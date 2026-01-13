@@ -1,0 +1,53 @@
+.stock-tab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.tab-upper,
+.tab-lower {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--border-color);
+  overflow: hidden;
+  min-height: 300px;
+}
+
+.tab-upper {
+  min-height: 300px;
+}
+
+.tab-lower {
+  min-height: 300px;
+}
+
+.upper-content,
+.lower-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.chart-panel {
+  flex: 1;
+  border-right: 1px solid var(--border-color);
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.table-panel {
+  width: 300px;
+  overflow-y: auto;
+  background-color: var(--bg-secondary);
+}
+
+@media (max-width: 1200px) {
+  .table-panel {
+    width: 250px;
+  }
+}

@@ -1,0 +1,116 @@
+.title-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 30px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  padding: 0;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.title-bar-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  height: 100%;
+}
+
+.title-bar-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.logo-image {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.title-bar-menu {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 100%;
+  padding-left: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.title-bar-menu .menu-item {
+  padding: 4px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s;
+  font-size: 12px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.title-bar-menu .menu-item:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.title-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  -webkit-app-region: no-drag;
+  z-index: 1000;
+  position: relative;
+}
+
+.title-bar-button {
+  width: 32px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background-color: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.15s;
+  padding: 0;
+  line-height: 1;
+  -webkit-app-region: no-drag;
+  position: relative;
+  z-index: 1001;
+  user-select: none;
+  pointer-events: auto;
+}
+
+.title-bar-icon {
+  display: inline-block;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 300;
+}
+
+.title-bar-button:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.title-bar-close:hover {
+  background-color: var(--error-color);
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .title-bar {
+    height: 28px;
+  }
+
+  .title-bar-button {
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
+  }
+}

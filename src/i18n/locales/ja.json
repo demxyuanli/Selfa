@@ -1,0 +1,122 @@
+{
+  "app": {
+    "title": "株式分析ツール",
+    "search": "株式を検索...",
+    "loading": "読み込み中...",
+    "error": "エラー",
+    "noData": "データがありません"
+  },
+  "menu": {
+    "file": "ファイル",
+    "edit": "編集",
+    "view": "表示",
+    "analysis": "分析",
+    "help": "ヘルプ",
+    "fileNew": "新規",
+    "fileOpen": "開く",
+    "fileSave": "保存",
+    "fileExport": "データエクスポート",
+    "fileExit": "終了",
+    "editUndo": "元に戻す",
+    "editRedo": "やり直す",
+    "editCut": "切り取り",
+    "editCopy": "コピー",
+    "editPaste": "貼り付け",
+    "editFind": "検索",
+    "viewRefresh": "更新",
+    "viewLeftSidebar": "左サイドバー",
+    "viewRightSidebar": "右サイドバー",
+    "viewFullscreen": "フルスクリーン",
+    "analysisIndicators": "テクニカル指標",
+    "analysisCompare": "比較分析",
+    "helpAbout": "について",
+    "helpDocumentation": "ドキュメント"
+  },
+  "settings": {
+    "title": "設定",
+    "autoRefresh": "自動更新",
+    "refreshInterval": "更新間隔",
+    "seconds": "秒",
+    "theme": "テーマ",
+    "themeDark": "ダーク",
+    "themeLight": "ライト",
+    "save": "保存",
+    "cancel": "キャンセル"
+  },
+  "tool": {
+    "refresh": "更新",
+    "add": "追加",
+    "delete": "削除",
+    "export": "エクスポート",
+    "settings": "設定"
+  },
+  "sidebar": {
+    "stockGroups": "株式グループ",
+    "indices": "インデックス",
+    "toolbar": "ツールバー",
+    "search": "検索",
+    "groups": "グループ",
+    "favorites": "お気に入り",
+    "noFavorites": "お気に入りがありません"
+  },
+  "index": {
+    "shanghai": "上海指数",
+    "shenzhen": "深圳指数",
+    "chuangye": "創業板指数",
+    "timeSeries": "分時チャート",
+    "dailyK": "日足チャート"
+  },
+  "workspace": {
+    "empty": "株式が選択されていません。左側のサイドバーから株式をクリックして詳細を表示します。"
+  },
+  "status": {
+    "ready": "準備完了",
+    "connection": "接続"
+  },
+  "stock": {
+    "symbol": "シンボル",
+    "name": "名称",
+    "price": "価格",
+    "change": "変動",
+    "changePercent": "変動率",
+    "volume": "出来高",
+    "marketCap": "時価総額",
+    "high": "高値",
+    "low": "安値",
+    "open": "始値",
+    "previousClose": "前日終値",
+    "selectPeriod": "期間を選択",
+    "periods": {
+      "1d": "1日",
+      "5d": "5日",
+      "1mo": "1ヶ月",
+      "3mo": "3ヶ月",
+      "6mo": "6ヶ月",
+      "1y": "1年",
+      "2y": "2年",
+      "5y": "5年"
+    }
+  },
+  "analysis": {
+    "title": "テクニカル分析",
+    "indicators": "指標",
+    "trend": "トレンド",
+    "volume": "出来高",
+    "compare": "比較",
+    "sma20": "SMA 20",
+    "sma50": "SMA 50",
+    "ema12": "EMA 12",
+    "ema26": "EMA 26",
+    "rsi": "RSI",
+    "macd": "MACD",
+    "macdSignal": "MACDシグナル",
+    "macdHistogram": "MACDヒストグラム"
+  },
+  "language": {
+    "en": "English",
+    "zh": "中文",
+    "ja": "日本語",
+    "select": "言語を選択"
+  }
+}
+

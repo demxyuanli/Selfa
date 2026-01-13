@@ -1,0 +1,122 @@
+{
+  "app": {
+    "title": "Stock Analyzer",
+    "search": "Search stocks...",
+    "loading": "Loading...",
+    "error": "Error",
+    "noData": "No data available"
+  },
+  "menu": {
+    "file": "File",
+    "edit": "Edit",
+    "view": "View",
+    "analysis": "Analysis",
+    "help": "Help",
+    "fileNew": "New",
+    "fileOpen": "Open",
+    "fileSave": "Save",
+    "fileExport": "Export Data",
+    "fileExit": "Exit",
+    "editUndo": "Undo",
+    "editRedo": "Redo",
+    "editCut": "Cut",
+    "editCopy": "Copy",
+    "editPaste": "Paste",
+    "editFind": "Find",
+    "viewRefresh": "Refresh",
+    "viewLeftSidebar": "Left Sidebar",
+    "viewRightSidebar": "Right Sidebar",
+    "viewFullscreen": "Fullscreen",
+    "analysisIndicators": "Technical Indicators",
+    "analysisCompare": "Compare Analysis",
+    "helpAbout": "About",
+    "helpDocumentation": "Documentation"
+  },
+  "settings": {
+    "title": "Settings",
+    "autoRefresh": "Auto Refresh",
+    "refreshInterval": "Refresh Interval",
+    "seconds": "seconds",
+    "theme": "Theme",
+    "themeDark": "Dark",
+    "themeLight": "Light",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "tool": {
+    "refresh": "Refresh",
+    "add": "Add",
+    "delete": "Delete",
+    "export": "Export",
+    "settings": "Settings"
+  },
+  "sidebar": {
+    "stockGroups": "Stock Groups",
+    "indices": "Indices",
+    "toolbar": "Toolbar",
+    "search": "Search",
+    "groups": "Groups",
+    "favorites": "Favorites",
+    "noFavorites": "No favorites"
+  },
+  "index": {
+    "shanghai": "Shanghai Index",
+    "shenzhen": "Shenzhen Index",
+    "chuangye": "ChiNext Index",
+    "timeSeries": "Time Series",
+    "dailyK": "Daily K-Line"
+  },
+  "workspace": {
+    "empty": "No stock selected. Click a stock from the left sidebar to view details."
+  },
+  "status": {
+    "ready": "Ready",
+    "connection": "Connection"
+  },
+  "stock": {
+    "symbol": "Symbol",
+    "name": "Name",
+    "price": "Price",
+    "change": "Change",
+    "changePercent": "Change %",
+    "volume": "Volume",
+    "marketCap": "Market Cap",
+    "high": "High",
+    "low": "Low",
+    "open": "Open",
+    "previousClose": "Previous Close",
+    "selectPeriod": "Select Period",
+    "periods": {
+      "1d": "1 Day",
+      "5d": "5 Days",
+      "1mo": "1 Month",
+      "3mo": "3 Months",
+      "6mo": "6 Months",
+      "1y": "1 Year",
+      "2y": "2 Years",
+      "5y": "5 Years"
+    }
+  },
+  "analysis": {
+    "title": "Technical Analysis",
+    "indicators": "Indicators",
+    "trend": "Trend",
+    "volume": "Volume",
+    "compare": "Compare",
+    "sma20": "SMA 20",
+    "sma50": "SMA 50",
+    "ema12": "EMA 12",
+    "ema26": "EMA 26",
+    "rsi": "RSI",
+    "macd": "MACD",
+    "macdSignal": "MACD Signal",
+    "macdHistogram": "MACD Histogram"
+  },
+  "language": {
+    "en": "English",
+    "zh": "中文",
+    "ja": "日本語",
+    "select": "Select Language"
+  }
+}
+

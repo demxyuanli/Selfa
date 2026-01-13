@@ -1,0 +1,122 @@
+{
+  "app": {
+    "title": "股票分析器",
+    "search": "搜索股票...",
+    "loading": "加载中...",
+    "error": "错误",
+    "noData": "无可用数据"
+  },
+  "menu": {
+    "file": "文件",
+    "edit": "编辑",
+    "view": "视图",
+    "analysis": "分析",
+    "help": "帮助",
+    "fileNew": "新建",
+    "fileOpen": "打开",
+    "fileSave": "保存",
+    "fileExport": "导出数据",
+    "fileExit": "退出",
+    "editUndo": "撤销",
+    "editRedo": "重做",
+    "editCut": "剪切",
+    "editCopy": "复制",
+    "editPaste": "粘贴",
+    "editFind": "查找",
+    "viewRefresh": "刷新",
+    "viewLeftSidebar": "左侧边栏",
+    "viewRightSidebar": "右侧边栏",
+    "viewFullscreen": "全屏",
+    "analysisIndicators": "技术指标",
+    "analysisCompare": "对比分析",
+    "helpAbout": "关于",
+    "helpDocumentation": "帮助文档"
+  },
+  "settings": {
+    "title": "设置",
+    "autoRefresh": "自动刷新",
+    "refreshInterval": "刷新间隔",
+    "seconds": "秒",
+    "theme": "主题",
+    "themeDark": "深色",
+    "themeLight": "浅色",
+    "save": "保存",
+    "cancel": "取消"
+  },
+  "tool": {
+    "refresh": "刷新",
+    "add": "添加",
+    "delete": "删除",
+    "export": "导出",
+    "settings": "设置"
+  },
+  "sidebar": {
+    "stockGroups": "股票分组",
+    "indices": "指数",
+    "toolbar": "工具栏",
+    "search": "搜索",
+    "groups": "分组",
+    "favorites": "自选",
+    "noFavorites": "暂无自选股"
+  },
+  "index": {
+    "shanghai": "上证指数",
+    "shenzhen": "深证指数",
+    "chuangye": "创业板指",
+    "timeSeries": "分时图",
+    "dailyK": "日K图"
+  },
+  "workspace": {
+    "empty": "未选择股票。从左侧边栏点击股票查看详情。"
+  },
+  "status": {
+    "ready": "就绪",
+    "connection": "连接"
+  },
+  "stock": {
+    "symbol": "代码",
+    "name": "名称",
+    "price": "价格",
+    "change": "涨跌",
+    "changePercent": "涨跌幅",
+    "volume": "成交量",
+    "marketCap": "市值",
+    "high": "最高",
+    "low": "最低",
+    "open": "开盘",
+    "previousClose": "昨收",
+    "selectPeriod": "选择周期",
+    "periods": {
+      "1d": "1天",
+      "5d": "5天",
+      "1mo": "1月",
+      "3mo": "3月",
+      "6mo": "6月",
+      "1y": "1年",
+      "2y": "2年",
+      "5y": "5年"
+    }
+  },
+  "analysis": {
+    "title": "技术分析",
+    "indicators": "指标",
+    "trend": "趋势",
+    "volume": "成交量",
+    "compare": "对比",
+    "sma20": "SMA 20",
+    "sma50": "SMA 50",
+    "ema12": "EMA 12",
+    "ema26": "EMA 26",
+    "rsi": "RSI",
+    "macd": "MACD",
+    "macdSignal": "MACD信号",
+    "macdHistogram": "MACD柱状图"
+  },
+  "language": {
+    "en": "English",
+    "zh": "中文",
+    "ja": "日本語",
+    "select": "选择语言"
+  }
+}
+

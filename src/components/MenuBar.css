@@ -1,0 +1,25 @@
+.menu-bar {
+  display: flex;
+  align-items: center;
+  height: var(--header-height);
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.menu-items {
+  display: flex;
+  gap: 0;
+}
+
+.menu-item {
+  padding: 4px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s;
+}
+
+.menu-item:hover {
+  background-color: var(--bg-tertiary);
+}

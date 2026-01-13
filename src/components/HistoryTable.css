@@ -1,0 +1,23 @@
+.history-table {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.table-header {
+  padding: 8px;
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.history-table table {
+  flex: 1;
+}
+
+.history-table th,
+.history-table td {
+  padding: 4px 8px;
+  font-size: 11px;
+}
