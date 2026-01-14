@@ -1,0 +1,225 @@
+.compare-analysis {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary, #1e1e1e);
+  overflow: hidden;
+}
+
+.compare-analysis .analysis-columns {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.compare-analysis .analysis-column,
+.compare-analysis .column-divider,
+.compare-analysis .column-header,
+.compare-analysis .params-content,
+.compare-analysis .results-content,
+.compare-analysis .chart-content,
+.compare-analysis .no-data {
+  /* Inherit from StockAnalysis.css */
+}
+
+.search-box {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.search-input {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 10px;
+  background: var(--input-bg, #2d2d30);
+  border: 1px solid var(--border-color, #3c3c3c);
+  border-radius: 3px;
+  color: var(--text-primary, #cccccc);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent-color, #007acc);
+}
+
+.search-btn {
+  padding: 4px 10px;
+  font-size: 10px;
+  background: var(--accent-color, #007acc);
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.search-btn:hover:not(:disabled) {
+  background: #0066aa;
+}
+
+.search-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.search-results {
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color, #3c3c3c);
+  border-radius: 3px;
+  margin-bottom: 8px;
+}
+
+.search-result-item {
+  padding: 6px 8px;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-color, #3c3c3c);
+  transition: background-color 0.15s;
+}
+
+.search-result-item:last-child {
+  border-bottom: none;
+}
+
+.search-result-item:hover {
+  background: var(--bg-tertiary, #252526);
+}
+
+.result-symbol {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-primary, #cccccc);
+  min-width: 60px;
+}
+
+.result-name {
+  font-size: 9px;
+  color: var(--text-secondary, #858585);
+}
+
+.stock-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stock-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 6px;
+  background: var(--bg-tertiary, #252526);
+  border-radius: 3px;
+}
+
+.stock-label {
+  font-size: 10px;
+  color: var(--text-primary, #cccccc);
+}
+
+.remove-btn {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  background: transparent;
+  color: var(--text-secondary, #858585);
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-btn:hover {
+  background: var(--bg-secondary, #1e1e1e);
+  color: #e74c3c;
+}
+
+.compare-stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.compare-stats-card {
+  background: var(--bg-primary, #1e1e1e);
+  border: 1px solid var(--border-color, #3c3c3c);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.stats-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-color, #3c3c3c);
+}
+
+.stats-symbol {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary, #cccccc);
+}
+
+.stats-name {
+  font-size: 9px;
+  color: var(--text-secondary, #858585);
+}
+
+.stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.stats-row:last-child {
+  margin-bottom: 0;
+}
+
+.stats-label {
+  font-size: 10px;
+  color: var(--text-secondary, #858585);
+}
+
+.stats-value {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-primary, #cccccc);
+}
+
+.stats-value.positive {
+  color: #4caf50;
+}
+
+.stats-value.negative {
+  color: #f44336;
+}
+
+/* Scrollbar */
+.search-results::-webkit-scrollbar {
+  width: 4px;
+}
+
+.search-results::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.search-results::-webkit-scrollbar-thumb {
+  background: var(--border-color, #3c3c3c);
+  border-radius: 2px;
+}
+
+.search-results::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted, #6e6e6e);
+}

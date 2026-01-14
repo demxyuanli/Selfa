@@ -2,22 +2,105 @@
   height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-.table-header {
-  padding: 8px;
-  background-color: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border-color);
-  font-weight: 600;
-  font-size: 12px;
+.table-scroll {
+  flex: 1;
+  overflow: auto;
 }
 
 .history-table table {
-  flex: 1;
+  width: 100%;
+  border-collapse: collapse;
 }
 
-.history-table th,
+.history-table thead {
+  position: sticky;
+  top: 0;
+  background-color: var(--bg-tertiary);
+  z-index: 1;
+}
+
+.history-table th {
+  position: relative;
+  padding: 4px 3px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.history-table th:first-child {
+  text-align: left;
+}
+
 .history-table td {
-  padding: 4px 8px;
-  font-size: 11px;
+  padding: 3px 3px;
+  font-size: 10px;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.history-table .date-cell {
+  text-align: left;
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.history-table .close-cell {
+  font-weight: 600;
+}
+
+.history-table .vol-cell {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+.history-table tbody tr:hover {
+  background-color: var(--bg-tertiary);
+}
+
+/* Column Resizer */
+.col-resizer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 4px;
+  height: 100%;
+  cursor: col-resize;
+  background-color: transparent;
+  transition: background-color 0.15s;
+}
+
+.col-resizer:hover {
+  background-color: var(--accent-color);
+}
+
+/* Scrollbar Styling */
+.table-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+  background: var(--bg-tertiary);
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.table-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.table-scroll::-webkit-scrollbar-corner {
+  background: var(--bg-tertiary);
 }

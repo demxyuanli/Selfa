@@ -2,22 +2,104 @@
   height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-.table-header {
-  padding: 8px;
-  background-color: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border-color);
-  font-weight: 600;
-  font-size: 12px;
+.table-scroll {
+  flex: 1;
+  overflow: auto;
 }
 
 .time-series-table table {
-  flex: 1;
+  width: 100%;
+  border-collapse: collapse;
 }
 
-.time-series-table th,
+.time-series-table thead {
+  position: sticky;
+  top: 0;
+  background-color: var(--bg-tertiary);
+  z-index: 1;
+}
+
+.time-series-table th {
+  position: relative;
+  padding: 4px 4px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.time-series-table th:first-child {
+  text-align: left;
+}
+
 .time-series-table td {
-  padding: 4px 8px;
-  font-size: 11px;
+  padding: 3px 4px;
+  font-size: 10px;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.time-series-table .time-cell {
+  text-align: left;
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.time-series-table .price-cell {
+  font-weight: 500;
+}
+
+.time-series-table .vol-cell {
+  font-size: 9px;
+}
+
+.time-series-table tbody tr:hover {
+  background-color: var(--bg-tertiary);
+}
+
+/* Column Resizer */
+.col-resizer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 4px;
+  height: 100%;
+  cursor: col-resize;
+  background-color: transparent;
+  transition: background-color 0.15s;
+}
+
+.col-resizer:hover {
+  background-color: var(--accent-color);
+}
+
+/* Scrollbar Styling */
+.table-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+  background: var(--bg-tertiary);
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.table-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.table-scroll::-webkit-scrollbar-corner {
+  background: var(--bg-tertiary);
 }

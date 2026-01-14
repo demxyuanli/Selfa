@@ -117,6 +117,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ onMenuAction, onSettingsClick }) =>
   const viewMenuItems: MenuItem[] = [
     { label: t("menu.viewRefresh"), action: "view:refresh", shortcut: "F5" },
     { separator: true },
+    { label: t("menu.viewToolbar"), action: "view:toolbar" },
     { label: t("menu.viewLeftSidebar"), action: "view:leftSidebar" },
     { label: t("menu.viewRightSidebar"), action: "view:rightSidebar" },
     { separator: true },

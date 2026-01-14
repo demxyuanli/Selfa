@@ -1,28 +1,6 @@
-import React, { useMemo, useRef, useEffect } from "react";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-} from "chart.js";
-import { Line, Bar } from "react-chartjs-2";
+import React, { useMemo, useState } from "react";
+import ReactECharts from "echarts-for-react";
 import "./TimeSeriesChart.css";
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-);
 
 interface StockData {
   date: string;
@@ -36,313 +14,449 @@ interface StockData {
 interface TimeSeriesChartProps {
   data: StockData[];
   quote?: any;
+  compact?: boolean; // For sidebar charts
 }
 
-const tradingHours = ["09:30", "10:00", "10:30", "11:00", "11:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30"];
-
-const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data }) => {
-  const priceChartRef = useRef<any>(null);
-  const volumeChartRef = useRef<any>(null);
-  const [crosshairData, setCrosshairData] = React.useState<{ time: string; price: number; volume: number; index: number } | null>(null);
-
-  const { labels, prices, volumes, avgPrice, volumeColors } = useMemo(() => {
-    if (!data || data.length === 0) {
-      return { labels: [], prices: [], volumes: [], avgPrice: 0, volumeColors: [] };
+// Generate full trading hours time points (09:30-11:30, 13:00-15:00)
+const generateFullTradingTimes = (): string[] => {
+  const times: string[] = [];
+  // Morning: 09:30-11:30
+  for (let h = 9; h <= 11; h++) {
+    for (let m = 0; m < 60; m++) {
+      if (h === 9 && m < 30) continue;
+      if (h === 11 && m > 30) break;
+      times.push(`${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`);
     }
+  }
+  // Afternoon: 13:00-15:00
+  for (let h = 13; h <= 14; h++) {
+    for (let m = 0; m < 60; m++) {
+      times.push(`${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`);
+    }
+  }
+  // 15:00
+  times.push("15:00");
+  return times;
+};
 
-    const lbls = data.map((d) => {
+const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false }) => {
+  const [crosshairData, setCrosshairData] = useState<{ time: string; price: number; volume: number } | null>(null);
+  const fullTradingTimes = useMemo(() => generateFullTradingTimes(), []);
+
+  const option = useMemo(() => {
+    if (!data || data.length === 0) {
+      return {};
+    }
+    
+    // Create a map of actual data by time
+    const dataMap = new Map<string, { price: number; volume: number }>();
+    data.forEach((d) => {
       const dateStr = d.date;
-      if (dateStr.includes(" ")) {
-        return dateStr.split(" ")[1] || dateStr;
-      }
-      return dateStr;
+      const timeStr = dateStr.includes(" ") ? dateStr.split(" ")[1] : dateStr;
+      dataMap.set(timeStr, { price: d.close, volume: d.volume });
     });
-    const prcs = data.map((d) => d.close);
-    const vols = data.map((d) => d.volume);
-    const avg = prcs.length > 0 ? prcs.reduce((a, b) => a + b, 0) / prcs.length : 0;
 
-    const colors = prcs.map((price, index) => {
+    // Map prices and volumes to full trading times
+    // Ensure continuity between 11:30 and 13:00 by using last morning price for 13:00 if no data
+    let lastMorningPrice: number | null = null;
+    const prices: (number | null)[] = fullTradingTimes.map((time) => {
+      const dataPoint = dataMap.get(time);
+      if (dataPoint) {
+        const [hours, minutes] = time.split(":").map(Number);
+        const totalMinutes = hours * 60 + minutes;
+        // Track last price before 13:00
+        if (totalMinutes < 13 * 60) {
+          lastMorningPrice = dataPoint.price;
+        }
+        return dataPoint.price;
+      }
+      // If this is 13:00 and we have last morning price, use it to ensure continuity
+      if (time === "13:00" && lastMorningPrice !== null) {
+        return lastMorningPrice;
+      }
+      return null;
+    });
+    
+    const volumes: (number | null)[] = fullTradingTimes.map((time) => {
+      const dataPoint = dataMap.get(time);
+      return dataPoint ? dataPoint.volume : null;
+    });
+
+    // Calculate price range for Y axis
+    const validPrices = prices.filter((p): p is number => p !== null);
+    const minPrice = validPrices.length > 0 ? Math.min(...validPrices) : 0;
+    const maxPrice = validPrices.length > 0 ? Math.max(...validPrices) : 0;
+    const priceRange = maxPrice - minPrice;
+    
+    // Y axis: min with 10% padding below, max without padding
+    const yAxisMin = minPrice - priceRange * 0.1;
+    const yAxisMax = maxPrice;
+    
+    const avgPrice = validPrices.length > 0 ? validPrices.reduce((a, b) => a + b, 0) / validPrices.length : 0;
+
+    const volumeColors = prices.map((price, index) => {
+      if (price === null) {
+        return "rgba(133, 133, 133, 0.3)";
+      }
       if (index === 0) {
         return "rgba(133, 133, 133, 0.6)";
       }
-      const prevPrice = prcs[index - 1];
-      return price >= prevPrice ? "rgba(244, 67, 54, 0.8)" : "rgba(76, 175, 80, 0.8)";
+      const prevPrice = prices[index - 1];
+      if (prevPrice === null) {
+        return "rgba(133, 133, 133, 0.6)";
+      }
+      return price >= prevPrice ? "#f44336" : "#4caf50";
     });
 
-    return { labels: lbls, prices: prcs, volumes: vols, avgPrice: avg, volumeColors: colors };
-  }, [data]);
-
-  const priceChartData = useMemo(() => {
-    if (labels.length === 0) {
-      return {
-        labels: [],
-        datasets: [],
-      };
-    }
-
     return {
-      labels,
-      datasets: [
+      backgroundColor: "#1e1e1e",
+      grid: [
         {
-          label: "Price",
-          data: prices,
-          borderColor: "rgb(0, 122, 204)",
-          backgroundColor: "rgba(0, 122, 204, 0.1)",
-          borderWidth: 1,
-          fill: true,
-          tension: 0.1,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          yAxisID: "y",
+          left: "5%",
+          right: "3%",
+          top: "10%",
+          height: "60%",
         },
         {
-          label: "Avg Price",
-          data: prices.map(() => avgPrice),
-          borderColor: "rgb(133, 133, 133)",
-          borderDash: [5, 5],
-          borderWidth: 1,
-          fill: false,
-          pointRadius: 0,
-          pointHoverRadius: 0,
-          yAxisID: "y",
+          left: "5%",
+          right: "3%",
+          top: "75%",
+          height: "20%",
         },
       ],
-    };
-  }, [labels, prices, avgPrice]);
-
-  const volumeChartData = useMemo(() => {
-    if (labels.length === 0) {
-      return {
-        labels: [],
-        datasets: [],
-      };
-    }
-
-    return {
-      labels,
-      datasets: [
+      xAxis: [
         {
-          label: "Volume",
-          data: volumes,
-          backgroundColor: volumeColors,
-          yAxisID: "y1",
+          type: "category",
+          data: fullTradingTimes,
+          boundaryGap: false,
+          axisLine: {
+            lineStyle: {
+              color: "#3e3e42",
+            },
+          },
+          axisLabel: {
+            color: "#858585",
+            fontSize: compact ? 7 : 9,
+            interval: 0,
+            formatter: (value: string, index: number) => {
+              const timeStr = value;
+              if (!timeStr || !timeStr.includes(":")) {
+                return "";
+              }
+              const [hours, minutes] = timeStr.split(":");
+              const h = parseInt(hours);
+              const m = parseInt(minutes);
+              const totalMinutes = h * 60 + m;
+              // Trading hours: 09:30-11:30 and 13:00-15:00
+              const morningStart = 9 * 60 + 30;
+              const morningEnd = 11 * 60 + 30;
+              const afternoonStart = 13 * 60;
+              const afternoonEnd = 15 * 60;
+              
+              // Don't show 11:30 if next label is 13:00 (to avoid overlap)
+              if (totalMinutes === morningEnd) {
+                // Check if next time point is 13:00
+                if (index < fullTradingTimes.length - 1) {
+                  const nextTime = fullTradingTimes[index + 1];
+                  if (nextTime === "13:00") {
+                    return ""; // Don't show 11:30, only show 13:00
+                  }
+                }
+              }
+              
+              // Check if within trading hours
+              const inMorning = totalMinutes >= morningStart && totalMinutes <= morningEnd;
+              const inAfternoon = totalMinutes >= afternoonStart && totalMinutes <= afternoonEnd;
+              
+              if (inMorning || inAfternoon) {
+                // Show label every 30 minutes
+                if (totalMinutes % 30 === 0) {
+                  return value;
+                }
+              }
+              return "";
+            },
+          },
+          splitLine: {
+            show: true,
+            lineStyle: {
+              color: "#3e3e42",
+              opacity: 0.3,
+            },
+            interval: (_index: number, value: string) => {
+              const timeStr = value;
+              if (!timeStr || !timeStr.includes(":")) {
+                return false;
+              }
+              const [hours, minutes] = timeStr.split(":");
+              const h = parseInt(hours);
+              const m = parseInt(minutes);
+              const totalMinutes = h * 60 + m;
+              // Trading hours: 09:30-11:30 and 13:00-15:00
+              const morningStart = 9 * 60 + 30;
+              const morningEnd = 11 * 60 + 30;
+              const afternoonStart = 13 * 60;
+              const afternoonEnd = 15 * 60;
+              
+              // Check if within trading hours
+              const inMorning = totalMinutes >= morningStart && totalMinutes <= morningEnd;
+              const inAfternoon = totalMinutes >= afternoonStart && totalMinutes <= afternoonEnd;
+              
+              if (inMorning || inAfternoon) {
+                // Show grid line every 30 minutes
+                return totalMinutes % 30 === 0;
+              }
+              return false;
+            },
+          },
+        },
+        {
+          type: "category",
+          gridIndex: 1,
+          data: fullTradingTimes,
+          boundaryGap: false,
+          axisLine: {
+            lineStyle: {
+              color: "#3e3e42",
+            },
+          },
+          axisLabel: {
+            color: "#858585",
+            fontSize: 9,
+            interval: 0,
+            formatter: (value: string, index: number) => {
+              const timeStr = value;
+              if (!timeStr || !timeStr.includes(":")) {
+                return "";
+              }
+              const [hours, minutes] = timeStr.split(":");
+              const h = parseInt(hours);
+              const m = parseInt(minutes);
+              const totalMinutes = h * 60 + m;
+              // Trading hours: 09:30-11:30 and 13:00-15:00
+              const morningStart = 9 * 60 + 30;
+              const morningEnd = 11 * 60 + 30;
+              const afternoonStart = 13 * 60;
+              const afternoonEnd = 15 * 60;
+              
+              // Don't show 11:30 if next label is 13:00 (to avoid overlap)
+              if (totalMinutes === morningEnd) {
+                // Check if next time point is 13:00
+                if (index < fullTradingTimes.length - 1) {
+                  const nextTime = fullTradingTimes[index + 1];
+                  if (nextTime === "13:00") {
+                    return ""; // Don't show 11:30, only show 13:00
+                  }
+                }
+              }
+              
+              // Check if within trading hours
+              const inMorning = totalMinutes >= morningStart && totalMinutes <= morningEnd;
+              const inAfternoon = totalMinutes >= afternoonStart && totalMinutes <= afternoonEnd;
+              
+              if (inMorning || inAfternoon) {
+                // Show label every 30 minutes
+                if (totalMinutes % 30 === 0) {
+                  return value;
+                }
+              }
+              return "";
+            },
+          },
+          splitLine: {
+            show: false,
+          },
         },
       ],
-    };
-  }, [labels, volumes, volumeColors]);
+      yAxis: [
+        {
+          type: "value",
+          scale: true,
+          min: yAxisMin,
+          max: yAxisMax,
+          splitArea: {
+            show: true,
+            areaStyle: {
+              color: ["rgba(62, 62, 66, 0.1)", "rgba(62, 62, 66, 0.05)"],
+            },
+          },
+          axisLabel: {
+            color: "#858585",
+            fontSize: compact ? 7 : 9,
+            formatter: (value: number) => {
+              if (compact) {
+                // No unit, just number
+                return value.toFixed(0);
+              }
+              return value.toFixed(2);
+            },
+          },
+          axisLine: {
+            lineStyle: {
+              color: "#3e3e42",
+            },
+          },
+          splitLine: {
+            show: true,
+            lineStyle: {
+              color: "#3e3e42",
+              opacity: 0.5,
+            },
+          },
+        },
+        {
+          type: "value",
+          gridIndex: 1,
+          scale: true,
+          axisLabel: {
+            color: "#858585",
+            fontSize: compact ? 7 : 9,
+            formatter: (value: number) => {
+              if (compact) {
+                // Round to 100 million (亿), no unit
+                return Math.round(value / 100000000).toString();
+              }
+              return (value / 10000).toFixed(1) + "万";
+            },
+          },
+          axisLine: {
+            lineStyle: {
+              color: "#3e3e42",
+            },
+          },
+          splitLine: {
+            show: true,
+            lineStyle: {
+              color: "#3e3e42",
+              opacity: 0.3,
+            },
+          },
+        },
+      ],
+      dataZoom: [
+        {
+          type: "inside",
+          xAxisIndex: [0, 1],
+          start: 0,
+          end: 100,
+        },
+      ],
+      tooltip: {
+        trigger: "axis",
+        axisPointer: {
+          type: "cross",
+          lineStyle: {
+            color: "#007acc",
+            width: 1,
+          },
+          crossStyle: {
+            color: "#007acc",
+          },
+        },
+        backgroundColor: "rgba(37, 37, 38, 0.95)",
+        borderColor: "#3e3e42",
+        borderWidth: 1,
+        textStyle: {
+          color: "#cccccc",
+          fontSize: compact ? 8 : 10,
+        },
+        formatter: (params: any) => {
+          if (!params || params.length === 0) return "";
+          const param = params[0];
+          const dataIndex = param.dataIndex;
+          if (dataIndex < 0 || dataIndex >= fullTradingTimes.length) return "";
 
-  const handleChartHover = useMemo(() => {
-    return (event: MouseEvent, chartRef: any) => {
-      if (!chartRef.current || !labels.length) return;
-
-      try {
-        const chart = chartRef.current;
-        const rect = chart.canvas.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-
-        const dataX = chart.scales.x.getValueForPixel(x);
-
-        if (dataX >= 0 && dataX < labels.length) {
-          const index = Math.round(dataX);
-          if (index >= 0 && index < labels.length) {
-            setCrosshairData({
-              time: labels[index],
-              price: prices[index],
-              volume: volumes[index],
-              index,
-            });
+          const price = prices[dataIndex];
+          const volume = volumes[dataIndex];
+          const time = fullTradingTimes[dataIndex];
+          
+          if (price === null || volume === null) {
+            return `
+              <div style="padding: 4px 0;">
+                <div><strong>${time}</strong></div>
+                <div>暂无数据</div>
+              </div>
+            `;
           }
-        }
-      } catch (err) {
-        console.error("Error handling hover:", err);
-      }
-    };
-  }, [labels, prices, volumes]);
 
-  const handlePriceChartHover = (event: any) => {
-    if (event.native) {
-      handleChartHover(event.native, priceChartRef);
-    }
-  };
-
-  const handleVolumeChartHover = (event: any) => {
-    if (event.native) {
-      handleChartHover(event.native, volumeChartRef);
-    }
-  };
-
-  const priceOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    onHover: handlePriceChartHover,
-    plugins: {
-      legend: {
-        display: true,
-        position: "top" as const,
-        labels: {
-          color: "rgb(204, 204, 204)",
-          usePointStyle: true,
+          return `
+            <div style="padding: 4px 0;">
+              <div><strong>${time}</strong></div>
+              <div>价格: <span style="color: #cccccc;">${price.toFixed(2)}</span></div>
+              <div>均价: <span style="color: #858585;">${avgPrice.toFixed(2)}</span></div>
+              <div>成交量: <span style="color: #cccccc;">${(volume / 10000).toFixed(2)}万</span></div>
+            </div>
+          `;
         },
       },
-      tooltip: {
-        enabled: true,
-        mode: "index" as const,
-        intersect: false,
-        callbacks: {
-          label: function(context: any) {
-            const index = context.dataIndex;
-            if (index >= 0 && index < labels.length) {
-              return [
-                `Time: ${labels[index]}`,
-                `Price: ${prices[index].toFixed(2)}`,
-                `Avg: ${avgPrice.toFixed(2)}`,
-                `Volume: ${(volumes[index] / 10000).toFixed(2)}万`,
-              ];
-            }
-            return [];
+      series: [
+        {
+          name: "价格",
+          type: "line",
+          data: prices,
+          smooth: false,
+          symbol: "none",
+          connectNulls: false, // Don't connect null values, but we ensure continuity at 13:00
+          lineStyle: {
+            color: "#007acc",
+            width: 1,
+          },
+          areaStyle: {
+            color: {
+              type: "linear",
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                {
+                  offset: 0,
+                  color: "rgba(0, 122, 204, 0.3)",
+                },
+                {
+                  offset: 1,
+                  color: "rgba(0, 122, 204, 0.05)",
+                },
+              ],
+            },
+          },
+          emphasis: {
+            focus: "series",
           },
         },
-      },
-    },
-    scales: {
-      x: {
-        display: true,
-        grid: {
-          color: "rgba(62, 62, 66, 0.5)",
-          drawBorder: true,
-        },
-        ticks: {
-          color: "rgb(133, 133, 133)",
-          maxTicksLimit: 12,
-          callback: function(value: any) {
-            const index = value as number;
-            if (index >= 0 && index < labels.length) {
-              const label = labels[index];
-              if (tradingHours.includes(label)) {
-                return label;
-              }
-            }
-            return "";
+        {
+          name: "均价",
+          type: "line",
+          data: prices.map(() => avgPrice),
+          smooth: false,
+          symbol: "none",
+          lineStyle: {
+            color: "#858585",
+            width: 1,
+            type: "dashed",
+          },
+          emphasis: {
+            focus: "series",
           },
         },
-      },
-      y: {
-        display: true,
-        position: "left" as const,
-        grid: {
-          color: "rgba(62, 62, 66, 0.5)",
-          drawBorder: true,
-        },
-        ticks: {
-          color: "rgb(133, 133, 133)",
-        },
-        title: {
-          display: true,
-          text: "Price",
-          color: "rgb(204, 204, 204)",
-        },
-      },
-    },
-    interaction: {
-      mode: "nearest" as const,
-      axis: "x" as const,
-      intersect: false,
-    },
-  };
-
-  const volumeOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    onHover: handleVolumeChartHover,
-    plugins: {
-      legend: {
-        display: false,
-      },
-      tooltip: {
-        enabled: true,
-        mode: "index" as const,
-        intersect: false,
-        callbacks: {
-          label: function(context: any) {
-            const index = context.dataIndex;
-            if (index >= 0 && index < volumes.length) {
-              return `Volume: ${(volumes[index] / 10000).toFixed(2)}万`;
-            }
-            return "";
+        {
+          name: "成交量",
+          type: "bar",
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          data: volumes.map((vol, index) => ({
+            value: vol,
+            itemStyle: {
+              color: volumeColors[index],
+            },
+          })),
+          emphasis: {
+            focus: "series",
           },
         },
-      },
-    },
-    scales: {
-      x: {
-        display: true,
-        grid: {
-          color: "rgba(62, 62, 66, 0.5)",
-          drawBorder: true,
-        },
-        ticks: {
-          color: "rgb(133, 133, 133)",
-          maxTicksLimit: 12,
-          callback: function(value: any) {
-            const index = value as number;
-            if (index >= 0 && index < labels.length) {
-              const label = labels[index];
-              if (tradingHours.includes(label)) {
-                return label;
-              }
-            }
-            return "";
-          },
-        },
-      },
-      y: {
-        display: true,
-        position: "right" as const,
-        grid: {
-          color: "rgba(62, 62, 66, 0.5)",
-          drawBorder: true,
-        },
-        ticks: {
-          color: "rgb(133, 133, 133)",
-        },
-        title: {
-          display: true,
-          text: "Volume",
-          color: "rgb(204, 204, 204)",
-        },
-      },
-    },
-    interaction: {
-      mode: "nearest" as const,
-      axis: "x" as const,
-      intersect: false,
-    },
-  };
-
-  useEffect(() => {
-    const handleMouseMove = (event: MouseEvent) => {
-      if (priceChartRef.current) {
-        handleChartHover(event, priceChartRef);
-      }
+      ],
     };
-
-    const handleMouseLeave = () => {
-      setCrosshairData(null);
-    };
-
-    const priceChartElement = priceChartRef.current?.canvas;
-    if (priceChartElement) {
-      priceChartElement.addEventListener("mousemove", handleMouseMove);
-      priceChartElement.addEventListener("mouseleave", handleMouseLeave);
-    }
-
-    return () => {
-      if (priceChartElement) {
-        priceChartElement.removeEventListener("mousemove", handleMouseMove);
-        priceChartElement.removeEventListener("mouseleave", handleMouseLeave);
-      }
-    };
-  }, [handleChartHover]);
+  }, [data, fullTradingTimes]);
 
   if (!data || data.length === 0) {
     return (
@@ -356,17 +470,44 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data }) => {
     <div className="time-series-chart">
       {crosshairData && (
         <div className="crosshair-info">
-          <div>Time: {crosshairData.time}</div>
-          <div>Price: {crosshairData.price.toFixed(2)}</div>
-          <div>Volume: {(crosshairData.volume / 10000).toFixed(2)}万</div>
+          <div>时间: {crosshairData.time}</div>
+          <div>价格: {crosshairData.price.toFixed(2)}</div>
+          <div>成交量: {(crosshairData.volume / 10000).toFixed(2)}万</div>
         </div>
       )}
-      <div className="price-chart">
-        <Line ref={priceChartRef} data={priceChartData} options={priceOptions} />
-      </div>
-      <div className="volume-chart">
-        <Bar ref={volumeChartRef} data={volumeChartData} options={volumeOptions} />
-      </div>
+      <ReactECharts
+        option={option}
+        style={{ height: "100%", width: "100%" }}
+        opts={{ renderer: "canvas" }}
+        onEvents={{
+          mousemove: (params: any) => {
+            if (params.dataIndex !== undefined && params.dataIndex >= 0 && params.dataIndex < fullTradingTimes.length) {
+              const index = params.dataIndex;
+              const time = fullTradingTimes[index];
+              
+              // Find corresponding data point
+              const dataPoint = data.find((d) => {
+                const dateStr = d.date;
+                const timeStr = dateStr.includes(" ") ? dateStr.split(" ")[1] : dateStr;
+                return timeStr === time;
+              });
+              
+              if (dataPoint) {
+                setCrosshairData({
+                  time: time,
+                  price: dataPoint.close,
+                  volume: dataPoint.volume,
+                });
+              } else {
+                setCrosshairData(null);
+              }
+            }
+          },
+          mouseout: () => {
+            setCrosshairData(null);
+          },
+        }}
+      />
     </div>
   );
 };

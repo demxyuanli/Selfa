@@ -34,6 +34,7 @@ interface StockTab {
 function App() {
   const [leftSidebarVisible, setLeftSidebarVisible] = useState(true);
   const [rightSidebarVisible, setRightSidebarVisible] = useState(true);
+  const [toolbarVisible, setToolbarVisible] = useState(false);
   const [tabs, setTabs] = useState<StockTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -122,6 +123,9 @@ function App() {
       case "view:rightSidebar":
         setRightSidebarVisible(!rightSidebarVisible);
         break;
+      case "view:toolbar":
+        setToolbarVisible(!toolbarVisible);
+        break;
       case "view:fullscreen":
         const isFullscreen = await appWindow.isFullscreen();
         await appWindow.setFullscreen(!isFullscreen);
@@ -207,7 +211,7 @@ function App() {
         onMenuAction={handleMenuAction}
         onSettingsClick={() => setSettingsOpen(true)}
       />
-      <ToolBar />
+      {toolbarVisible && <ToolBar />}
       <div className="app-main">
         <LeftSidebar
           visible={leftSidebarVisible}

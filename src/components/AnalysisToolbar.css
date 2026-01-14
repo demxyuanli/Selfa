@@ -9,4 +9,38 @@
 .tool-btn {
   padding: 4px 12px;
   font-size: 12px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tool-btn:hover {
+  background-color: var(--bg-tertiary);
+  border-color: var(--accent-color);
+}
+
+.tool-btn.active {
+  background-color: var(--accent-color);
+  color: white;
+  border-color: var(--accent-color);
+}
+
+.tool-btn.primary {
+  background-color: #2ecc71;
+  color: white;
+  border-color: #2ecc71;
+  font-weight: 500;
+}
+
+.tool-btn.primary:hover {
+  background-color: #27ae60;
+  border-color: #27ae60;
+}
+
+.tool-btn.primary.active {
+  background-color: #1e8449;
+  border-color: #1e8449;
 }

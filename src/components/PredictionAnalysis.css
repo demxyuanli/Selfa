@@ -1,0 +1,130 @@
+.prediction-analysis {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary, #1e1e1e);
+  overflow: hidden;
+}
+
+.prediction-analysis .analysis-columns {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.prediction-analysis .analysis-column,
+.prediction-analysis .column-divider,
+.prediction-analysis .column-header,
+.prediction-analysis .params-content,
+.prediction-analysis .results-content,
+.prediction-analysis .chart-content,
+.prediction-analysis .no-data {
+  /* Inherit from StockAnalysis.css */
+}
+
+.prediction-analysis .param-select {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 10px;
+  background: var(--input-bg, #2d2d30);
+  border: 1px solid var(--border-color, #3c3c3c);
+  border-radius: 3px;
+  color: var(--text-primary, #cccccc);
+}
+
+.prediction-analysis .param-select:focus {
+  outline: none;
+  border-color: var(--accent-color, #007acc);
+}
+
+.prediction-analysis .generate-btn {
+  padding: 6px 12px;
+  font-size: 10px;
+  background: var(--accent-color, #007acc);
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  margin-top: 8px;
+}
+
+.prediction-analysis .generate-btn:hover:not(:disabled) {
+  background: #0066aa;
+}
+
+.prediction-analysis .generate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.prediction-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prediction-result-card {
+  background: var(--bg-primary, #1e1e1e);
+  border: 1px solid var(--border-color, #3c3c3c);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.pred-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.pred-date {
+  font-size: 10px;
+  color: var(--text-secondary, #858585);
+}
+
+.pred-signal {
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.pred-price {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #cccccc);
+  margin-bottom: 4px;
+}
+
+.pred-range {
+  font-size: 9px;
+  color: var(--text-muted, #6e6e6e);
+  margin-bottom: 6px;
+}
+
+.pred-confidence {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pred-confidence span {
+  font-size: 9px;
+  color: var(--text-muted, #6e6e6e);
+}
+
+.confidence-bar-mini {
+  height: 3px;
+  background: var(--bg-tertiary, #252526);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.confidence-fill-mini {
+  height: 100%;
+  transition: width 0.3s ease;
+}
