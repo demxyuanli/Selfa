@@ -51,8 +51,8 @@
 }
 
 .sidebar-icon {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -60,13 +60,15 @@
   background-color: transparent;
   color: var(--text-primary);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 10px;
+  font-weight: 600;
   border-radius: 4px;
   transition: all 0.15s;
   padding: 0;
   position: relative;
   opacity: 0.8;
   margin: 0 auto;
+  letter-spacing: 0.5px;
 }
 
 .sidebar-icon:hover {
@@ -79,16 +81,20 @@
   opacity: 1;
 }
 
-.sidebar-icon.active::after {
+.right-sidebar .sidebar-icon.active::before {
+  display: none;
+}
+
+.right-sidebar .sidebar-icon.active::after {
   content: "";
   position: absolute;
-  left: 0;
+  right: 0;
   top: 50%;
   transform: translateY(-50%);
   width: 2px;
   height: 16px;
   background-color: var(--accent-color);
-  border-radius: 0 1px 1px 0;
+  border-radius: 1px 0 0 1px;
 }
 
 .sidebar-panel {

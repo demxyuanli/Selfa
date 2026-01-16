@@ -9,6 +9,8 @@ pub struct StockQuote {
     pub change_percent: f64,
     pub volume: i64,
     pub market_cap: Option<i64>,
+    pub pe_ratio: Option<f64>,
+    pub turnover: Option<i64>,
     pub high: f64,
     pub low: f64,
     pub open: f64,
@@ -69,7 +71,11 @@ fn parse_symbol(symbol: &str) -> (String, String) {
 
 pub async fn fetch_stock_quote(symbol: &str) -> Result<StockQuote, String> {
     let (secid, _) = parse_symbol(symbol);
-    let fields = "f43,f44,f45,f46,f47,f48,f49,f50,f51,f52,f57,f58,f107,f137,f170,f171,f184";
+    // f43: price, f44: high, f45: low, f46: open, f47: volume, f48: turnover (交易额)
+    // f58: name, f60: previous_close, f169: change, f170: change_percent
+    // f116: total_market_cap (total market capitalization), f117: circulation_market_cap
+    // f115: pe_ratio (TTM PE / 滚动市盈率)
+    let fields = "f43,f44,f45,f46,f47,f48,f49,f50,f51,f52,f57,f58,f60,f107,f115,f116,f117,f137,f169,f170,f171,f184";
     let url = format!(
         "http://push2.eastmoney.com/api/qt/stock/get?secid={}&fields={}",
         secid, fields
@@ -99,7 +105,7 @@ pub async fn fetch_stock_quote(symbol: &str) -> Result<StockQuote, String> {
     if data.is_null() {
         return Err("No data returned".to_string());
     }
-    
+
     let price = data["f43"].as_f64().unwrap_or(0.0) / 100.0;
     let previous_close = data["f60"].as_f64().unwrap_or(price * 100.0) / 100.0;
     let high = data["f44"].as_f64().unwrap_or(price * 100.0) / 100.0;
@@ -108,7 +114,19 @@ pub async fn fetch_stock_quote(symbol: &str) -> Result<StockQuote, String> {
     let volume = data["f47"].as_i64().unwrap_or(0);
     let change = data["f169"].as_f64().unwrap_or(0.0) / 100.0;
     let change_percent = data["f170"].as_f64().unwrap_or(0.0) / 100.0;
-    let market_cap = data["f116"].as_i64();
+    
+    // f116: total market cap (total market capitalization) in yuan (元)
+    // f117: circulation market cap (free float market value) in yuan (元)
+    let market_cap = data["f116"].as_i64().or_else(|| {
+        // Fallback to circulation market cap if total market cap is not available
+        data["f117"].as_i64()
+    });
+    
+    // f115: pe_ratio (TTM PE / 滚动市盈率) - value is already in correct format, no scaling needed
+    let pe_ratio = data["f115"].as_f64();
+    
+    // f48: turnover (交易额/成交额) in yuan (元)
+    let turnover = data["f48"].as_i64();
     
     let name = data["f58"]
         .as_str()
@@ -123,6 +141,8 @@ pub async fn fetch_stock_quote(symbol: &str) -> Result<StockQuote, String> {
         change_percent,
         volume,
         market_cap,
+        pe_ratio,
+        turnover,
         high,
         low,
         open,
@@ -1186,4 +1206,1046 @@ fn predict_ensemble(
     }
     
     Ok(results)
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AIAnalysisResult {
+    pub analysis: String,
+    pub prediction: AIPrediction,
+    pub risk_assessment: AIRiskAssessment,
+    pub recommendations: Vec<String>,
+    pub technical_summary: AITechnicalSummary,
+    pub price_targets: Vec<AIPriceTarget>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AIPrediction {
+    pub price: f64,
+    pub confidence: f64,
+    pub trend: String,
+    pub reasoning: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AIRiskAssessment {
+    pub level: String,
+    pub factors: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AITechnicalSummary {
+    pub indicators: Vec<AIIndicator>,
+    pub overall_signal: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AIIndicator {
+    pub name: String,
+    pub value: f64,
+    pub signal: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AIPriceTarget {
+    pub period: String,
+    pub target: f64,
+    pub probability: f64,
+}
+
+pub async fn ai_analyze_stock(
+    symbol: &str,
+    data: &[StockData],
+    quote: Option<&StockQuote>,
+    api_key: Option<&str>,
+    model: &str,
+    use_local_fallback: bool,
+) -> Result<AIAnalysisResult, String> {
+    if data.len() < 20 {
+        return Err("Insufficient data for AI analysis".to_string());
+    }
+
+    // Check if model is free (Groq and Gemini are free but still need API key)
+    let is_free_model = model.starts_with("groq:") || 
+                       model.starts_with("llama") || 
+                       model.starts_with("mixtral") ||
+                       model.starts_with("gemini");
+    
+    // For models that require API key but none provided, use local analysis
+    if (api_key.is_none() && !is_free_model) || use_local_fallback {
+        return generate_local_ai_analysis(symbol, data, quote);
+    }
+    
+    // For free models, still need API key (but it's free to get)
+    // If no key provided for free model, fall back to local analysis
+    let api_key_to_use = if is_free_model {
+        api_key.unwrap_or_else(|| {
+            // Free APIs require API key - user needs to get free API key
+            return "";
+        })
+    } else {
+        api_key.unwrap_or("")
+    };
+    
+    if api_key_to_use.is_empty() && is_free_model {
+        let error_msg = if model.starts_with("gemini") {
+            "Gemini API requires a free API key. Please get one from https://makersuite.google.com/app/apikey".to_string()
+        } else {
+            "Free API models require a free API key. Please get one from the provider's website".to_string()
+        };
+        return Err(error_msg);
+    }
+
+    match call_ai_api(symbol, data, quote, api_key_to_use, model).await {
+        Ok(result) => Ok(result),
+        Err(e) => {
+            eprintln!("AI API call failed: {}", e);
+            if use_local_fallback {
+                generate_local_ai_analysis(symbol, data, quote)
+            } else {
+                Err(format!("AI API error: {}", e))
+            }
+        }
+    }
+}
+
+async fn call_ai_api(
+    symbol: &str,
+    data: &[StockData],
+    _quote: Option<&StockQuote>,
+    api_key: &str,
+    model: &str,
+) -> Result<AIAnalysisResult, String> {
+    let closes: Vec<f64> = data.iter().map(|d| d.close).collect();
+    let last_price = closes[closes.len() - 1];
+    let price_change = if closes.len() >= 2 {
+        ((last_price - closes[closes.len() - 2]) / closes[closes.len() - 2]) * 100.0
+    } else {
+        0.0
+    };
+
+    let rsi = calculate_rsi(&closes, 14);
+    let macd_result = calculate_macd(&closes, 12, 26, 9);
+    let ma20 = calculate_sma(&closes, 20);
+    let ma50 = calculate_sma(&closes, 50);
+
+    let last_rsi = rsi.last().copied().unwrap_or(50.0);
+    let last_macd = macd_result.macd.last().copied().unwrap_or(0.0);
+    let last_signal = macd_result.signal.last().copied().unwrap_or(0.0);
+    let last_ma20 = ma20.iter().rev().find(|&&x| x > 0.0).copied().unwrap_or(last_price);
+    let last_ma50 = ma50.iter().rev().find(|&&x| x > 0.0).copied().unwrap_or(last_price);
+
+    let prompt = format!(
+        r#"Please analyze the following stock data and provide a comprehensive analysis in JSON format. IMPORTANT: All text content must be in Chinese (Simplified Chinese).
+
+Stock Symbol: {}
+Current Price: {:.2}
+Price Change: {:.2}%
+
+Recent Price Data (last 10 days):
+{}
+
+Technical Indicators:
+- RSI (14): {:.2}
+- MACD: {:.2}, Signal: {:.2}
+- MA20: {:.2}, MA50: {:.2}
+- Current Price vs MA20: {:.2}%
+- Current Price vs MA50: {:.2}%
+
+Please provide analysis in the following JSON format (all text fields must be in Chinese):
+{{
+  "analysis": "综合分析文本（3-5段，使用中文）",
+  "prediction": {{
+    "price": <predicted_price>,
+    "confidence": <confidence_0_100>,
+    "trend": "bullish|bearish|neutral",
+    "reasoning": "预测理由（使用中文）"
+  }},
+  "risk_assessment": {{
+    "level": "low|medium|high",
+    "factors": ["风险因素1（中文）", "风险因素2（中文）"]
+  }},
+  "recommendations": ["投资建议1（中文）", "投资建议2（中文）", "投资建议3（中文）"],
+  "technical_summary": {{
+    "indicators": [
+      {{"name": "RSI", "value": <value>, "signal": "buy|sell|hold"}},
+      {{"name": "MACD", "value": <value>, "signal": "buy|sell|hold"}},
+      {{"name": "MA20", "value": <value>, "signal": "buy|sell|hold"}},
+      {{"name": "MA50", "value": <value>, "signal": "buy|sell|hold"}}
+    ],
+    "overall_signal": "buy|sell|hold"
+  }},
+  "price_targets": [
+    {{"period": "1周", "target": <price>, "probability": <0_100>}},
+    {{"period": "1个月", "target": <price>, "probability": <0_100>}},
+    {{"period": "3个月", "target": <price>, "probability": <0_100>}}
+  ]
+}}
+
+IMPORTANT: All text content in the JSON response must be in Simplified Chinese. Respond ONLY with valid JSON, no additional text."#,
+        symbol,
+        last_price,
+        price_change,
+        format_recent_data(data),
+        last_rsi,
+        last_macd,
+        last_signal,
+        last_ma20,
+        last_ma50,
+        ((last_price - last_ma20) / last_ma20) * 100.0,
+        ((last_price - last_ma50) / last_ma50) * 100.0,
+    );
+
+    let (api_url, api_provider) = if model.starts_with("gpt") {
+        ("https://api.openai.com/v1/chat/completions", "openai")
+    } else if model.starts_with("claude") {
+        ("https://api.anthropic.com/v1/messages", "anthropic")
+    } else if model.starts_with("groq") || model.starts_with("llama") || model.starts_with("mixtral") {
+        ("https://api.groq.com/openai/v1/chat/completions", "groq")
+    } else if model.starts_with("gemini") {
+        ("https://generativelanguage.googleapis.com/v1/models", "gemini") // Will try v1 first, fallback to v1beta
+    } else if model.starts_with("huggingface") || model.contains("/") {
+        ("https://api-inference.huggingface.co/models", "huggingface")
+    } else {
+        return Err("Unsupported model".to_string());
+    };
+
+    let client = reqwest::Client::builder()
+        .user_agent("StockAnalyzer/1.0")
+        .build()
+        .map_err(|e| format!("Client error: {}", e))?;
+
+    let response = if api_provider == "openai" || api_provider == "groq" {
+        // OpenAI-compatible API (OpenAI, Groq)
+        let groq_model = if model.starts_with("groq:") {
+            model.strip_prefix("groq:").unwrap_or(model)
+        } else if model.starts_with("llama") {
+            "llama-3.1-70b-versatile"
+        } else if model.starts_with("mixtral") {
+            "mixtral-8x7b-32768"
+        } else {
+            model
+        };
+        
+        let body = serde_json::json!({
+            "model": groq_model,
+            "messages": [
+                {"role": "system", "content": "You are a professional stock market analyst. Provide accurate, data-driven analysis in JSON format. IMPORTANT: All text content must be in Simplified Chinese (中文)."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.3,
+            "response_format": {"type": "json_object"}
+        });
+
+        client
+            .post(api_url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {}", e))?
+    } else if api_provider == "anthropic" {
+        // Claude API
+        let claude_prompt = format!(
+            "You are a professional stock market analyst. Provide accurate, data-driven analysis in JSON format. IMPORTANT: All text content must be in Simplified Chinese (中文).\n\n{}",
+            prompt
+        );
+        let body = serde_json::json!({
+            "model": model,
+            "max_tokens": 4000,
+            "messages": [
+                {"role": "user", "content": claude_prompt}
+            ]
+        });
+
+        client
+            .post(api_url)
+            .header("x-api-key", api_key)
+            .header("anthropic-version", "2023-06-01")
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {}", e))?
+    } else if api_provider == "gemini" {
+        // Google Gemini API
+        // Map user selection to actual API model names
+        let gemini_model = if model.starts_with("gemini:") {
+            let model_name = model.strip_prefix("gemini:").unwrap_or("gemini-2.5-flash");
+            // Map to correct API model names
+            match model_name {
+                "gemini-1.5-flash" => "gemini-1.5-flash",
+                "gemini-1.5-pro" => "gemini-1.5-pro",
+                "gemini-2.5-flash" => "gemini-2.5-flash",
+                "gemini-2.5-pro" => "gemini-2.5-pro",
+                "gemini-pro" => "gemini-2.5-flash", // Fallback to 2.5-flash
+                _ => "gemini-2.5-flash"
+            }
+        } else if model == "gemini" {
+            "gemini-2.5-flash"
+        } else {
+            "gemini-2.5-flash"
+        };
+        
+        // Build the prompt with system instruction (Chinese output required)
+        let full_prompt = format!(
+            "You are a professional stock market analyst. Provide accurate, data-driven analysis in JSON format. IMPORTANT: All text content must be in Simplified Chinese (中文).\n\n{}",
+            prompt
+        );
+        
+        let body = serde_json::json!({
+            "contents": [{
+                "parts": [{
+                    "text": full_prompt
+                }]
+            }],
+            "generationConfig": {
+                "temperature": 0.3,
+                "maxOutputTokens": 4000,
+                "responseMimeType": "application/json"
+            }
+        });
+
+        // Try different API endpoints and model name variations
+        let mut response = None;
+        let mut last_error = String::new();
+        let mut tried_models = vec![gemini_model.to_string()];
+        
+        // List of models to try in order
+        let models_to_try = vec![
+            gemini_model,
+            "gemini-2.5-flash",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "gemini-pro",
+        ];
+        
+        // Try v1 API first (for newer models)
+        for model_name in &models_to_try {
+            if response.is_some() {
+                break;
+            }
+            
+            let url_v1 = format!("https://generativelanguage.googleapis.com/v1/models/{}:generateContent?key={}", 
+                model_name, api_key);
+            match client
+                .post(&url_v1)
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send()
+                .await
+            {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        response = Some(resp);
+                        break;
+                    } else {
+                        let status = resp.status();
+                        let error_text = resp.text().await.unwrap_or_default();
+                        if !tried_models.contains(&model_name.to_string()) {
+                            tried_models.push(model_name.to_string());
+                        }
+                        last_error = format!("v1 API error {} for {}: {}", status, model_name, error_text);
+                    }
+                }
+                Err(e) => {
+                    if !tried_models.contains(&model_name.to_string()) {
+                        tried_models.push(model_name.to_string());
+                    }
+                    last_error = format!("v1 API network error for {}: {}", model_name, e);
+                }
+            }
+        }
+        
+        // If v1 failed, try v1beta
+        if response.is_none() {
+            for model_name in &models_to_try {
+                if response.is_some() {
+                    break;
+                }
+                
+                let url_v1beta = format!("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}", 
+                    model_name, api_key);
+                match client
+                    .post(&url_v1beta)
+                    .header("Content-Type", "application/json")
+                    .json(&body)
+                    .send()
+                    .await
+                {
+                    Ok(resp) => {
+                        if resp.status().is_success() {
+                            response = Some(resp);
+                            break;
+                        } else {
+                            let status = resp.status();
+                            let error_text = resp.text().await.unwrap_or_default();
+                            if !tried_models.contains(&model_name.to_string()) {
+                                tried_models.push(model_name.to_string());
+                            }
+                            last_error = format!("v1beta API error {} for {}: {}", status, model_name, error_text);
+                        }
+                    }
+                    Err(e) => {
+                        if !tried_models.contains(&model_name.to_string()) {
+                            tried_models.push(model_name.to_string());
+                        }
+                        last_error = format!("v1beta API network error for {}: {}", model_name, e);
+                    }
+                }
+            }
+        }
+        
+        response.ok_or_else(|| {
+            format!("Gemini API error. Tried models: {}. Last error: {}", 
+                tried_models.join(", "), last_error)
+        })?
+    } else if api_provider == "huggingface" {
+        // Hugging Face Inference API
+        let hf_model = if model.starts_with("huggingface:") {
+            model.strip_prefix("huggingface:").unwrap_or(model)
+        } else {
+            model
+        };
+        
+        let url = format!("{}/{}", api_url, hf_model);
+        let body = serde_json::json!({
+            "inputs": format!("You are a professional stock market analyst. Provide accurate, data-driven analysis in JSON format. IMPORTANT: All text content must be in Simplified Chinese (中文).\n\n{}", prompt),
+            "parameters": {
+                "max_new_tokens": 2000,
+                "temperature": 0.3,
+                "return_full_text": false
+            }
+        });
+
+        client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {}", e))?
+    } else {
+        return Err("Unsupported API provider".to_string());
+    };
+
+    let status = response.status();
+    if !status.is_success() {
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(format!("API error: {} - {}", status, error_text));
+    }
+
+    let json: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Parse error: {}", e))?;
+
+    let content = if api_provider == "openai" || api_provider == "groq" {
+        json["choices"][0]["message"]["content"]
+            .as_str()
+            .ok_or("No content in response")?
+    } else if api_provider == "anthropic" {
+        json["content"][0]["text"]
+            .as_str()
+            .ok_or("No content in response")?
+    } else if api_provider == "gemini" {
+        // Check for errors first
+        if let Some(error) = json.get("error") {
+            let error_msg = error["message"]
+                .as_str()
+                .unwrap_or("Unknown Gemini API error");
+            return Err(format!("Gemini API error: {}", error_msg));
+        }
+        
+        // Extract text from candidates
+        let text = json["candidates"][0]["content"]["parts"][0]["text"]
+            .as_str()
+            .ok_or("No content in Gemini response")?;
+        
+        // Gemini may return text wrapped in markdown code blocks, extract JSON
+        let text_clean = if text.trim_start().starts_with("```json") {
+            text.trim_start()
+                .strip_prefix("```json")
+                .and_then(|s| s.strip_suffix("```"))
+                .map(|s| s.trim())
+                .unwrap_or(text)
+        } else if text.trim_start().starts_with("```") {
+            text.trim_start()
+                .strip_prefix("```")
+                .and_then(|s| s.strip_suffix("```"))
+                .map(|s| s.trim())
+                .unwrap_or(text)
+        } else {
+            text
+        };
+        
+        text_clean
+    } else if api_provider == "huggingface" {
+        // Hugging Face returns array of generated text
+        if let Some(text_array) = json.as_array() {
+            if let Some(first_item) = text_array.first() {
+                first_item["generated_text"]
+                    .as_str()
+                    .ok_or("No generated text in response")?
+            } else {
+                return Err("Empty response from Hugging Face".to_string());
+            }
+        } else if json["generated_text"].is_string() {
+            json["generated_text"]
+                .as_str()
+                .ok_or("No generated text in response")?
+        } else {
+            return Err("Unexpected Hugging Face response format".to_string());
+        }
+    } else {
+        return Err("Unsupported API provider for content extraction".to_string());
+    };
+
+    // Clean and extract JSON from content
+    let cleaned_content = extract_json_from_text(content);
+
+    // Try to parse JSON, with fallback for incomplete responses
+    let result: AIAnalysisResult = match serde_json::from_str(&cleaned_content) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            // Try to find and extract JSON object more aggressively
+            let json_candidate = find_json_in_text(&cleaned_content);
+            match serde_json::from_str(&json_candidate) {
+                Ok(parsed) => parsed,
+                Err(e2) => {
+                    // If JSON parsing still fails, try to extract at least the analysis text
+                    // and create a minimal valid response
+                    if let Some(analysis_text) = extract_analysis_text(&cleaned_content) {
+                        eprintln!("AI API partially failed, using fallback analysis. Error: {}", e2);
+                        create_fallback_analysis(analysis_text, symbol, data)
+                    } else {
+                        // Log the problematic content for debugging
+                        let preview = if cleaned_content.len() > 1000 {
+                            // Find the last valid UTF-8 character boundary before 1000 bytes
+                            let mut end_idx = 1000;
+                            while end_idx > 0 && !cleaned_content.is_char_boundary(end_idx) {
+                                end_idx -= 1;
+                            }
+                            if end_idx == 0 {
+                                end_idx = 1000; // Fallback if no valid boundary found
+                            }
+                            format!("{}...", &cleaned_content[..end_idx])
+                        } else {
+                            cleaned_content.clone()
+                        };
+                        return Err(format!("Failed to parse AI response: {}. Original error: {}. Content length: {}. Preview: {}",
+                            e2, e, cleaned_content.len(), preview));
+                    }
+                }
+            }
+        }
+    };
+
+    Ok(result)
+}
+
+// Extract JSON from text that may contain markdown code blocks or other text
+fn extract_json_from_text(text: &str) -> String {
+    let trimmed = text.trim();
+    
+    // Try to extract JSON from markdown code blocks
+    if trimmed.starts_with("```json") {
+        if let Some(json_part) = trimmed.strip_prefix("```json") {
+            if let Some(json_clean) = json_part.strip_suffix("```") {
+                return json_clean.trim().to_string();
+            }
+            // If no closing ```, try to find the first { and extract from there
+            if let Some(start_pos) = json_part.find('{') {
+                return extract_json_object(&json_part[start_pos..]);
+            }
+        }
+    } else if trimmed.starts_with("```") {
+        if let Some(json_part) = trimmed.strip_prefix("```") {
+            if let Some(json_clean) = json_part.strip_suffix("```") {
+                let cleaned = json_clean.trim();
+                // Try to find JSON object in the cleaned text
+                if let Some(start_pos) = cleaned.find('{') {
+                    return extract_json_object(&cleaned[start_pos..]);
+                }
+                return cleaned.to_string();
+            }
+            // If no closing ```, try to find the first { and extract from there
+            if let Some(start_pos) = json_part.find('{') {
+                return extract_json_object(&json_part[start_pos..]);
+            }
+        }
+    }
+    
+    // Try to find JSON object in the text
+    if let Some(start_pos) = trimmed.find('{') {
+        return extract_json_object(&trimmed[start_pos..]);
+    }
+    
+    // Return as-is if no JSON object found
+    trimmed.to_string()
+}
+
+// More aggressive JSON finding - looks for the largest valid JSON object
+fn find_json_in_text(text: &str) -> String {
+    // First try the standard extraction
+    let extracted = extract_json_from_text(text);
+    
+    // If that didn't work or produced invalid JSON, try to find JSON more aggressively
+    if let Some(start_pos) = text.find('{') {
+        let mut best_json = String::new();
+        let mut best_length = 0;
+        
+        // Try multiple starting positions
+        for i in start_pos..text.len().min(start_pos + 100) {
+            if text.chars().nth(i) == Some('{') {
+                let candidate = extract_json_object(&text[i..]);
+                if candidate.len() > best_length {
+                    // Try to validate it's valid JSON
+                    if serde_json::from_str::<serde_json::Value>(&candidate).is_ok() {
+                        best_json = candidate;
+                        best_length = best_json.len();
+                    }
+                }
+            }
+        }
+        
+        if !best_json.is_empty() {
+            return best_json;
+        }
+        
+        // Fallback: return the extracted version
+        return extracted;
+    }
+    
+    extracted
+}
+
+// Extract analysis text from potentially malformed AI response
+fn extract_analysis_text(text: &str) -> Option<String> {
+    // Try to find analysis field in the text
+    if let Some(start) = text.find("\"analysis\"") {
+        let remaining = &text[start..];
+        if let Some(colon_pos) = remaining.find(':') {
+            let value_start = colon_pos + 1;
+            let value_text = &remaining[value_start..].trim();
+
+            // Find the start of the string value
+            if value_text.starts_with('"') {
+                let mut in_escape = false;
+                let mut result = String::new();
+                let mut chars = value_text.chars().skip(1); // Skip opening quote
+
+                while let Some(ch) = chars.next() {
+                    match ch {
+                        '\\' => {
+                            if in_escape {
+                                result.push('\\');
+                                in_escape = false;
+                            } else {
+                                in_escape = true;
+                            }
+                        }
+                        '"' => {
+                            if !in_escape {
+                                // End of string
+                                return Some(result);
+                            } else {
+                                result.push('"');
+                                in_escape = false;
+                            }
+                        }
+                        _ => {
+                            if in_escape {
+                                result.push('\\');
+                                in_escape = false;
+                            }
+                            result.push(ch);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: try to extract any substantial text content
+    let cleaned = text.trim();
+    if cleaned.len() > 50 && !cleaned.contains("error") && !cleaned.contains("Error") {
+        Some(cleaned.to_string())
+    } else {
+        None
+    }
+}
+
+// Create a fallback analysis when AI response is malformed
+fn create_fallback_analysis(analysis_text: String, symbol: &str, data: &[StockData]) -> AIAnalysisResult {
+    let closes: Vec<f64> = data.iter().map(|d| d.close).collect();
+    let last_price = closes[closes.len() - 1];
+    let price_change = if closes.len() >= 2 {
+        ((last_price - closes[closes.len() - 2]) / closes[closes.len() - 2]) * 100.0
+    } else {
+        0.0
+    };
+
+    let rsi = calculate_rsi(&closes, 14);
+    let last_rsi = rsi.last().copied().unwrap_or(50.0);
+    let ma20 = calculate_sma(&closes, 20);
+    let last_ma20 = ma20.iter().rev().find(|&&x| x > 0.0).copied().unwrap_or(last_price);
+
+    // Create basic analysis based on technical indicators
+    let trend = if last_price > last_ma20 && last_rsi > 50.0 {
+        "bullish"
+    } else if last_price < last_ma20 && last_rsi < 50.0 {
+        "bearish"
+    } else {
+        "neutral"
+    };
+
+    let confidence = if trend == "neutral" { 50.0 } else { 65.0 };
+
+    AIAnalysisResult {
+        analysis: analysis_text,
+        prediction: AIPrediction {
+            price: (last_price * (1.0 + price_change / 100.0 * 0.1)).max(0.01),
+            confidence,
+            trend: trend.to_string(),
+            reasoning: format!("基于技术指标分析，当前股价{}元，涨跌幅{:.2}%，RSI为{:.1}，建议投资者谨慎决策。",
+                             last_price, price_change, last_rsi),
+        },
+        risk_assessment: AIRiskAssessment {
+            level: if last_rsi > 70.0 || last_rsi < 30.0 { "high" } else { "medium" }.to_string(),
+            factors: vec![
+                "市场波动风险".to_string(),
+                "技术指标信号不明确".to_string(),
+                "AI分析数据不完整".to_string(),
+            ],
+        },
+        recommendations: vec![
+            "建议投资者根据个人风险承受能力决策".to_string(),
+            "关注股价波动和技术指标变化".to_string(),
+            "如有疑问可咨询专业投资顾问".to_string(),
+        ],
+        technical_summary: AITechnicalSummary {
+            indicators: vec![
+                AIIndicator {
+                    name: "RSI".to_string(),
+                    value: last_rsi,
+                    signal: if last_rsi > 70.0 { "sell" } else if last_rsi < 30.0 { "buy" } else { "hold" }.to_string(),
+                },
+                AIIndicator {
+                    name: "MA20".to_string(),
+                    value: last_ma20,
+                    signal: if last_price > last_ma20 { "buy" } else { "hold" }.to_string(),
+                },
+            ],
+            overall_signal: if trend == "bullish" { "buy" } else if trend == "bearish" { "sell" } else { "hold" }.to_string(),
+        },
+        price_targets: vec![
+            AIPriceTarget {
+                period: "1周".to_string(),
+                target: last_price * 1.05,
+                probability: 60.0,
+            },
+            AIPriceTarget {
+                period: "1个月".to_string(),
+                target: last_price * 1.10,
+                probability: 50.0,
+            },
+            AIPriceTarget {
+                period: "3个月".to_string(),
+                target: last_price * 1.15,
+                probability: 40.0,
+            },
+        ],
+    }
+}
+
+// Extract a complete JSON object from text, handling incomplete strings
+fn extract_json_object(text: &str) -> String {
+    let mut result = String::new();
+    let mut depth = 0;
+    let mut in_string = false;
+    let mut escape_next = false;
+    let mut chars = text.chars().peekable();
+    
+    while let Some(ch) = chars.next() {
+        if escape_next {
+            result.push(ch);
+            escape_next = false;
+            continue;
+        }
+        
+        match ch {
+            '\\' => {
+                result.push(ch);
+                escape_next = true;
+            }
+            '"' => {
+                result.push(ch);
+                in_string = !in_string;
+            }
+            '{' => {
+                result.push(ch);
+                if !in_string {
+                    depth += 1;
+                }
+            }
+            '}' => {
+                result.push(ch);
+                if !in_string {
+                    depth -= 1;
+                    if depth == 0 {
+                        // Found complete JSON object
+                        return result;
+                    }
+                }
+            }
+            _ => {
+                result.push(ch);
+            }
+        }
+    }
+    
+    // If we didn't find a complete object, try to fix common truncation issues
+    if depth > 0 {
+        // Try to close unclosed objects/arrays
+        while depth > 0 {
+            // Check if we're in the middle of a string
+            if in_string {
+                // Close the string
+                result.push('"');
+                in_string = false;
+            }
+            // Close objects/arrays
+            result.push('}');
+            depth -= 1;
+        }
+    }
+    
+    result
+}
+
+fn format_recent_data(data: &[StockData]) -> String {
+    let recent = data.iter().rev().take(10).rev();
+    recent
+        .map(|d| format!("{}: O={:.2}, H={:.2}, L={:.2}, C={:.2}, V={}", 
+            d.date, d.open, d.high, d.low, d.close, d.volume))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn generate_local_ai_analysis(
+    symbol: &str,
+    data: &[StockData],
+    _quote: Option<&StockQuote>,
+) -> Result<AIAnalysisResult, String> {
+    let closes: Vec<f64> = data.iter().map(|d| d.close).collect();
+    let last_price = closes[closes.len() - 1];
+    let price_change = if closes.len() >= 2 {
+        ((last_price - closes[closes.len() - 2]) / closes[closes.len() - 2]) * 100.0
+    } else {
+        0.0
+    };
+
+    let rsi = calculate_rsi(&closes, 14);
+    let macd_result = calculate_macd(&closes, 12, 26, 9);
+    let ma20 = calculate_sma(&closes, 20);
+    let ma50 = calculate_sma(&closes, 50);
+    let ema12 = calculate_ema(&closes, 12);
+    let ema26 = calculate_ema(&closes, 26);
+
+    let last_rsi = rsi.last().copied().unwrap_or(50.0);
+    let last_macd = macd_result.macd.last().copied().unwrap_or(0.0);
+    let last_signal = macd_result.signal.last().copied().unwrap_or(0.0);
+    let last_ma20 = ma20.iter().rev().find(|&&x| x > 0.0).copied().unwrap_or(last_price);
+    let last_ma50 = ma50.iter().rev().find(|&&x| x > 0.0).copied().unwrap_or(last_price);
+    let last_ema12 = ema12.last().copied().unwrap_or(last_price);
+    let last_ema26 = ema26.last().copied().unwrap_or(last_price);
+
+    let trend_slope = if closes.len() >= 20 {
+        let recent = &closes[closes.len() - 20..];
+        let first = recent[0];
+        let last = recent[recent.len() - 1];
+        ((last - first) / first) * 100.0
+    } else {
+        0.0
+    };
+
+    let mut bullish_signals = 0;
+    let mut bearish_signals = 0;
+
+    if last_price > last_ma20 { bullish_signals += 1; } else { bearish_signals += 1; }
+    if last_price > last_ma50 { bullish_signals += 1; } else { bearish_signals += 1; }
+    if last_ma20 > last_ma50 { bullish_signals += 1; } else { bearish_signals += 1; }
+    if last_ema12 > last_ema26 { bullish_signals += 1; } else { bearish_signals += 1; }
+    if last_macd > last_signal { bullish_signals += 1; } else { bearish_signals += 1; }
+    if last_rsi > 50.0 { bullish_signals += 1; } else { bearish_signals += 1; }
+
+    let overall_signal = if bullish_signals > bearish_signals {
+        "buy"
+    } else if bearish_signals > bullish_signals {
+        "sell"
+    } else {
+        "hold"
+    };
+
+    let trend = if trend_slope > 2.0 {
+        "bullish"
+    } else if trend_slope < -2.0 {
+        "bearish"
+    } else {
+        "neutral"
+    };
+
+    let predicted_price = if trend_slope > 0.0 {
+        last_price * (1.0 + trend_slope / 100.0 * 0.1)
+    } else {
+        last_price * (1.0 + trend_slope / 100.0 * 0.1)
+    };
+
+    let confidence = (50.0 + (bullish_signals + bearish_signals) as f64 * 5.0).min(85.0);
+
+    let volatility = calculate_variance(&closes).sqrt() / last_price * 100.0;
+    let risk_level = if volatility > 5.0 {
+        "high"
+    } else if volatility > 2.0 {
+        "medium"
+    } else {
+        "low"
+    };
+
+    let risk_factors = vec![
+        format!("Volatility: {:.2}%", volatility),
+        if last_rsi > 70.0 {
+            "RSI indicates overbought condition".to_string()
+        } else if last_rsi < 30.0 {
+            "RSI indicates oversold condition".to_string()
+        } else {
+            "RSI in neutral range".to_string()
+        },
+        if trend_slope.abs() < 1.0 {
+            "Low trend strength".to_string()
+        } else {
+            format!("Trend strength: {:.2}%", trend_slope.abs())
+        },
+    ];
+
+    let mut recommendations = Vec::new();
+    if overall_signal == "buy" {
+        recommendations.push("Consider buying on dips".to_string());
+        recommendations.push("Set stop-loss below recent support".to_string());
+    } else if overall_signal == "sell" {
+        recommendations.push("Consider taking profits".to_string());
+        recommendations.push("Watch for reversal signals".to_string());
+    } else {
+        recommendations.push("Wait for clearer signals".to_string());
+        recommendations.push("Monitor key support/resistance levels".to_string());
+    }
+    recommendations.push(format!("RSI at {:.1} suggests {}", last_rsi, 
+        if last_rsi > 70.0 { "overbought" } else if last_rsi < 30.0 { "oversold" } else { "neutral" }));
+
+    let indicators = vec![
+        AIIndicator {
+            name: "RSI".to_string(),
+            value: last_rsi,
+            signal: if last_rsi > 70.0 { "sell" } else if last_rsi < 30.0 { "buy" } else { "hold" }.to_string(),
+        },
+        AIIndicator {
+            name: "MACD".to_string(),
+            value: last_macd,
+            signal: if last_macd > last_signal { "buy" } else { "sell" }.to_string(),
+        },
+        AIIndicator {
+            name: "MA20".to_string(),
+            value: last_ma20,
+            signal: if last_price > last_ma20 { "buy" } else { "sell" }.to_string(),
+        },
+        AIIndicator {
+            name: "MA50".to_string(),
+            value: last_ma50,
+            signal: if last_price > last_ma50 { "buy" } else { "sell" }.to_string(),
+        },
+    ];
+
+    let price_targets = vec![
+        AIPriceTarget {
+            period: "1 week".to_string(),
+            target: predicted_price * 1.02,
+            probability: confidence * 0.8,
+        },
+        AIPriceTarget {
+            period: "1 month".to_string(),
+            target: predicted_price * 1.05,
+            probability: confidence * 0.7,
+        },
+        AIPriceTarget {
+            period: "3 months".to_string(),
+            target: predicted_price * 1.10,
+            probability: confidence * 0.6,
+        },
+    ];
+
+    let analysis = format!(
+        r#"Stock {} Analysis:
+
+Current Price: {:.2} ({:.2}%)
+
+Technical Analysis:
+The stock is currently trading at {:.2}, showing a {} trend over the past period. 
+RSI is at {:.1}, indicating {} conditions. MACD shows {}, suggesting {} momentum.
+
+Moving averages indicate {} sentiment, with price {} the 20-day and 50-day moving averages.
+The overall technical picture suggests a {} outlook.
+
+Risk Assessment:
+The stock exhibits {} volatility, classified as {} risk. Key risk factors include {}.
+
+Recommendation:
+Based on technical indicators, the recommended action is to {}. 
+Investors should monitor key support and resistance levels, and consider the overall market conditions."#,
+        symbol,
+        last_price,
+        price_change,
+        last_price,
+        trend,
+        last_rsi,
+        if last_rsi > 70.0 { "overbought" } else if last_rsi < 30.0 { "oversold" } else { "neutral" },
+        if last_macd > last_signal { "positive" } else { "negative" },
+        if last_macd > last_signal { "bullish" } else { "bearish" },
+        if bullish_signals > bearish_signals { "bullish" } else { "bearish" },
+        if last_price > last_ma20 && last_price > last_ma50 { "above" } else { "below" },
+        trend,
+        volatility,
+        risk_level,
+        risk_factors.join(", "),
+        overall_signal,
+    );
+
+    Ok(AIAnalysisResult {
+        analysis,
+        prediction: AIPrediction {
+            price: predicted_price,
+            confidence,
+            trend: trend.to_string(),
+            reasoning: format!(
+                "Based on {} trend analysis and technical indicators, the stock shows {} signals. 
+                RSI at {:.1} and MACD {} suggest {} momentum.",
+                trend,
+                overall_signal,
+                last_rsi,
+                if last_macd > last_signal { "positive" } else { "negative" },
+                trend
+            ),
+        },
+        risk_assessment: AIRiskAssessment {
+            level: risk_level.to_string(),
+            factors: risk_factors,
+        },
+        recommendations,
+        technical_summary: AITechnicalSummary {
+            indicators,
+            overall_signal: overall_signal.to_string(),
+        },
+        price_targets,
+    })
 }

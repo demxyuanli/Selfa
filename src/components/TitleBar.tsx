@@ -170,7 +170,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ onMenuAction, onSettingsClick }) =>
       </div>
       <div className="title-bar-right">
         <button className="title-bar-button" onClick={handleSettings} title="Settings">
-          <span className="title-bar-icon">⚙</span>
+          <span className="title-bar-icon">ST</span>
         </button>
         <LanguageSelector />
         <button 
@@ -187,7 +187,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ onMenuAction, onSettingsClick }) =>
           onMouseDown={(e) => e.stopPropagation()}
           title={isMaximized ? "Restore" : "Maximize"}
         >
-          <span className="title-bar-icon">{isMaximized ? "□" : "⬜"}</span>
+          <span className="title-bar-icon">{isMaximized ? "□" : "□"}</span>
         </button>
         <button 
           className="title-bar-button title-bar-close" 

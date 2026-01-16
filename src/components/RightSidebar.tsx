@@ -35,46 +35,76 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!visible || activePanel !== "timeSeries") {
+      return;
+    }
+    
+    let isInitialLoad = true;
+    
     const fetchTimeSeriesData = async () => {
-      setLoading(true);
       try {
         const [shTS, szTS, cyTS] = await Promise.all([
           invoke("get_time_series", { symbol: "000001" }),
           invoke("get_time_series", { symbol: "399001" }),
           invoke("get_time_series", { symbol: "399006" }),
         ]);
-        console.log("Time series data received:", {
-          sh: shTS,
-          sz: szTS,
-          cy: cyTS,
-          shLength: Array.isArray(shTS) ? shTS.length : 0,
-          szLength: Array.isArray(szTS) ? szTS.length : 0,
-          cyLength: Array.isArray(cyTS) ? cyTS.length : 0,
+        
+        const newShData = shTS as StockData[];
+        const newSzData = szTS as StockData[];
+        const newCyData = cyTS as StockData[];
+        
+        // Use functional updates to access current state
+        setShTimeSeries((prev) => {
+          if (isInitialLoad || JSON.stringify(newShData) !== JSON.stringify(prev)) {
+            return newShData;
+          }
+          return prev;
         });
-        setShTimeSeries(shTS as StockData[]);
-        setSzTimeSeries(szTS as StockData[]);
-        setCyTimeSeries(cyTS as StockData[]);
+        setSzTimeSeries((prev) => {
+          if (isInitialLoad || JSON.stringify(newSzData) !== JSON.stringify(prev)) {
+            return newSzData;
+          }
+          return prev;
+        });
+        setCyTimeSeries((prev) => {
+          if (isInitialLoad || JSON.stringify(newCyData) !== JSON.stringify(prev)) {
+            return newCyData;
+          }
+          return prev;
+        });
+        
+        if (isInitialLoad) {
+          setLoading(false);
+          isInitialLoad = false;
+        }
       } catch (err) {
         console.error("Error fetching time series data:", err);
-        setShTimeSeries([]);
-        setSzTimeSeries([]);
-        setCyTimeSeries([]);
-      } finally {
-        setLoading(false);
+        if (isInitialLoad) {
+          setLoading(false);
+          isInitialLoad = false;
+        }
+        // Don't clear existing data on error, keep showing cached data
       }
     };
 
-    if (visible && activePanel === "timeSeries") {
+    // Initial load
+    setLoading(true);
+    fetchTimeSeriesData();
+    
+    // Set up interval for periodic updates
+    const interval = setInterval(() => {
       fetchTimeSeriesData();
-      const interval = setInterval(fetchTimeSeriesData, 60000);
-      return () => clearInterval(interval);
-    }
+    }, 60000);
+    
+    return () => clearInterval(interval);
   }, [visible, activePanel]);
 
   useEffect(() => {
+    if (!visible || activePanel !== "dailyK") {
+      return;
+    }
+    
     const fetchKLineData = async () => {
-      if (activePanel !== "dailyK" || !visible) return;
-      
       setLoading(true);
       try {
         const period = klinePeriod;
@@ -117,7 +147,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
                   {loading ? (
                     <div className="index-loading">Loading...</div>
                   ) : (
-                    <TimeSeriesChart data={shTimeSeries} compact={true} />
+                    <TimeSeriesChart key="sh" data={shTimeSeries} compact={true} />
                   )}
                 </div>
                 <div className="index-chart-item">
@@ -125,7 +155,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
                   {loading ? (
                     <div className="index-loading">Loading...</div>
                   ) : (
-                    <TimeSeriesChart data={szTimeSeries} compact={true} />
+                    <TimeSeriesChart key="sz" data={szTimeSeries} compact={true} />
                   )}
                 </div>
                 <div className="index-chart-item">
@@ -133,7 +163,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
                   {loading ? (
                     <div className="index-loading">Loading...</div>
                   ) : (
-                    <TimeSeriesChart data={cyTimeSeries} compact={true} />
+                    <TimeSeriesChart key="cy" data={cyTimeSeries} compact={true} />
                   )}
                 </div>
               </div>
@@ -219,7 +249,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
             }}
             title={t("index.timeSeries")}
           >
-            📈
+            TS
           </button>
           <button
             className={`sidebar-icon ${activePanel === "dailyK" ? "active" : ""}`}
@@ -229,7 +259,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
             }}
             title={t("index.dailyK")}
           >
-            📊
+            KL
           </button>
         </div>
       </div>

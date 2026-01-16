@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
+import ChartDialog from "./ChartDialog";
 import "./StockAnalysis.css";
 import "./CompareAnalysis.css";
 
@@ -32,6 +33,8 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
   const [searchResults, setSearchResults] = useState<Array<{ symbol: string; name: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [normalizeMode, setNormalizeMode] = useState<"price" | "percent">("percent");
+  const [isChartDialogOpen, setIsChartDialogOpen] = useState(false);
+  const chartRef = useRef<ReactECharts>(null);
 
   useEffect(() => {
     if (currentData.length > 0) {
@@ -42,6 +45,35 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
       }]);
     }
   }, [currentSymbol, currentData]);
+
+  useEffect(() => {
+    let resizeTimer: number | null = null;
+    const handleResize = () => {
+      if (resizeTimer) {
+        clearTimeout(resizeTimer);
+      }
+      resizeTimer = setTimeout(() => {
+        if (chartRef.current) {
+          try {
+            const instance = chartRef.current.getEchartsInstance();
+            if (instance && !instance.isDisposed()) {
+              instance.resize();
+            }
+          } catch (error) {
+            // Ignore errors during resize
+          }
+        }
+      }, 100);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      if (resizeTimer) {
+        clearTimeout(resizeTimer);
+      }
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
@@ -154,17 +186,17 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
       grid: {
         left: "8%",
         right: "3%",
-        top: "12%",
+        top: "16%",
         bottom: "10%",
       },
       graphic: [
         {
           type: "text",
           left: "center",
-          top: "2%",
+          top: "1%",
           style: {
             text: `${t("analysis.comparisonMode")}: ${normalizeMode === "percent" ? t("analysis.normalizePercent") : t("analysis.normalizePrice")} | ${t("analysis.comparedStocks")}: ${compareStocks.length}`,
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: "bold",
             fill: "#858585",
           },
@@ -430,20 +462,38 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
 
         {/* Right Column: Chart */}
         <div className="analysis-column chart-column">
-          <div className="column-header">{t("analysis.chart")}</div>
+          <div className="column-header">
+            <span>{t("analysis.chart")}</span>
+          </div>
           <div className="chart-content">
             {Object.keys(chartOption).length === 0 ? (
               <div className="no-data">{t("analysis.noData")}</div>
             ) : (
-              <ReactECharts
-                option={chartOption}
-                style={{ height: "100%", width: "100%" }}
-                opts={{ renderer: "canvas" }}
-              />
+              <>
+                <button
+                  className="chart-zoom-button-overlay"
+                  onClick={() => setIsChartDialogOpen(true)}
+                  title={t("chart.zoom")}
+                >
+                  ZO
+                </button>
+                <ReactECharts
+                  ref={chartRef}
+                  option={chartOption}
+                  style={{ height: "100%", width: "100%" }}
+                  opts={{ renderer: "canvas" }}
+                />
+              </>
             )}
           </div>
         </div>
       </div>
+      <ChartDialog
+        isOpen={isChartDialogOpen}
+        onClose={() => setIsChartDialogOpen(false)}
+        title={`${t("analysis.compare")} - ${t("chart.title")}`}
+        chartOption={chartOption}
+      />
     </div>
   );
 };

@@ -23,6 +23,67 @@ async fn get_stock_quote(
 }
 
 #[tauri::command]
+async fn get_all_favorites_quotes(
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<Vec<(StockInfo, Option<StockQuote>)>, String> {
+    let stocks = db.get_stocks_by_group(None)
+        .map_err(|e| format!("Failed to get stocks: {}", e))?;
+    
+    // Exclude default indices: 000001 (Shanghai), 399001 (Shenzhen), 399006 (ChiNext)
+    let excluded_symbols = ["000001", "399001", "399006"];
+    
+    // Filter out excluded indices
+    let filtered_stocks: Vec<_> = stocks
+        .into_iter()
+        .filter(|stock| !excluded_symbols.contains(&stock.symbol.as_str()))
+        .collect();
+    
+    // Fetch quotes concurrently using tokio tasks
+    let mut tasks = Vec::new();
+    for stock in &filtered_stocks {
+        let symbol = stock.symbol.clone();
+        let db_clone = db.inner().clone();
+        let task = tokio::spawn(async move {
+            let symbol_clone = symbol.clone();
+            match fetch_stock_quote(&symbol_clone).await {
+                Ok(quote) => {
+                    // Save to database for caching (but don't fail if save fails)
+                    let _ = db_clone.save_quote(&quote);
+                    (symbol, Some(quote))
+                }
+                Err(err) => {
+                    eprintln!("Failed to fetch quote for {}: {}", symbol_clone, err);
+                    (symbol, None)
+                }
+            }
+        });
+        tasks.push(task);
+    }
+    
+    // Collect results from all tasks
+    let mut quotes_map = std::collections::HashMap::new();
+    for task in tasks {
+        match task.await {
+            Ok((symbol, quote)) => {
+                quotes_map.insert(symbol, quote);
+            }
+            Err(err) => {
+                eprintln!("Task error: {}", err);
+            }
+        }
+    }
+    
+    // Combine stocks with their quotes in the original order
+    let mut result = Vec::new();
+    for stock in filtered_stocks {
+        let quote = quotes_map.remove(&stock.symbol);
+        result.push((stock, quote.flatten()));
+    }
+
+    Ok(result)
+}
+
+#[tauri::command]
 async fn get_stock_history(
     symbol: String,
     period: String,
@@ -208,6 +269,7 @@ struct TagInfo {
 }
 
 #[derive(serde::Serialize)]
+#[allow(dead_code)]
 struct StockWithTags {
     symbol: String,
     name: String,
@@ -310,11 +372,45 @@ fn predict_stock_price(
     stock_api::predict_stock_price(&data, &method, period)
 }
 
+#[tauri::command]
+async fn ai_analyze_stock(
+    symbol: String,
+    data: Vec<StockData>,
+    quote: Option<StockQuote>,
+    api_key: Option<String>,
+    model: String,
+    use_local_fallback: bool,
+) -> Result<stock_api::AIAnalysisResult, String> {
+    stock_api::ai_analyze_stock(
+        &symbol,
+        &data,
+        quote.as_ref(),
+        api_key.as_deref(),
+        &model,
+        use_local_fallback,
+    )
+    .await
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
             let db = Database::new(app.handle())
                 .map_err(|e| format!("Failed to initialize database: {}", e))?;
+
+            // Add some test stocks for heatmap demo
+            let test_stocks = vec![
+                StockInfo { symbol: "000002".to_string(), name: "万科A".to_string(), exchange: "SZ".to_string() },
+                StockInfo { symbol: "600036".to_string(), name: "招商银行".to_string(), exchange: "SH".to_string() },
+                StockInfo { symbol: "000001".to_string(), name: "平安银行".to_string(), exchange: "SZ".to_string() },
+                StockInfo { symbol: "600519".to_string(), name: "贵州茅台".to_string(), exchange: "SH".to_string() },
+                StockInfo { symbol: "000858".to_string(), name: "五粮液".to_string(), exchange: "SZ".to_string() },
+            ];
+
+            for stock in test_stocks {
+                let _ = db.add_stock(&stock, None); // Ignore errors if stock already exists
+            }
+
             app.manage(Arc::new(db));
             Ok(())
         })
@@ -341,7 +437,9 @@ fn main() {
             remove_tag_from_stock,
             get_stock_tags,
             get_stocks_by_tag,
-            predict_stock_price
+            predict_stock_price,
+            ai_analyze_stock,
+            get_all_favorites_quotes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

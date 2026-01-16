@@ -1,0 +1,515 @@
+.ai-agent-analysis {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Column Header Enhancement */
+.ai-agent-analysis .column-header {
+  background: linear-gradient(180deg, #2d2d30 0%, #252526 100%);
+  border-bottom: 2px solid #007acc;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: relative;
+}
+
+.ai-agent-analysis .column-header::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(0, 122, 204, 0.5) 50%, transparent 100%);
+}
+
+/* Configuration Panel Styles */
+.ai-agent-analysis .params-column {
+  background: linear-gradient(180deg, #252526 0%, #1e1e1e 100%);
+  border-right: 1px solid rgba(0, 122, 204, 0.2);
+}
+
+.ai-agent-analysis .params-content {
+  padding: 12px;
+  background: transparent;
+}
+
+.ai-agent-analysis .param-section {
+  background: rgba(45, 45, 48, 0.5);
+  border: 1px solid rgba(62, 62, 66, 0.6);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  transition: all 0.2s ease;
+}
+
+.ai-agent-analysis .param-section:hover {
+  border-color: rgba(0, 122, 204, 0.3);
+  background: rgba(45, 45, 48, 0.7);
+}
+
+.ai-agent-analysis .param-section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #007acc;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ai-agent-analysis .param-section-label::before {
+  content: "CF";
+  font-size: 10px;
+  opacity: 0.8;
+  font-weight: 600;
+}
+
+.ai-agent-analysis .param-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-agent-analysis .param-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-agent-analysis .param-item-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: #858585;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ai-agent-analysis .param-item-label::before {
+  content: "•";
+  color: #007acc;
+  font-weight: bold;
+}
+
+.ai-agent-analysis .param-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: #1e1e1e;
+  border: 1px solid #3e3e42;
+  border-radius: 4px;
+  color: #cccccc;
+  font-size: 11px;
+  transition: all 0.2s ease;
+}
+
+.ai-agent-analysis .param-input:hover {
+  border-color: #4e4e52;
+}
+
+.ai-agent-analysis .param-input:focus {
+  outline: none;
+  border-color: #007acc;
+  background: #252526;
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+}
+
+.ai-agent-analysis .param-select {
+  width: 100%;
+  padding: 8px 28px 8px 10px;
+  background: #1e1e1e;
+  border: 1px solid #3e3e42;
+  border-radius: 4px;
+  color: #cccccc;
+  font-size: 11px;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath fill='%23858585' d='M7 10L2 5h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.2s ease;
+}
+
+.ai-agent-analysis .param-select:hover {
+  border-color: #4e4e52;
+  background: #252526;
+}
+
+.ai-agent-analysis .param-select:focus {
+  outline: none;
+  border-color: #007acc;
+  background: #252526;
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+}
+
+.ai-agent-analysis .param-select option {
+  padding: 8px 10px;
+  background: #1e1e1e;
+  color: #cccccc;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.ai-agent-analysis .param-select optgroup {
+  font-weight: 600;
+  color: #007acc;
+  background: #252526;
+  padding: 4px 0;
+}
+
+.ai-agent-analysis .api-info {
+  margin-top: 4px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.15) 0%, rgba(76, 175, 80, 0.05) 100%);
+  border: 1px solid rgba(76, 175, 80, 0.4);
+  border-left: 3px solid #4caf50;
+  border-radius: 4px;
+  font-size: 10px;
+  color: #81c784;
+  line-height: 1.5;
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-agent-analysis .api-info::before {
+  content: "i";
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  font-weight: bold;
+  opacity: 0.8;
+  font-style: italic;
+}
+
+.ai-agent-analysis .api-info small {
+  display: block;
+  padding-left: 20px;
+}
+
+.ai-agent-analysis .param-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #cccccc;
+  cursor: pointer;
+  padding: 6px 0;
+  transition: color 0.2s ease;
+}
+
+.ai-agent-analysis .param-checkbox:hover {
+  color: #ffffff;
+}
+
+.ai-agent-analysis .param-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #007acc;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+}
+
+.ai-agent-analysis .param-checkbox input[type="checkbox"]:checked {
+  background: #007acc;
+  border-color: #007acc;
+}
+
+.ai-agent-analysis .generate-btn {
+  width: 100%;
+  padding: 12px 16px;
+  margin-top: 16px;
+  background: linear-gradient(135deg, #007acc 0%, #005a9e 100%);
+  border: none;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 122, 204, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-agent-analysis .generate-btn::before {
+  content: "GO";
+  margin-right: 6px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.ai-agent-analysis .generate-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0086d9 0%, #006bb3 100%);
+  box-shadow: 0 4px 8px rgba(0, 122, 204, 0.4);
+  transform: translateY(-1px);
+}
+
+.ai-agent-analysis .generate-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 122, 204, 0.3);
+}
+
+.ai-agent-analysis .generate-btn:disabled {
+  background: #3e3e42;
+  color: #858585;
+  cursor: not-allowed;
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+.ai-agent-analysis .generate-btn:disabled::before {
+  content: "...";
+  font-size: 12px;
+}
+
+.ai-agent-analysis .error-message {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(244, 67, 54, 0.15) 0%, rgba(244, 67, 54, 0.05) 100%);
+  border: 1px solid rgba(244, 67, 54, 0.4);
+  border-left: 3px solid #f44336;
+  border-radius: 4px;
+  color: #ff6b6b;
+  font-size: 11px;
+  line-height: 1.5;
+  position: relative;
+}
+
+.ai-agent-analysis .error-message::before {
+  content: "!";
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.ai-agent-analysis .ai-results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.ai-agent-analysis .ai-result-card {
+  background: #252526;
+  border: 1px solid #3e3e42;
+  border-radius: 4px;
+  padding: 12px;
+}
+
+.ai-agent-analysis .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.ai-agent-analysis .card-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: #cccccc;
+}
+
+.ai-agent-analysis .trend-badge,
+.ai-agent-analysis .risk-badge,
+.ai-agent-analysis .signal-badge {
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: bold;
+  color: white;
+}
+
+.ai-agent-analysis .prediction-card {
+  border-left: 3px solid #007acc;
+}
+
+.ai-agent-analysis .prediction-price {
+  font-size: 16px;
+  font-weight: bold;
+  color: #007acc;
+  margin: 8px 0;
+}
+
+.ai-agent-analysis .prediction-confidence {
+  font-size: 11px;
+  color: #858585;
+  margin-bottom: 10px;
+}
+
+.ai-agent-analysis .prediction-reasoning {
+  font-size: 11px;
+  color: #cccccc;
+  line-height: 1.5;
+  margin-top: 10px;
+}
+
+.ai-agent-analysis .prediction-reasoning strong {
+  color: #ffffff;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.ai-agent-analysis .prediction-reasoning p {
+  margin: 0;
+}
+
+.ai-agent-analysis .risk-card {
+  border-left: 3px solid #ff9800;
+}
+
+.ai-agent-analysis .risk-factors {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.ai-agent-analysis .risk-factors li {
+  font-size: 11px;
+  color: #cccccc;
+  padding: 4px 0;
+  padding-left: 16px;
+  position: relative;
+}
+
+.ai-agent-analysis .risk-factors li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #ff9800;
+}
+
+.ai-agent-analysis .recommendations-card {
+  border-left: 3px solid #4caf50;
+}
+
+.ai-agent-analysis .recommendations-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.ai-agent-analysis .recommendations-list li {
+  font-size: 11px;
+  color: #cccccc;
+  padding: 4px 0;
+  padding-left: 16px;
+  position: relative;
+}
+
+.ai-agent-analysis .recommendations-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #4caf50;
+}
+
+.ai-agent-analysis .technical-card {
+  border-left: 3px solid #9c27b0;
+}
+
+.ai-agent-analysis .indicators-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-agent-analysis .indicator-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  padding: 4px 0;
+}
+
+.ai-agent-analysis .indicator-name {
+  color: #858585;
+  flex: 1;
+}
+
+.ai-agent-analysis .indicator-value {
+  color: #cccccc;
+  font-weight: bold;
+  margin: 0 8px;
+}
+
+.ai-agent-analysis .indicator-signal {
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.ai-agent-analysis .targets-card {
+  border-left: 3px solid #00bcd4;
+}
+
+.ai-agent-analysis .targets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-agent-analysis .target-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  padding: 4px 0;
+}
+
+.ai-agent-analysis .target-period {
+  color: #858585;
+  min-width: 60px;
+}
+
+.ai-agent-analysis .target-price {
+  color: #00bcd4;
+  font-weight: bold;
+  flex: 1;
+}
+
+.ai-agent-analysis .target-probability {
+  color: #858585;
+  font-size: 10px;
+}
+
+.ai-agent-analysis .analysis-card {
+  border-left: 3px solid #607d8b;
+}
+
+.ai-agent-analysis .analysis-text {
+  font-size: 11px;
+  color: #cccccc;
+  line-height: 1.6;
+}
+
+.ai-agent-analysis .analysis-text p {
+  margin: 8px 0;
+}
+
+.ai-agent-analysis .analysis-text p:first-child {
+  margin-top: 0;
+}
+
+.ai-agent-analysis .analysis-text p:last-child {
+  margin-bottom: 0;
+}

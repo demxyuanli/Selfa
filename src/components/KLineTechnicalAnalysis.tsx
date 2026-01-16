@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
+import ChartDialog from "./ChartDialog";
 import "./StockAnalysis.css";
 import "./KLineTechnicalAnalysis.css";
 
@@ -18,165 +19,34 @@ interface KLineTechnicalAnalysisProps {
 }
 
 type IndicatorType = "sma" | "ema" | "bollinger" | "vwap" | "none";
-type OscillatorType = "rsi" | "macd" | "kdj" | "momentum" | "none";
+type OscillatorType = "rsi" | "macd" | "kdj" | "momentum" | "cci" | "adx" | "dmi" | "stochrsi" | "bbpercent" | "none";
 
 
 const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineData }) => {
   const { t } = useTranslation();
   const [overlayIndicator, setOverlayIndicator] = useState<IndicatorType>("sma");
   const [oscillatorType, setOscillatorType] = useState<OscillatorType>("rsi");
+
+  // Dynamic parameters for indicators
+  const [indicatorParams, setIndicatorParams] = useState({
+    rsiPeriod: 14,
+    macdFast: 12,
+    macdSlow: 26,
+    macdSignal: 9,
+    kdjPeriod: 9,
+    momentumPeriod: 10,
+    cciPeriod: 20,
+    adxPeriod: 14,
+    stochRsiRsiPeriod: 14,
+    stochRsiStochPeriod: 14,
+    stochRsiKPeriod: 3,
+    stochRsiDPeriod: 3,
+    bbPercentPeriod: 20,
+  });
   const [showSignals, setShowSignals] = useState(true);
-
-  // Main chart option
-    if (!chipData) return {};
-    
-    const chartData = chipData.priceLevels.map((price, idx) => {
-      const amount = chipData.chipAmounts[idx];
-      const isProfit = price < chipData.currentPrice;
-      return {
-        value: [amount, price],
-        itemStyle: {
-          color: isProfit ? "#f44336" : "#4caf50", // 红色=获利盘，绿色=套牢盘
-        },
-      };
-    });
-
-    return {
-      backgroundColor: "transparent",
-      grid: {
-        left: "15%",
-        right: "5%",
-        top: "10%",
-        bottom: "10%",
-      },
-      xAxis: {
-        type: "value",
-        name: t("analysis.chipAmount"),
-        nameLocation: "middle",
-        nameGap: 30,
-        axisLabel: {
-          color: "#858585",
-          fontSize: 9,
-        },
-        splitLine: {
-          show: true,
-          lineStyle: {
-            color: "rgba(133, 133, 133, 0.15)",
-            type: "dashed",
-            width: 1,
-          },
-        },
-      },
-      yAxis: {
-        type: "value",
-        name: t("stock.price"),
-        nameLocation: "middle",
-        nameGap: 50,
-        scale: true,
-        axisLabel: {
-          color: "#858585",
-          fontSize: 9,
-        },
-        splitLine: {
-          show: false,
-        },
-      },
-      series: [
-        {
-          name: t("analysis.chipDistribution"),
-          type: "bar",
-          data: chartData,
-          barWidth: "60%",
-          label: {
-            show: false,
-          },
-        },
-        {
-          name: t("analysis.avgCost"),
-          type: "line",
-          data: [[chipData.avgCost, chipData.avgCost]],
-          markLine: {
-            silent: true,
-            symbol: "none",
-            lineStyle: {
-              color: "#FFD700",
-              width: 2,
-              type: "solid",
-            },
-            label: {
-              show: true,
-              position: "insideEndRight",
-              formatter: `${t("analysis.avgCost")}: ${chipData.avgCost.toFixed(2)}`,
-              fontSize: 9,
-              color: "#FFD700",
-            },
-            data: [
-              {
-                yAxis: chipData.avgCost,
-              },
-            ],
-          },
-        },
-        {
-          name: t("analysis.currentPrice"),
-          type: "line",
-          data: [[chipData.currentPrice, chipData.currentPrice]],
-          markLine: {
-            silent: true,
-            symbol: "none",
-            lineStyle: {
-              color: "#007acc",
-              width: 2,
-              type: "dashed",
-            },
-            label: {
-              show: true,
-              position: "insideEndRight",
-              formatter: `${t("analysis.currentPrice")}: ${chipData.currentPrice.toFixed(2)}`,
-              fontSize: 9,
-              color: "#007acc",
-            },
-            data: [
-              {
-                yAxis: chipData.currentPrice,
-              },
-            ],
-          },
-        },
-      ],
-      tooltip: {
-        trigger: "axis",
-        backgroundColor: "rgba(37, 37, 38, 0.95)",
-        borderColor: "#555",
-        borderWidth: 1,
-        textStyle: { color: "#ccc", fontSize: 10 },
-        formatter: (params: any) => {
-          if (!params || params.length === 0) return "";
-          const param = params[0];
-          if (param.seriesName === t("analysis.chipDistribution")) {
-            const price = param.value[1];
-            const amount = param.value[0];
-            const isProfit = price < chipData.currentPrice;
-            return `<div>
-              <div><strong>${t("stock.price")}: ${price.toFixed(2)}</strong></div>
-              <div>${t("analysis.chipAmount")}: ${amount.toFixed(0)}</div>
-              <div style="color: ${isProfit ? "#f44336" : "#4caf50"}">
-                ${isProfit ? t("analysis.profitChip") : t("analysis.lossChip")}
-              </div>
-            </div>`;
-          }
-          return "";
-        },
-      },
-      legend: {
-        data: series.map(s => s.name).filter(Boolean),
-        textStyle: { color: "#858585", fontSize: 8 },
-        itemWidth: 8,
-        itemHeight: 8,
-        top: 0,
-      },
-    };
-  }, [klineData, overlayIndicator, oscillatorType, showSignals]);
+  const [isChartDialogOpen, setIsChartDialogOpen] = useState(false);
+  const [selectedDateIndex, setSelectedDateIndex] = useState<number | null>(null);
+  const chartRef = useRef<ReactECharts>(null);
 
   // Calculate SMA
   const calculateSMA = (data: number[], period: number): (number | null)[] => {
@@ -308,6 +178,170 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
     return { macdLine, signalLine, histogram };
   };
 
+  // Calculate Average Directional Index (ADX)
+  const calculateADX = (highs: number[], lows: number[], closes: number[], period: number) => {
+    const len = closes.length;
+    if (len < period + 1) {
+      return {
+        adx: new Array(len).fill(null),
+        plusDI: new Array(len).fill(null),
+        minusDI: new Array(len).fill(null),
+      };
+    }
+
+    const plusDI: (number | null)[] = new Array(len).fill(null);
+    const minusDI: (number | null)[] = new Array(len).fill(null);
+    const adx: (number | null)[] = new Array(len).fill(null);
+
+    // Calculate +DI and -DI
+    for (let i = period; i < len; i++) {
+      let sumTR = 0, sumPlusDM = 0, sumMinusDM = 0;
+
+      // Calculate smoothed TR, +DM, -DM for the period
+      for (let j = i - period + 1; j <= i; j++) {
+        const tr = Math.max(
+          highs[j] - lows[j],
+          Math.abs(highs[j] - closes[j - 1]),
+          Math.abs(lows[j] - closes[j - 1])
+        );
+        sumTR += tr;
+
+        const upMove = highs[j] - highs[j - 1];
+        const downMove = lows[j - 1] - lows[j];
+
+        if (upMove > downMove && upMove > 0) sumPlusDM += upMove;
+        if (downMove > upMove && downMove > 0) sumMinusDM += downMove;
+      }
+
+      const avgTR = sumTR / period;
+      const avgPlusDM = sumPlusDM / period;
+      const avgMinusDM = sumMinusDM / period;
+
+      plusDI[i] = avgTR > 0 ? (avgPlusDM / avgTR) * 100 : 0;
+      minusDI[i] = avgTR > 0 ? (avgMinusDM / avgTR) * 100 : 0;
+    }
+
+    // Calculate ADX
+    for (let i = period * 2; i < len; i++) {
+      // Simple average for ADX (simplified version)
+      let sumDX = 0;
+      let count = 0;
+      for (let j = i - period + 1; j <= i; j++) {
+        const p = plusDI[j] || 0;
+        const m = minusDI[j] || 0;
+        if (p + m > 0) {
+          const dx = Math.abs(p - m) / (p + m) * 100;
+          sumDX += dx;
+          count++;
+        }
+      }
+      adx[i] = count > 0 ? sumDX / count : null;
+    }
+
+    return {
+      adx,
+      plusDI,
+      minusDI,
+    };
+  };
+
+  // Calculate Stochastic RSI
+  const calculateStochRSI = (closes: number[], rsiPeriod: number, stochPeriod: number, kPeriod: number, dPeriod: number) => {
+    const rsiValues = calculateRSI(closes, rsiPeriod);
+    const stochK: (number | null)[] = [];
+    const stochD: (number | null)[] = [];
+
+    // Calculate %K
+    for (let i = 0; i < rsiValues.length; i++) {
+      if (i < stochPeriod - 1) {
+        stochK.push(null);
+        continue;
+      }
+
+      // Get RSI values for the stochastic period
+      const rsiSlice: number[] = [];
+      for (let j = i - stochPeriod + 1; j <= i; j++) {
+        if (rsiValues[j] !== null) {
+          rsiSlice.push(rsiValues[j]!);
+        }
+      }
+
+      if (rsiSlice.length === stochPeriod) {
+        const highestRSI = Math.max(...rsiSlice);
+        const lowestRSI = Math.min(...rsiSlice);
+        const currentRSI = rsiValues[i];
+
+        if (currentRSI !== null && highestRSI !== lowestRSI) {
+          const k = ((currentRSI - lowestRSI) / (highestRSI - lowestRSI)) * 100;
+          stochK.push(k);
+        } else {
+          stochK.push(50); // Neutral value when range is zero
+        }
+      } else {
+        stochK.push(null);
+      }
+    }
+
+    // Calculate %D (SMA of %K)
+    for (let i = 0; i < stochK.length; i++) {
+      if (i < kPeriod + dPeriod - 2) {
+        stochD.push(null);
+        continue;
+      }
+
+      let sumK = 0;
+      let count = 0;
+      for (let j = i - dPeriod + 1; j <= i; j++) {
+        if (stochK[j] !== null) {
+          sumK += stochK[j]!;
+          count++;
+        }
+      }
+
+      if (count === dPeriod) {
+        stochD.push(sumK / count);
+      } else {
+        stochD.push(null);
+      }
+    }
+
+    return {
+      k: stochK,
+      d: stochD,
+      rsi: rsiValues
+    };
+  };
+
+  // Calculate Commodity Channel Index (CCI)
+  const calculateCCI = (highs: number[], lows: number[], closes: number[], period: number): (number | null)[] => {
+    if (closes.length < period) return closes.map(() => null);
+    const result: (number | null)[] = new Array(period - 1).fill(null);
+
+    for (let i = period - 1; i < closes.length; i++) {
+      // Calculate Typical Price for the period
+      const typicalPrices: number[] = [];
+      for (let j = i - period + 1; j <= i; j++) {
+        const tp = (highs[j] + lows[j] + closes[j]) / 3;
+        typicalPrices.push(tp);
+      }
+
+      // Calculate SMA of Typical Price
+      const smaTP = typicalPrices.reduce((sum, tp) => sum + tp, 0) / period;
+
+      // Calculate Mean Deviation
+      const deviations = typicalPrices.map(tp => Math.abs(tp - smaTP));
+      const meanDeviation = deviations.reduce((sum, dev) => sum + dev, 0) / period;
+
+      // Calculate CCI
+      const currentTP = (highs[i] + lows[i] + closes[i]) / 3;
+      const cci = meanDeviation !== 0 ? (currentTP - smaTP) / (0.015 * meanDeviation) : 0;
+
+      result.push(cci);
+    }
+
+    return result;
+  };
+
   // Calculate KDJ
   const calculateKDJ = (highs: number[], lows: number[], closes: number[], period: number) => {
     const result: { k: (number | null)[]; d: (number | null)[]; j: (number | null)[] } = {
@@ -380,12 +414,12 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
 
     const series: any[] = [];
     const grids: any[] = [
-      { left: "8%", right: "3%", top: "10%", height: oscillatorType !== "none" ? "50%" : "65%" },
-      { left: "8%", right: "3%", top: oscillatorType !== "none" ? "65%" : "80%", height: "15%" },
+      { left: "8%", right: "3%", top: "18%", height: oscillatorType !== "none" ? "48%" : "62%" },
+      { left: "8%", right: "3%", top: oscillatorType !== "none" ? "68%" : "83%", height: "15%" },
     ];
     
     if (oscillatorType !== "none") {
-      grids.push({ left: "8%", right: "3%", top: "85%", height: "10%" });
+      grids.push({ left: "8%", right: "3%", top: "86%", height: "10%" });
     }
 
     // Calculate support and resistance levels
@@ -557,7 +591,7 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
     ];
 
     if (oscillatorType === "rsi") {
-      const rsi = calculateRSI(closes, 14);
+      const rsi = calculateRSI(closes, indicatorParams.rsiPeriod);
       xAxis.push({ 
         type: "category", 
         data: dates, 
@@ -663,7 +697,7 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
         symbol: "none",
       });
     } else if (oscillatorType === "macd") {
-      const macd = calculateMACD(closes, 12, 26, 9);
+      const macd = calculateMACD(closes, indicatorParams.macdFast, indicatorParams.macdSlow, indicatorParams.macdSignal);
       xAxis.push({ 
         type: "category", 
         data: dates, 
@@ -715,7 +749,7 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
         }
       );
     } else if (oscillatorType === "kdj") {
-      const kdj = calculateKDJ(highs, lows, closes, 9);
+      const kdj = calculateKDJ(highs, lows, closes, indicatorParams.kdjPeriod);
       xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
       yAxis.push({
         type: "value",
@@ -729,6 +763,332 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
         { name: t("analysis.kdjD"), type: "line", xAxisIndex: 2, yAxisIndex: 2, data: kdj.d, symbol: "none", lineStyle: { color: "#00ffff", width: 1 } },
         { name: t("analysis.kdjJ"), type: "line", xAxisIndex: 2, yAxisIndex: 2, data: kdj.j, symbol: "none", lineStyle: { color: "#ff00ff", width: 1 } }
       );
+    } else if (oscillatorType === "momentum") {
+      // Calculate momentum as percentage change from N periods ago
+      const momentumData: (number | null)[] = [];
+      for (let i = 0; i < closes.length; i++) {
+        if (i >= indicatorParams.momentumPeriod) {
+          const momentum = ((closes[i] - closes[i - indicatorParams.momentumPeriod]) / closes[i - indicatorParams.momentumPeriod]) * 100;
+          momentumData.push(momentum);
+        } else {
+          momentumData.push(null);
+        }
+      }
+
+      xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+      yAxis.push({
+        type: "value",
+        gridIndex: 2,
+        axisLabel: { fontSize: 9, color: "#858585", formatter: (value: number) => `${value.toFixed(1)}%` },
+      });
+      series.push({
+        name: t("analysis.momentum"),
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: momentumData,
+        symbol: "none",
+        lineStyle: { color: "#ff9800", width: 1.5 },
+        areaStyle: { opacity: 0.1, color: "#ff9800" },
+      });
+
+      // Add zero line
+      series.push({
+        name: "Zero Line",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: new Array(dates.length).fill(0),
+        symbol: "none",
+        lineStyle: { color: "#666", width: 1, type: "dashed" },
+      });
+    } else if (oscillatorType === "cci") {
+      const cciData = calculateCCI(highs, lows, closes, indicatorParams.cciPeriod);
+
+      xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+      yAxis.push({
+        type: "value",
+        gridIndex: 2,
+        axisLabel: { fontSize: 9, color: "#858585" },
+      });
+
+      // Add CCI line
+      series.push({
+        name: t("analysis.cci"),
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: cciData,
+        symbol: "none",
+        lineStyle: { color: "#e91e63", width: 1.5 },
+      });
+
+      // Add overbought line (+100)
+      series.push({
+        name: "Overbought (+100)",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: new Array(dates.length).fill(100),
+        symbol: "none",
+        lineStyle: { color: "#f44336", width: 1, type: "dashed" },
+      });
+
+      // Add oversold line (-100)
+      series.push({
+        name: "Oversold (-100)",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: new Array(dates.length).fill(-100),
+        symbol: "none",
+        lineStyle: { color: "#4caf50", width: 1, type: "dashed" },
+      });
+
+      // Add zero line
+      series.push({
+        name: "Zero Line",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: new Array(dates.length).fill(0),
+        symbol: "none",
+        lineStyle: { color: "#666", width: 1, type: "dashed" },
+      });
+    } else if (oscillatorType === "adx") {
+      const adxData = calculateADX(highs, lows, closes, indicatorParams.adxPeriod);
+
+      xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+      yAxis.push({
+        type: "value",
+        gridIndex: 2,
+        min: 0,
+        max: 100,
+        axisLabel: { fontSize: 9, color: "#858585" },
+      });
+
+      // Add ADX line
+      series.push({
+        name: t("analysis.adx"),
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: adxData.adx,
+        symbol: "none",
+        lineStyle: { color: "#9c27b0", width: 1.5 },
+      });
+
+      // Add +DI line
+      series.push({
+        name: "+DI",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: adxData.plusDI,
+        symbol: "none",
+        lineStyle: { color: "#4caf50", width: 1 },
+      });
+
+      // Add -DI line
+      series.push({
+        name: "-DI",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: adxData.minusDI,
+        symbol: "none",
+        lineStyle: { color: "#f44336", width: 1 },
+      });
+
+      // Add trend strength line (25)
+      series.push({
+        name: "Trend Strength (25)",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: new Array(dates.length).fill(25),
+        symbol: "none",
+        lineStyle: { color: "#ff9800", width: 1, type: "dashed" },
+      });
+    } else if (oscillatorType === "dmi") {
+      const dmiData = calculateADX(highs, lows, closes, 14);
+
+      xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+      yAxis.push({
+        type: "value",
+        gridIndex: 2,
+        min: 0,
+        max: 100,
+        axisLabel: { fontSize: 9, color: "#858585" },
+      });
+
+      // Add +DI line
+      series.push({
+        name: "+DI (Directional Indicator)",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: dmiData.plusDI,
+        symbol: "none",
+        lineStyle: { color: "#4caf50", width: 1.5 },
+      });
+
+      // Add -DI line
+      series.push({
+        name: "-DI (Directional Indicator)",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: dmiData.minusDI,
+        symbol: "none",
+        lineStyle: { color: "#f44336", width: 1.5 },
+      });
+
+      // Add ADX line for reference
+      series.push({
+        name: "ADX (Trend Strength)",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: dmiData.adx,
+        symbol: "none",
+        lineStyle: { color: "#9c27b0", width: 1, type: "dashed" },
+      });
+
+      // Add trend strength line (25)
+      series.push({
+        name: "Trend Strength (25)",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: new Array(dates.length).fill(25),
+        symbol: "none",
+        lineStyle: { color: "#ff9800", width: 1, type: "dashed" },
+      });
+    } else if (oscillatorType === "stochrsi") {
+      const stochRsiData = calculateStochRSI(closes, indicatorParams.stochRsiRsiPeriod, indicatorParams.stochRsiStochPeriod, indicatorParams.stochRsiKPeriod, indicatorParams.stochRsiDPeriod);
+
+      xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+      yAxis.push({
+        type: "value",
+        gridIndex: 2,
+        min: 0,
+        max: 100,
+        axisLabel: { fontSize: 9, color: "#858585" },
+      });
+
+      // Add StochRSI %K line
+      series.push({
+        name: "StochRSI %K",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: stochRsiData.k,
+        symbol: "none",
+        lineStyle: { color: "#2196f3", width: 1.5 },
+      });
+
+      // Add StochRSI %D line
+      series.push({
+        name: "StochRSI %D",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: stochRsiData.d,
+        symbol: "none",
+        lineStyle: { color: "#ff5722", width: 1.5 },
+      });
+
+      // Add overbought line (80)
+      series.push({
+        name: "Overbought (80)",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: new Array(dates.length).fill(80),
+        symbol: "none",
+        lineStyle: { color: "#f44336", width: 1, type: "dashed" },
+      });
+
+      // Add oversold line (20)
+      series.push({
+        name: "Oversold (20)",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: new Array(dates.length).fill(20),
+        symbol: "none",
+        lineStyle: { color: "#4caf50", width: 1, type: "dashed" },
+      });
+    } else if (oscillatorType === "bbpercent") {
+      // Calculate Bollinger Bands %B
+      const bb = calculateBollingerBands(closes, indicatorParams.bbPercentPeriod, 2);
+      const bbPercent: (number | null)[] = [];
+
+      for (let i = 0; i < closes.length; i++) {
+        const upper = bb.upper[i];
+        const lower = bb.lower[i];
+        const price = closes[i];
+
+        if (upper !== null && lower !== null && upper > lower) {
+          const percent = ((price - lower) / (upper - lower)) * 100;
+          bbPercent.push(percent);
+        } else {
+          bbPercent.push(null);
+        }
+      }
+
+      xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+      yAxis.push({
+        type: "value",
+        gridIndex: 2,
+        min: 0,
+        max: 100,
+        axisLabel: { fontSize: 9, color: "#858585", formatter: (value: number) => `${value}%` },
+      });
+
+      series.push({
+        name: "BB %B",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: bbPercent,
+        symbol: "none",
+        lineStyle: { color: "#9c27b0", width: 1.5 },
+      });
+
+      // Add overbought line (80%)
+      series.push({
+        name: "Overbought (80%)",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: new Array(dates.length).fill(80),
+        symbol: "none",
+        lineStyle: { color: "#f44336", width: 1, type: "dashed" },
+      });
+
+      // Add oversold line (20%)
+      series.push({
+        name: "Oversold (20%)",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: new Array(dates.length).fill(20),
+        symbol: "none",
+        lineStyle: { color: "#4caf50", width: 1, type: "dashed" },
+      });
+
+      // Add middle line (50%)
+      series.push({
+        name: "Middle (50%)",
+        type: "line",
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        data: new Array(dates.length).fill(50),
+        symbol: "none",
+        lineStyle: { color: "#666", width: 1, type: "dashed" },
+      });
     }
 
     return {
@@ -740,10 +1100,10 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
         {
           type: "text",
           left: "center",
-          top: "2%",
+          top: "1%",
           style: {
             text: `${t("analysis.overlayIndicator")}: ${overlayIndicator !== "none" ? overlayIndicator.toUpperCase() : t("analysis.overlayNone")} | ${t("analysis.oscillator")}: ${oscillatorType !== "none" ? oscillatorType.toUpperCase() : t("analysis.oscillatorNone")}`,
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: "bold",
             fill: "#858585",
           },
@@ -752,7 +1112,23 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
       series,
       tooltip: {
         trigger: "axis",
-        axisPointer: { type: "cross" },
+        axisPointer: {
+          type: "cross",
+          crossStyle: {
+            color: "#007acc",
+            width: 1,
+            type: "dashed",
+          },
+          lineStyle: {
+            color: "#007acc",
+            width: 1,
+            type: "dashed",
+          },
+          label: {
+            backgroundColor: "#007acc",
+            color: "#fff",
+          },
+        },
         backgroundColor: "rgba(37, 37, 38, 0.95)",
         borderColor: "#555",
         borderWidth: 1,
@@ -794,17 +1170,49 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
       },
       legend: {
         data: series.map(s => s.name).filter(Boolean),
-        textStyle: { color: "#858585", fontSize: 8 },
-        itemWidth: 8,
-        itemHeight: 8,
-        top: 0,
+        textStyle: { color: "#858585", fontSize: 10 },
+        itemWidth: 10,
+        itemHeight: 10,
+        itemGap: 12,
+        top: "4%",
+        left: "center",
+        orient: "horizontal",
       },
       dataZoom: [
         { type: "inside", xAxisIndex: [0, 1, oscillatorType !== "none" ? 2 : 1] },
         { show: true, type: "slider", xAxisIndex: [0, 1, oscillatorType !== "none" ? 2 : 1], top: "95%", height: 15 },
       ],
     };
-  }, [klineData, overlayIndicator, oscillatorType, showSignals]);
+  }, [klineData, overlayIndicator, oscillatorType, showSignals, indicatorParams]);
+
+  useEffect(() => {
+    let resizeTimer: number | null = null;
+    const handleResize = () => {
+      if (resizeTimer) {
+        clearTimeout(resizeTimer);
+      }
+      resizeTimer = setTimeout(() => {
+        if (chartRef.current) {
+          try {
+            const instance = chartRef.current.getEchartsInstance();
+            if (instance && !instance.isDisposed()) {
+              instance.resize();
+            }
+          } catch (error) {
+            // Ignore errors during resize
+          }
+        }
+      }, 100);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      if (resizeTimer) {
+        clearTimeout(resizeTimer);
+      }
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   return (
     <div className="kline-technical-analysis">
@@ -841,6 +1249,12 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
                   <option value="rsi">{t("analysis.oscillatorRSI")}</option>
                   <option value="macd">{t("analysis.oscillatorMACD")}</option>
                   <option value="kdj">{t("analysis.oscillatorKDJ")}</option>
+                  <option value="momentum">{t("analysis.oscillatorMomentum")}</option>
+                  <option value="cci">{t("analysis.oscillatorCCI")}</option>
+                  <option value="adx">{t("analysis.oscillatorADX")}</option>
+                  <option value="dmi">{t("analysis.oscillatorDMI")}</option>
+                  <option value="stochrsi">{t("analysis.oscillatorStochRSI")}</option>
+                  <option value="bbpercent">{t("analysis.oscillatorBBPercent")}</option>
                 </select>
               </div>
             </div>
@@ -879,14 +1293,171 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
                 </div>
               )}
               {oscillatorType !== "none" && (
-                <div className="summary-card">
-                  <div className="summary-title">{t("analysis.oscillator")}: {oscillatorType.toUpperCase()}</div>
-                  <div className="summary-desc">
-                    {oscillatorType === "rsi" && t("analysis.oscillatorDescRSI")}
-                    {oscillatorType === "macd" && t("analysis.oscillatorDescMACD")}
-                    {oscillatorType === "kdj" && t("analysis.oscillatorDescKDJ")}
+                <>
+                  {/* Dynamic Parameter Controls */}
+                  <div className="param-section">
+                    <label className="param-section-label">{t("analysis.indicatorParams")}</label>
+                    <div className="param-inputs">
+                      {oscillatorType === "rsi" && (
+                        <div className="param-row">
+                          <label>RSI {t("analysis.period")}</label>
+                          <input
+                            type="number"
+                            value={indicatorParams.rsiPeriod}
+                            onChange={(e) => setIndicatorParams({...indicatorParams, rsiPeriod: parseInt(e.target.value) || 14})}
+                            min="2"
+                            max="50"
+                            className="param-input"
+                          />
+                        </div>
+                      )}
+                      {oscillatorType === "macd" && (
+                        <>
+                          <div className="param-row">
+                            <label>MACD Fast</label>
+                            <input
+                              type="number"
+                              value={indicatorParams.macdFast}
+                              onChange={(e) => setIndicatorParams({...indicatorParams, macdFast: parseInt(e.target.value) || 12})}
+                              min="2"
+                              max="50"
+                              className="param-input"
+                            />
+                          </div>
+                          <div className="param-row">
+                            <label>MACD Slow</label>
+                            <input
+                              type="number"
+                              value={indicatorParams.macdSlow}
+                              onChange={(e) => setIndicatorParams({...indicatorParams, macdSlow: parseInt(e.target.value) || 26})}
+                              min="5"
+                              max="100"
+                              className="param-input"
+                            />
+                          </div>
+                          <div className="param-row">
+                            <label>MACD Signal</label>
+                            <input
+                              type="number"
+                              value={indicatorParams.macdSignal}
+                              onChange={(e) => setIndicatorParams({...indicatorParams, macdSignal: parseInt(e.target.value) || 9})}
+                              min="2"
+                              max="50"
+                              className="param-input"
+                            />
+                          </div>
+                        </>
+                      )}
+                      {oscillatorType === "kdj" && (
+                        <div className="param-row">
+                          <label>KDJ {t("analysis.period")}</label>
+                          <input
+                            type="number"
+                            value={indicatorParams.kdjPeriod}
+                            onChange={(e) => setIndicatorParams({...indicatorParams, kdjPeriod: parseInt(e.target.value) || 9})}
+                            min="2"
+                            max="50"
+                            className="param-input"
+                          />
+                        </div>
+                      )}
+                      {oscillatorType === "momentum" && (
+                        <div className="param-row">
+                          <label>{t("analysis.period")}</label>
+                          <input
+                            type="number"
+                            value={indicatorParams.momentumPeriod}
+                            onChange={(e) => setIndicatorParams({...indicatorParams, momentumPeriod: parseInt(e.target.value) || 10})}
+                            min="2"
+                            max="50"
+                            className="param-input"
+                          />
+                        </div>
+                      )}
+                      {oscillatorType === "cci" && (
+                        <div className="param-row">
+                          <label>CCI {t("analysis.period")}</label>
+                          <input
+                            type="number"
+                            value={indicatorParams.cciPeriod}
+                            onChange={(e) => setIndicatorParams({...indicatorParams, cciPeriod: parseInt(e.target.value) || 20})}
+                            min="2"
+                            max="50"
+                            className="param-input"
+                          />
+                        </div>
+                      )}
+                      {oscillatorType === "adx" && (
+                        <div className="param-row">
+                          <label>ADX {t("analysis.period")}</label>
+                          <input
+                            type="number"
+                            value={indicatorParams.adxPeriod}
+                            onChange={(e) => setIndicatorParams({...indicatorParams, adxPeriod: parseInt(e.target.value) || 14})}
+                            min="2"
+                            max="50"
+                            className="param-input"
+                          />
+                        </div>
+                      )}
+                      {oscillatorType === "stochrsi" && (
+                        <>
+                          <div className="param-row">
+                            <label>RSI {t("analysis.period")}</label>
+                            <input
+                              type="number"
+                              value={indicatorParams.stochRsiRsiPeriod}
+                              onChange={(e) => setIndicatorParams({...indicatorParams, stochRsiRsiPeriod: parseInt(e.target.value) || 14})}
+                              min="2"
+                              max="50"
+                              className="param-input"
+                            />
+                          </div>
+                          <div className="param-row">
+                            <label>Stoch {t("analysis.period")}</label>
+                            <input
+                              type="number"
+                              value={indicatorParams.stochRsiStochPeriod}
+                              onChange={(e) => setIndicatorParams({...indicatorParams, stochRsiStochPeriod: parseInt(e.target.value) || 14})}
+                              min="2"
+                              max="50"
+                              className="param-input"
+                            />
+                          </div>
+                        </>
+                      )}
+                      {oscillatorType === "bbpercent" && (
+                        <div className="param-row">
+                          <label>BB {t("analysis.period")}</label>
+                          <input
+                            type="number"
+                            value={indicatorParams.bbPercentPeriod}
+                            onChange={(e) => setIndicatorParams({...indicatorParams, bbPercentPeriod: parseInt(e.target.value) || 20})}
+                            min="2"
+                            max="50"
+                            className="param-input"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+
+                  {/* Indicator Description */}
+                  <div className="summary-card">
+                    <div className="summary-title">{t("analysis.oscillator")}: {oscillatorType.toUpperCase()}</div>
+                    <div className="summary-desc">
+                      {oscillatorType === "rsi" && t("analysis.oscillatorDescRSI")}
+                      {oscillatorType === "macd" && t("analysis.oscillatorDescMACD")}
+                      {oscillatorType === "kdj" && t("analysis.oscillatorDescKDJ")}
+                      {oscillatorType === "momentum" && t("analysis.oscillatorDescMomentum")}
+                      {oscillatorType === "cci" && t("analysis.oscillatorDescCCI")}
+                      {oscillatorType === "adx" && t("analysis.oscillatorDescADX")}
+                      {oscillatorType === "dmi" && t("analysis.oscillatorDescDMI")}
+                      {oscillatorType === "stochrsi" && t("analysis.oscillatorDescStochRSI")}
+                      {oscillatorType === "bbpercent" && t("analysis.oscillatorDescBBPercent")}
+                    </div>
+                  </div>
+                </>
               )}
               {showSignals && (
                 <div className="summary-card">
@@ -902,23 +1473,69 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
 
         {/* Right Column: Chart */}
         <div className="analysis-column chart-column">
-          <div className="column-header">{t("analysis.chart")}</div>
+          <div className="column-header">
+            <span>{t("analysis.chart")}</span>
+          </div>
+          {selectedDateIndex !== null && selectedDateIndex >= 0 && selectedDateIndex < klineData.length && (
+            <div style={{ padding: "4px 12px", fontSize: "11px", color: "#858585", borderBottom: "1px solid #3e3e42" }}>
+              <strong style={{ color: "#007acc" }}>{t("analysis.selectedDate")}:</strong> {klineData[selectedDateIndex].date} | 
+              O: {klineData[selectedDateIndex].open.toFixed(2)} | 
+              H: {klineData[selectedDateIndex].high.toFixed(2)} | 
+              L: {klineData[selectedDateIndex].low.toFixed(2)} | 
+              C: {klineData[selectedDateIndex].close.toFixed(2)} | 
+              V: {(klineData[selectedDateIndex].volume / 10000).toFixed(2)}万
+            </div>
+          )}
           <div className="chart-content" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
             {/* Main K-line chart */}
-            <div style={{ flex: "1 1 60%", minHeight: 0 }}>
+            <div style={{ flex: "1 1 60%", minHeight: 0, position: "relative" }}>
               {Object.keys(chartOption).length === 0 ? (
                 <div className="no-data">{t("analysis.noData")}</div>
               ) : (
-                <ReactECharts
-                  option={chartOption}
-                  style={{ height: "100%", width: "100%" }}
-                  opts={{ renderer: "canvas" }}
-                />
+                <>
+                  <button
+                    className="chart-zoom-button-overlay"
+                    onClick={() => setIsChartDialogOpen(true)}
+                    title={t("chart.zoom")}
+                  >
+                    ZO
+                  </button>
+                  <ReactECharts
+                    ref={chartRef}
+                    option={chartOption}
+                    style={{ height: "100%", width: "100%" }}
+                    opts={{ renderer: "canvas" }}
+                    onEvents={{
+                      click: (params: any) => {
+                        if (params.componentType === "series" || params.componentType === "xAxis") {
+                          const dataIndex = params.dataIndex;
+                          if (dataIndex !== null && dataIndex !== undefined && dataIndex >= 0 && dataIndex < klineData.length) {
+                            setSelectedDateIndex(dataIndex);
+                          }
+                        }
+                      },
+                      mousemove: (params: any) => {
+                        if (params.componentType === "series" || params.componentType === "xAxis") {
+                          const dataIndex = params.dataIndex;
+                          if (dataIndex !== null && dataIndex !== undefined && dataIndex >= 0 && dataIndex < klineData.length) {
+                            setSelectedDateIndex(dataIndex);
+                          }
+                        }
+                      },
+                    }}
+                  />
+                </>
               )}
             </div>
           </div>
         </div>
       </div>
+      <ChartDialog
+        isOpen={isChartDialogOpen}
+        onClose={() => setIsChartDialogOpen(false)}
+        title={`${t("analysis.klineAnalysis")} - ${t("chart.title")}`}
+        chartOption={chartOption}
+      />
     </div>
   );
 };

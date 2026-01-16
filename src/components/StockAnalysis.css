@@ -27,8 +27,8 @@
 }
 
 .results-column {
-  flex: 0 0 40%;
-  width: 40%;
+  flex: 0 0 30%;
+  width: 30%;
 }
 
 .chart-column {
@@ -49,6 +49,31 @@
   background: var(--bg-tertiary, #252526);
   border-bottom: 1px solid var(--border-color, #3c3c3c);
   flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chart-zoom-button {
+  background: transparent;
+  border: 1px solid var(--border-color, #3c3c3c);
+  color: var(--text-secondary, #858585);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+}
+
+.chart-zoom-button:hover {
+  background: var(--bg-secondary, #2d2d30);
+  border-color: var(--accent-color, #007acc);
+  color: var(--text-primary, #cccccc);
 }
 
 /* ============= Parameters Column ============= */
@@ -78,6 +103,34 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.param-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.param-row label {
+  font-size: 9px;
+  color: var(--text-muted, #6e6e6e);
+  min-width: 60px;
+}
+
+.param-input {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 9px;
+  border: 1px solid var(--border-color, #3e3e3e);
+  background-color: var(--bg-primary, #1e1e1e);
+  color: var(--text-primary, #cccccc);
+  border-radius: 3px;
+}
+
+.param-input:focus {
+  outline: none;
+  border-color: var(--accent-color, #007acc);
 }
 
 .param-item {
@@ -192,10 +245,41 @@
   flex: 1;
   overflow: hidden;
   min-height: 0;
+  position: relative;
 }
 
 .chart-content > div {
   height: 100%;
+}
+
+.chart-zoom-button-overlay {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  background: rgba(30, 30, 30, 0.8);
+  backdrop-filter: blur(4px);
+  border: 1px solid var(--border-color, #3c3c3c);
+  color: var(--text-secondary, #858585);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 24px;
+}
+
+.chart-zoom-button-overlay:hover {
+  background: rgba(45, 45, 48, 0.9);
+  border-color: var(--accent-color, #007acc);
+  color: var(--text-primary, #cccccc);
 }
 
 .no-data {

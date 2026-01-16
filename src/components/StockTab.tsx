@@ -10,6 +10,7 @@ import KLineTechnicalAnalysis from "./KLineTechnicalAnalysis";
 import KLineChipAnalysis from "./KLineChipAnalysis";
 import PredictionAnalysis from "./PredictionAnalysis";
 import CompareAnalysis from "./CompareAnalysis";
+import AIAgentAnalysis from "./AIAgentAnalysis";
 import "./StockTab.css";
 
 interface StockTab {
@@ -24,7 +25,7 @@ interface StockTabProps {
 }
 
 type KLinePeriod = "1d" | "1w" | "1mo" | "1y";
-type AnalysisTab = "timeseries" | "kline" | "klinechip" | "prediction" | "compare";
+type AnalysisTab = "timeseries" | "kline" | "klinechip" | "prediction" | "compare" | "aiagent";
 
 interface StockData {
   date: string;
@@ -40,7 +41,9 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
   const [timeSeriesData, setTimeSeriesData] = useState<StockData[]>([]);
   const [klineData, setKlineData] = useState<StockData[]>([]);
   const [klinePeriod, setKlinePeriod] = useState<KLinePeriod>("1d");
-  const [, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [timeSeriesLoading, setTimeSeriesLoading] = useState(false);
+  const [chartRendering, setChartRendering] = useState(false);
   const [activeAnalysisTab, setActiveAnalysisTab] = useState<AnalysisTab>("timeseries");
   const [upperHeight, setUpperHeight] = useState(40);
   const [isVResizing, setIsVResizing] = useState(false);
@@ -51,14 +54,18 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
   const [resizingPanel, setResizingPanel] = useState<"ts" | "kl" | null>(null);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
+  const chartRenderingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const fetchTimeSeriesData = async () => {
+      setTimeSeriesLoading(true);
       try {
         const tsData = await invoke("get_time_series", { symbol: tab.symbol });
         setTimeSeriesData(tsData as StockData[]);
       } catch (err) {
         console.error("Error fetching time series data:", err);
+      } finally {
+        setTimeSeriesLoading(false);
       }
     };
 
@@ -70,14 +77,23 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
   useEffect(() => {
     const fetchKLineData = async () => {
       setLoading(true);
+      setChartRendering(true);
       try {
         const klData = await invoke("get_stock_history", {
           symbol: tab.symbol,
           period: klinePeriod,
         });
         setKlineData(klData as StockData[]);
+        // Delay hiding rendering indicator to allow chart to render
+        if (chartRenderingTimeoutRef.current) {
+          clearTimeout(chartRenderingTimeoutRef.current);
+        }
+        chartRenderingTimeoutRef.current = setTimeout(() => {
+          setChartRendering(false);
+        }, 300);
       } catch (err) {
         console.error("Error fetching K-line data:", err);
+        setChartRendering(false);
       } finally {
         setLoading(false);
       }
@@ -86,6 +102,12 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
     if (tab.symbol) {
       fetchKLineData();
     }
+
+    return () => {
+      if (chartRenderingTimeoutRef.current) {
+        clearTimeout(chartRenderingTimeoutRef.current);
+      }
+    };
   }, [tab.symbol, klinePeriod]);
 
   // Vertical resize handler
@@ -168,7 +190,71 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
     startWidthRef.current = panel === "ts" ? tsTableWidth : klTableWidth;
   };
 
+  // Handle analysis tab change with rendering indicator
+  const handleAnalysisTabChange = (tab: AnalysisTab) => {
+    setActiveAnalysisTab(tab);
+    // Show rendering indicator when switching to a tab that needs chart rendering
+    const needsChart = tab === "kline" || tab === "klinechip" || tab === "prediction" || tab === "compare" || tab === "aiagent";
+    if (needsChart && klineData.length > 0) {
+      setChartRendering(true);
+      if (chartRenderingTimeoutRef.current) {
+        clearTimeout(chartRenderingTimeoutRef.current);
+      }
+      chartRenderingTimeoutRef.current = setTimeout(() => {
+        setChartRendering(false);
+      }, 300);
+    }
+  };
+
+  // Check if current tab needs data and if it's available
+  const isDataReady = () => {
+    switch (activeAnalysisTab) {
+      case "timeseries":
+        return timeSeriesData.length > 0;
+      case "kline":
+      case "klinechip":
+      case "prediction":
+      case "compare":
+      case "aiagent":
+        return klineData.length > 0;
+      default:
+        return true;
+    }
+  };
+
+  const isTabLoading = () => {
+    switch (activeAnalysisTab) {
+      case "timeseries":
+        return timeSeriesLoading;
+      case "kline":
+      case "klinechip":
+      case "prediction":
+      case "compare":
+      case "aiagent":
+        return loading;
+      default:
+        return false;
+    }
+  };
+
   const renderAnalysisContent = () => {
+    const isLoading = isTabLoading() || chartRendering;
+    const dataReady = isDataReady();
+
+    if (isLoading || !dataReady) {
+      return (
+        <div className="chart-loading-overlay">
+          <div className="loading-spinner">
+            <div className="spinner-ring"></div>
+            <div className="spinner-ring"></div>
+            <div className="spinner-ring"></div>
+            <div className="spinner-ring"></div>
+          </div>
+          <div className="loading-text">{t("analysis.loadingChart")}</div>
+        </div>
+      );
+    }
+
     switch (activeAnalysisTab) {
       case "timeseries":
         return (
@@ -184,7 +270,7 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
         );
       case "klinechip":
         return (
-          <KLineChipAnalysis klineData={klineData} />
+          <KLineChipAnalysis klineData={klineData} symbol={tab.symbol} />
         );
       case "prediction":
         return (
@@ -193,6 +279,10 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
       case "compare":
         return (
           <CompareAnalysis currentSymbol={tab.symbol} currentData={klineData} />
+        );
+      case "aiagent":
+        return (
+          <AIAgentAnalysis klineData={klineData} symbol={tab.symbol} quote={tab.quote} />
         );
       default:
         return null;
@@ -286,38 +376,45 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
         <div className="analysis-tabs-bar">
           <button
             className={`analysis-tab ${activeAnalysisTab === "timeseries" ? "active" : ""}`}
-            onClick={() => setActiveAnalysisTab("timeseries")}
+            onClick={() => handleAnalysisTabChange("timeseries")}
           >
-            <span className="tab-icon">📈</span>
+            <span className="tab-icon">TS</span>
             <span className="tab-label">{t("analysis.timeSeries")}</span>
           </button>
           <button
             className={`analysis-tab ${activeAnalysisTab === "kline" ? "active" : ""}`}
-            onClick={() => setActiveAnalysisTab("kline")}
+            onClick={() => handleAnalysisTabChange("kline")}
           >
-            <span className="tab-icon">📊</span>
+            <span className="tab-icon">KL</span>
             <span className="tab-label">{t("analysis.klineAnalysis")}</span>
           </button>
           <button
             className={`analysis-tab ${activeAnalysisTab === "klinechip" ? "active" : ""}`}
-            onClick={() => setActiveAnalysisTab("klinechip")}
+            onClick={() => handleAnalysisTabChange("klinechip")}
           >
-            <span className="tab-icon">📈</span>
+            <span className="tab-icon">CH</span>
             <span className="tab-label">{t("analysis.klineChipAnalysis")}</span>
           </button>
           <button
             className={`analysis-tab ${activeAnalysisTab === "prediction" ? "active" : ""}`}
-            onClick={() => setActiveAnalysisTab("prediction")}
+            onClick={() => handleAnalysisTabChange("prediction")}
           >
-            <span className="tab-icon">🔮</span>
+            <span className="tab-icon">PR</span>
             <span className="tab-label">{t("analysis.prediction")}</span>
           </button>
           <button
             className={`analysis-tab ${activeAnalysisTab === "compare" ? "active" : ""}`}
-            onClick={() => setActiveAnalysisTab("compare")}
+            onClick={() => handleAnalysisTabChange("compare")}
           >
-            <span className="tab-icon">⚖️</span>
+            <span className="tab-icon">CP</span>
             <span className="tab-label">{t("analysis.compare")}</span>
+          </button>
+          <button
+            className={`analysis-tab ${activeAnalysisTab === "aiagent" ? "active" : ""}`}
+            onClick={() => handleAnalysisTabChange("aiagent")}
+          >
+            <span className="tab-icon">AI</span>
+            <span className="tab-label">{t("analysis.aiAgent")}</span>
           </button>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, memo } from "react";
 import ReactECharts from "echarts-for-react";
 import "./TimeSeriesChart.css";
 
@@ -479,6 +479,8 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
         option={option}
         style={{ height: "100%", width: "100%" }}
         opts={{ renderer: "canvas" }}
+        notMerge={false}
+        lazyUpdate={true}
         onEvents={{
           mousemove: (params: any) => {
             if (params.dataIndex !== undefined && params.dataIndex >= 0 && params.dataIndex < fullTradingTimes.length) {
@@ -512,4 +514,22 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
   );
 };
 
-export default TimeSeriesChart;
+export default memo(TimeSeriesChart, (prevProps, nextProps) => {
+  // Only re-render if data actually changed
+  if (prevProps.data.length !== nextProps.data.length) {
+    return false;
+  }
+  // Deep compare data arrays
+  for (let i = 0; i < prevProps.data.length; i++) {
+    const prev = prevProps.data[i];
+    const next = nextProps.data[i];
+    if (prev.date !== next.date || prev.close !== next.close || prev.volume !== next.volume) {
+      return false;
+    }
+  }
+  // Also check compact prop
+  if (prevProps.compact !== nextProps.compact) {
+    return false;
+  }
+  return true; // Props are equal, skip re-render
+});

@@ -326,7 +326,7 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
         </table>
       </div>
       <div className="prediction-warning">
-        ⚠️ 风险提示：预测结果仅供参考，不构成投资建议。投资有风险，入市需谨慎。
+        ! 风险提示：预测结果仅供参考，不构成投资建议。投资有风险，入市需谨慎。
       </div>
     </div>
   );

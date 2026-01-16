@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./LeftSidebar.css";
 
@@ -6,6 +6,20 @@ interface StockInfo {
   symbol: string;
   name: string;
   exchange: string;
+}
+
+interface StockQuote {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  change_percent: number;
+  volume: number;
+  market_cap?: number;
+  high: number;
+  low: number;
+  open: number;
+  previous_close: number;
 }
 
 interface TagInfo {
@@ -16,18 +30,21 @@ interface TagInfo {
 
 interface StockWithTags extends StockInfo {
   tags: TagInfo[];
+  quote?: StockQuote | null;
 }
 
 interface GroupData {
   name: string;
   stocks: StockWithTags[];
   expanded: boolean;
+  quotes?: Map<string, StockQuote | null>;
 }
 
 interface LeftSidebarProps {
   visible: boolean;
   onToggle: () => void;
   onStockSelect: (symbol: string, name: string) => void;
+  onStockRemove?: (symbol: string) => void;
 }
 
 type PanelType = "search" | "favorites" | "groups" | "tags";
@@ -43,13 +60,14 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
   visible,
   onToggle,
   onStockSelect,
+  onStockRemove,
 }) => {
   const [activePanel, setActivePanel] = useState<PanelType>("favorites");
   const [allStocks, setAllStocks] = useState<StockWithTags[]>([]);
   const [groupsData, setGroupsData] = useState<GroupData[]>([]);
   const [allTags, setAllTags] = useState<TagInfo[]>([]);
   const [selectedTag, setSelectedTag] = useState<TagInfo | null>(null);
-  const [tagStocks, setTagStocks] = useState<StockInfo[]>([]);
+  const [tagStocks, setTagStocks] = useState<StockWithTags[]>([]);
   
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -71,6 +89,15 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const [draggedStock, setDraggedStock] = useState<{ stock: StockInfo; fromGroup: string } | null>(null);
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
 
+  // Favorites drag state for reordering
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [isDraggingReorder, setIsDraggingReorder] = useState(false);
+  
+  // Use refs to track current drag state
+  const draggedIndexRef = useRef<number | null>(null);
+  const dragOverIndexRef = useRef<number | null>(null);
+
   // Load all tags
   const loadTags = useCallback(async () => {
     try {
@@ -81,23 +108,41 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
     }
   }, []);
 
-  // Load all stocks (flat list for favorites)
+  // Load all stocks (flat list for favorites) with quotes
   const loadAllStocks = useCallback(async () => {
     try {
-      const stocks: StockInfo[] = await invoke("get_stocks_by_group", { groupName: null });
-      const stocksWithTags: StockWithTags[] = await Promise.all(
-        stocks.map(async (stock) => {
+      // Get stocks with quotes
+      const stocksWithQuotes: Array<[StockInfo, StockQuote | null]> = await invoke("get_all_favorites_quotes");
+      const stocksWithTagsAndQuotes: StockWithTags[] = await Promise.all(
+        stocksWithQuotes.map(async ([stock, quote]) => {
           try {
             const tags: TagInfo[] = await invoke("get_stock_tags", { symbol: stock.symbol });
-            return { ...stock, tags };
+            return { ...stock, tags, quote };
           } catch {
-            return { ...stock, tags: [] };
+            return { ...stock, tags: [], quote };
           }
         })
       );
-      setAllStocks(stocksWithTags);
+      setAllStocks(stocksWithTagsAndQuotes);
     } catch (err) {
       console.error("Error loading stocks:", err);
+      // Fallback: load stocks without quotes
+      try {
+        const stocks: StockInfo[] = await invoke("get_stocks_by_group", { groupName: null });
+        const stocksWithTags: StockWithTags[] = await Promise.all(
+          stocks.map(async (stock) => {
+            try {
+              const tags: TagInfo[] = await invoke("get_stock_tags", { symbol: stock.symbol });
+              return { ...stock, tags };
+            } catch {
+              return { ...stock, tags: [] };
+            }
+          })
+        );
+        setAllStocks(stocksWithTags);
+      } catch (fallbackErr) {
+        console.error("Error loading stocks (fallback):", fallbackErr);
+      }
     }
   }, []);
 
@@ -106,7 +151,14 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
     try {
       const groupList: string[] = await invoke("get_stock_groups");
       const allGroupNames = [UNGROUPED_GROUP, ...groupList];
-      
+
+      // Get all stock quotes for groups
+      const stocksWithQuotes: Array<[StockInfo, StockQuote | null]> = await invoke("get_all_favorites_quotes");
+      const quotesMap = new Map<string, StockQuote | null>();
+      stocksWithQuotes.forEach(([stock, quote]) => {
+        quotesMap.set(stock.symbol, quote);
+      });
+
       const newGroupsData: GroupData[] = await Promise.all(
         allGroupNames.map(async (groupName) => {
           const stocks: StockInfo[] = await invoke("get_stocks_by_group", { groupName });
@@ -114,27 +166,69 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
             stocks.map(async (stock) => {
               try {
                 const tags: TagInfo[] = await invoke("get_stock_tags", { symbol: stock.symbol });
-                return { ...stock, tags };
+                const quote = quotesMap.get(stock.symbol);
+                return { ...stock, tags, quote };
               } catch {
-                return { ...stock, tags: [] };
+                const quote = quotesMap.get(stock.symbol);
+                return { ...stock, tags: [], quote };
               }
             })
           );
-          return { name: groupName, stocks: stocksWithTags, expanded: false };
+          return { name: groupName, stocks: stocksWithTags, expanded: false, quotes: quotesMap };
         })
       );
-      
+
       setGroupsData(newGroupsData);
     } catch (err) {
       console.error("Error loading groups:", err);
+      // Fallback: load groups without quotes
+      try {
+        const groupList: string[] = await invoke("get_stock_groups");
+        const allGroupNames = [UNGROUPED_GROUP, ...groupList];
+
+        const newGroupsData: GroupData[] = await Promise.all(
+          allGroupNames.map(async (groupName) => {
+            const stocks: StockInfo[] = await invoke("get_stocks_by_group", { groupName });
+            const stocksWithTags: StockWithTags[] = await Promise.all(
+              stocks.map(async (stock) => {
+                try {
+                  const tags: TagInfo[] = await invoke("get_stock_tags", { symbol: stock.symbol });
+                  return { ...stock, tags };
+                } catch {
+                  return { ...stock, tags: [] };
+                }
+              })
+            );
+            return { name: groupName, stocks: stocksWithTags, expanded: false };
+          })
+        );
+
+        setGroupsData(newGroupsData);
+      } catch (fallbackErr) {
+        console.error("Error loading groups (fallback):", fallbackErr);
+      }
     }
   }, []);
 
-  // Load stocks by tag
+  // Load stocks by tag with quotes
   const loadStocksByTag = useCallback(async (tagId: number) => {
     try {
       const stocks: StockInfo[] = await invoke("get_stocks_by_tag", { tagId });
-      setTagStocks(stocks);
+
+      // Get quotes for these stocks
+      const stocksWithQuotes: Array<[StockInfo, StockQuote | null]> = await invoke("get_all_favorites_quotes");
+      const quotesMap = new Map<string, StockQuote | null>();
+      stocksWithQuotes.forEach(([stock, quote]) => {
+        quotesMap.set(stock.symbol, quote);
+      });
+
+      const stocksWithQuotesFiltered = stocks.map(stock => ({
+        ...stock,
+        tags: [], // Tags will be loaded separately if needed
+        quote: quotesMap.get(stock.symbol) || null
+      }));
+
+      setTagStocks(stocksWithQuotesFiltered);
     } catch (err) {
       console.error("Error loading stocks by tag:", err);
       setTagStocks([]);
@@ -211,6 +305,10 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
       try {
         await invoke("remove_stock", { symbol });
         refreshAll();
+        // Notify parent to close related tabs
+        if (onStockRemove) {
+          onStockRemove(symbol);
+        }
       } catch (err) {
         console.error("Error removing stock:", err);
       }
@@ -366,92 +464,119 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
     setDragOverGroup(null);
   };
 
+  // Mouse-based drag handlers for reordering
+  const handleMouseMoveRef = useRef<(e: MouseEvent) => void>();
+  const handleMouseUpRef = useRef<() => void>();
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    const currentDraggedIndex = draggedIndexRef.current;
+    if (currentDraggedIndex === null) return;
+
+    const stockListElement = document.querySelector('.panel-content .stock-list');
+    if (!stockListElement) return;
+
+    const stockItems = stockListElement.querySelectorAll('.favorites-item');
+    let newDragOverIndex: number | null = null;
+
+    stockItems.forEach((item, index) => {
+      const rect = item.getBoundingClientRect();
+      const itemCenterY = rect.top + rect.height / 2;
+
+      if (e.clientY >= rect.top && e.clientY <= rect.bottom && index !== currentDraggedIndex) {
+        if (e.clientY < itemCenterY) {
+          newDragOverIndex = index;
+        } else {
+          newDragOverIndex = index + 1;
+        }
+      }
+    });
+
+    if (newDragOverIndex !== null && newDragOverIndex !== dragOverIndexRef.current) {
+      dragOverIndexRef.current = newDragOverIndex;
+      setDragOverIndex(newDragOverIndex);
+    }
+  }, []);
+
+  const handleMouseUp = useCallback(async () => {
+    const currentDraggedIndex = draggedIndexRef.current;
+    const currentDragOverIndex = dragOverIndexRef.current;
+
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+    setIsDraggingReorder(false);
+    draggedIndexRef.current = null;
+    dragOverIndexRef.current = null;
+
+    document.removeEventListener('mousemove', handleMouseMoveRef.current!);
+    document.removeEventListener('mouseup', handleMouseUpRef.current!);
+
+    if (currentDraggedIndex === null || currentDragOverIndex === null) {
+      return;
+    }
+
+    if (currentDraggedIndex !== currentDragOverIndex) {
+      // Reorder the stocks array
+      setAllStocks((currentStocks) => {
+        const newStocks = [...currentStocks];
+        let targetIndex = currentDragOverIndex;
+        
+        // Adjust target index if dragging down
+        if (targetIndex > currentDraggedIndex) {
+          targetIndex = targetIndex - 1;
+        }
+
+        const [draggedItem] = newStocks.splice(currentDraggedIndex, 1);
+        newStocks.splice(targetIndex, 0, draggedItem);
+
+        // Save the new order to database
+        const symbols = newStocks.map(stock => stock.symbol);
+        invoke("update_stocks_order", { symbols })
+          .then(() => {
+            console.log("Order saved successfully");
+          })
+          .catch((error) => {
+            console.error("Failed to save stock order:", error);
+            // Revert on error
+            loadAllStocks();
+          });
+
+        return newStocks;
+      });
+    }
+  }, [loadAllStocks]);
+
+  handleMouseMoveRef.current = handleMouseMove;
+  handleMouseUpRef.current = handleMouseUp;
+
+  const handleFavoritesMouseDown = (e: React.MouseEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    draggedIndexRef.current = index;
+    dragOverIndexRef.current = null;
+    setDraggedIndex(index);
+    setDragOverIndex(null);
+    setIsDraggingReorder(true);
+    document.addEventListener('mousemove', handleMouseMoveRef.current!);
+    document.addEventListener('mouseup', handleMouseUpRef.current!);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (handleMouseMoveRef.current) {
+        document.removeEventListener('mousemove', handleMouseMoveRef.current);
+      }
+      if (handleMouseUpRef.current) {
+        document.removeEventListener('mouseup', handleMouseUpRef.current);
+      }
+    };
+  }, []);
+
   const handleStockClick = (stock: StockInfo) => {
     onStockSelect(stock.symbol, stock.name);
   };
 
   // Render stock item (reusable)
-  const renderStockItem = (stock: StockWithTags | StockInfo, groupName?: string) => {
-    const stockWithTags = 'tags' in stock ? stock : { ...stock, tags: [] };
-    return (
-      <div
-        key={stock.symbol}
-        className={`stock-item ${draggedStock?.stock.symbol === stock.symbol ? "dragging" : ""}`}
-        draggable={!!groupName}
-        onDragStart={groupName ? () => handleStockDragStart(stock, groupName) : undefined}
-        onDragEnd={groupName ? handleStockDragEnd : undefined}
-        onClick={() => handleStockClick(stock)}
-      >
-        <div className="stock-info">
-          <div className="stock-main">
-            <span className="stock-symbol">{stock.symbol}</span>
-            <span className="stock-name">{stock.name}</span>
-          </div>
-          {stockWithTags.tags.length > 0 && (
-            <div className="stock-tags">
-              {stockWithTags.tags.map((tag) => (
-                <span
-                  key={tag.id}
-                  className="stock-tag"
-                  style={{ backgroundColor: tag.color }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemoveTagFromStock(stock.symbol, tag.id);
-                  }}
-                  title={`移除: ${tag.name}`}
-                >
-                  {tag.name}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="stock-actions" onClick={(e) => e.stopPropagation()}>
-          <div className="tag-menu-container">
-            <button
-              className="stock-action-btn"
-              onClick={() => setTagMenuStock(tagMenuStock === stock.symbol ? null : stock.symbol)}
-              title="标签"
-            >
-              🏷
-            </button>
-            {tagMenuStock === stock.symbol && (
-              <div className="tag-menu">
-                {allTags.length === 0 ? (
-                  <div className="tag-menu-empty">暂无标签</div>
-                ) : (
-                  allTags.map((tag) => {
-                    const hasTag = stockWithTags.tags.some((t) => t.id === tag.id);
-                    return (
-                      <button
-                        key={tag.id}
-                        className={`tag-menu-item ${hasTag ? "selected" : ""}`}
-                        onClick={() => hasTag
-                          ? handleRemoveTagFromStock(stock.symbol, tag.id)
-                          : handleAddTagToStock(stock.symbol, tag.id)
-                        }
-                      >
-                        <span className="tag-menu-color" style={{ backgroundColor: tag.color }} />
-                        <span className="tag-menu-name">{tag.name}</span>
-                        {hasTag && <span className="tag-menu-check">✓</span>}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            )}
-          </div>
-          <button
-            className="stock-action-btn delete"
-            onClick={() => handleRemoveStock(stock.symbol)}
-            title="删除"
-          >
-            ×
-          </button>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className={`left-sidebar ${visible ? "expanded" : "collapsed"}`}>
@@ -462,28 +587,28 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
           onClick={() => { setActivePanel("search"); if (!visible) onToggle(); }}
           title="搜索股票"
         >
-          🔍
+          SE
         </button>
         <button
           className={`sidebar-icon ${activePanel === "favorites" ? "active" : ""}`}
           onClick={() => { setActivePanel("favorites"); if (!visible) onToggle(); }}
           title="自选股"
         >
-          ⭐
+          FA
         </button>
         <button
           className={`sidebar-icon ${activePanel === "groups" ? "active" : ""}`}
           onClick={() => { setActivePanel("groups"); if (!visible) onToggle(); }}
           title="分组管理"
         >
-          📁
+          GR
         </button>
         <button
           className={`sidebar-icon ${activePanel === "tags" ? "active" : ""}`}
           onClick={() => { setActivePanel("tags"); if (!visible) onToggle(); }}
           title="标签管理"
         >
-          🏷
+          TG
         </button>
       </div>
 
@@ -513,8 +638,23 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
                   {searchResults.map((stock) => (
                     <div key={stock.symbol} className="search-result-item">
                       <div className="result-content" onClick={() => handleStockClick(stock)}>
-                        <span className="result-symbol">{stock.symbol}</span>
-                        <span className="result-name">{stock.name}</span>
+                        <div className="stock-header">
+                          <span className="stock-symbol">{stock.symbol}</span>
+                          <span className="stock-name">{stock.name}</span>
+                          {(stock as any).quote && (
+                            <>
+                              <span className="stock-price">{(stock as any).quote.price.toFixed(2)}</span>
+                              <span
+                                className={`stock-change ${
+                                  (stock as any).quote.change_percent > 0 ? 'price-up' :
+                                  (stock as any).quote.change_percent < 0 ? 'price-down' : ''
+                                }`}
+                              >
+                                {(stock as any).quote.change_percent > 0 ? '+' : ''}{(stock as any).quote.change_percent.toFixed(2)}%
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
                       <button
                         className="add-btn"
@@ -538,14 +678,125 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 <button onClick={onToggle} className="toggle-btn">◀</button>
               </div>
               <div className="panel-toolbar">
-                <button className="toolbar-btn" onClick={refreshAll} title="刷新">↻</button>
+                <button className="toolbar-btn" onClick={refreshAll} title="刷新">RF</button>
+                <span className="toolbar-hint">拖拽⋮⋮排序</span>
               </div>
               <div className="panel-content">
                 {allStocks.length === 0 ? (
                   <div className="empty-message">暂无自选股</div>
                 ) : (
                   <div className="stock-list">
-                    {allStocks.map((stock) => renderStockItem(stock))}
+                    {allStocks.map((stock, index) => (
+                      <div
+                        key={stock.symbol}
+                        className={`stock-item favorites-item ${
+                          draggedIndex === index ? "dragging" : ""
+                        } ${
+                          dragOverIndex === index ? "drag-over" : ""
+                        }`}
+                        onClick={() => {
+                          if (!isDraggingReorder) {
+                            handleStockClick(stock);
+                          }
+                        }}
+                      >
+                        <div
+                          className="drag-handle"
+                          onMouseDown={(e) => handleFavoritesMouseDown(e, index)}
+                          onClick={(e) => e.stopPropagation()}
+                          title="拖拽排序"
+                        >
+                          ⋮⋮
+                        </div>
+                        <div className="stock-info">
+                          <div className="stock-header">
+                            <span className="stock-symbol">{stock.symbol}</span>
+                            <span
+                              className={`stock-name ${
+                                stock.quote && stock.quote.change_percent > 0 ? 'price-up' :
+                                stock.quote && stock.quote.change_percent < 0 ? 'price-down' : ''
+                              }`}
+                            >
+                              {stock.name}
+                            </span>
+                            {stock.quote && (
+                              <>
+                                <span className="stock-price">{stock.quote.price.toFixed(2)}</span>
+                                <span
+                                  className={`stock-change ${
+                                    stock.quote.change_percent > 0 ? 'price-up' :
+                                    stock.quote.change_percent < 0 ? 'price-down' : ''
+                                  }`}
+                                >
+                                  {stock.quote.change_percent > 0 ? '+' : ''}{stock.quote.change_percent.toFixed(2)}%
+                                </span>
+                              </>
+                            )}
+                          </div>
+                          {('tags' in stock ? stock.tags : []).length > 0 && (
+                            <div className="stock-tags">
+                              {('tags' in stock ? stock.tags : []).map((tag) => (
+                                <span
+                                  key={tag.id}
+                                  className="stock-tag"
+                                  style={{ backgroundColor: tag.color }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveTagFromStock(stock.symbol, tag.id);
+                                  }}
+                                  title={`移除: ${tag.name}`}
+                                >
+                                  {tag.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="stock-actions" onClick={(e) => e.stopPropagation()}>
+                          <div className="tag-menu-container">
+                            <button
+                              className="stock-action-btn"
+                              onClick={() => setTagMenuStock(tagMenuStock === stock.symbol ? null : stock.symbol)}
+                              title="标签"
+                            >
+                              TG
+                            </button>
+                            {tagMenuStock === stock.symbol && (
+                              <div className="tag-menu">
+                                {allTags.length === 0 ? (
+                                  <div className="tag-menu-empty">暂无标签</div>
+                                ) : (
+                                  allTags.map((tag) => {
+                                    const hasTag = ('tags' in stock ? stock.tags : []).some((t) => t.id === tag.id);
+                                    return (
+                                      <button
+                                        key={tag.id}
+                                        className={`tag-menu-item ${hasTag ? "selected" : ""}`}
+                                        onClick={() => hasTag
+                                          ? handleRemoveTagFromStock(stock.symbol, tag.id)
+                                          : handleAddTagToStock(stock.symbol, tag.id)
+                                        }
+                                      >
+                                        <span className="tag-menu-color" style={{ backgroundColor: tag.color }} />
+                                        <span className="tag-menu-name">{tag.name}</span>
+                                        {hasTag && <span className="tag-menu-check">OK</span>}
+                                      </button>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            className="stock-action-btn delete"
+                            onClick={() => handleRemoveStock(stock.symbol)}
+                            title="删除"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -561,7 +812,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
               </div>
               <div className="panel-toolbar">
                 <button className="toolbar-btn" onClick={handleCreateGroup} title="新建分组">+</button>
-                <button className="toolbar-btn" onClick={loadGroups} title="刷新">↻</button>
+                <button className="toolbar-btn" onClick={loadGroups} title="刷新">RF</button>
               </div>
               <div className="panel-content">
                 <div className="groups-tree">
@@ -630,9 +881,29 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
                                 onClick={() => handleStockClick(stock)}
                               >
                                 <div className="stock-info">
-                                  <div className="stock-main">
+                                  <div className="stock-header">
                                     <span className="stock-symbol">{stock.symbol}</span>
-                                    <span className="stock-name">{stock.name}</span>
+                                    <span
+                                      className={`stock-name ${
+                                        stock.quote && stock.quote.change_percent > 0 ? 'price-up' :
+                                        stock.quote && stock.quote.change_percent < 0 ? 'price-down' : ''
+                                      }`}
+                                    >
+                                      {stock.name}
+                                    </span>
+                                    {stock.quote && (
+                                      <>
+                                        <span className="stock-price">{stock.quote.price.toFixed(2)}</span>
+                                        <span
+                                          className={`stock-change ${
+                                            stock.quote.change_percent > 0 ? 'price-up' :
+                                            stock.quote.change_percent < 0 ? 'price-down' : ''
+                                          }`}
+                                        >
+                                          {stock.quote.change_percent > 0 ? '+' : ''}{stock.quote.change_percent.toFixed(2)}%
+                                        </span>
+                                      </>
+                                    )}
                                   </div>
                                   {stock.tags.length > 0 && (
                                     <div className="stock-tags">
@@ -738,8 +1009,8 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
                                   />
                                 ))}
                               </div>
-                              <button className="mini-btn save" onClick={handleUpdateTag}>✓</button>
-                              <button className="mini-btn cancel" onClick={() => setEditingTag(null)}>✗</button>
+                              <button className="mini-btn save" onClick={handleUpdateTag}>OK</button>
+                              <button className="mini-btn cancel" onClick={() => setEditingTag(null)}>×</button>
                             </div>
                           ) : (
                             <button
@@ -777,8 +1048,32 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
                             className="stock-item simple"
                             onClick={() => handleStockClick(stock)}
                           >
+                        <div className="stock-info">
+                          <div className="stock-header">
                             <span className="stock-symbol">{stock.symbol}</span>
-                            <span className="stock-name">{stock.name}</span>
+                            <span
+                              className={`stock-name ${
+                                stock.quote && stock.quote.change_percent > 0 ? 'price-up' :
+                                stock.quote && stock.quote.change_percent < 0 ? 'price-down' : ''
+                              }`}
+                            >
+                              {stock.name}
+                            </span>
+                            {stock.quote && (
+                              <>
+                                <span className="stock-price">{stock.quote.price.toFixed(2)}</span>
+                                <span
+                                  className={`stock-change ${
+                                    stock.quote.change_percent > 0 ? 'price-up' :
+                                    stock.quote.change_percent < 0 ? 'price-down' : ''
+                                  }`}
+                                >
+                                  {stock.quote.change_percent > 0 ? '+' : ''}{stock.quote.change_percent.toFixed(2)}%
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
                           </div>
                         ))}
                       </div>

@@ -5,6 +5,8 @@
   border-right: 1px solid var(--border-color);
   transition: width 0.2s;
   height: 100%;
+  position: relative;
+  overflow: visible;
 }
 
 .left-sidebar.collapsed {
@@ -27,6 +29,11 @@
   flex-shrink: 0;
 }
 
+.left-sidebar .sidebar-icons-bar {
+  position: relative;
+  overflow: visible;
+}
+
 .sidebar-icon {
   width: 20px;
   height: 20px;
@@ -37,7 +44,9 @@
   background-color: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
   border-radius: 4px;
   transition: all 0.15s;
   padding: 0;
@@ -55,16 +64,21 @@
   color: white;
 }
 
-.sidebar-icon.active::before {
+.left-sidebar .sidebar-icon.active::before {
   content: "";
   position: absolute;
-  left: -4px;
+  left: -6px;
   top: 50%;
   transform: translateY(-50%);
   width: 2px;
-  height: 12px;
+  height: 16px;
   background-color: var(--accent-color);
   border-radius: 0 1px 1px 0;
+  z-index: 10;
+}
+
+.left-sidebar .sidebar-icon.active::after {
+  display: none;
 }
 
 /* Content Area */
@@ -113,7 +127,7 @@
 }
 
 .toolbar-btn {
-  width: 24px;
+  width: 28px;
   height: 24px;
   display: flex;
   align-items: center;
@@ -122,7 +136,9 @@
   background-color: var(--bg-secondary);
   color: var(--text-primary);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
   border-radius: 3px;
   transition: all 0.15s;
   padding: 0;
@@ -217,7 +233,7 @@
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -225,7 +241,9 @@
   font-weight: 600;
   font-size: 12px;
   color: var(--accent-color);
+  width: 40px;
   flex-shrink: 0;
+  text-align: left;
 }
 
 .result-name {
@@ -234,6 +252,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  width: 80px;
+  flex-shrink: 0;
+  margin-right: 10px;
 }
 
 .add-btn {
@@ -290,6 +311,7 @@
   flex-direction: column;
   gap: 3px;
   min-width: 0;
+  align-items: flex-start;
 }
 
 .stock-main {
@@ -304,18 +326,94 @@
   color: var(--text-primary);
 }
 
+.stock-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  flex-wrap: nowrap;
+}
+
+.stock-symbol {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  width: 40px;
+  flex-shrink: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .stock-name {
   font-size: 11px;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  width: 50px;
+  flex-shrink: 0;
+  text-align: left;
+}
+
+.stock-name.price-up {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.stock-name.price-down {
+  color: #059669;
+  font-weight: 600;
+}
+
+.stock-price-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+/* .stock-info with horizontal layout (used in search results) - moved to avoid conflict */
+
+.stock-price-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+
+.stock-price {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-primary);
+  width: 40px;
+  text-align: left;
+  flex-shrink: 0;
+}
+
+.stock-change {
+  font-size: 9px;
+  font-weight: 500;
+  width: 20px;
+  flex-shrink: 0;
+  text-align: left;
+}
+
+.stock-change.price-up {
+  color: #dc2626;
+}
+
+.stock-change.price-down {
+  color: #059669;
 }
 
 .stock-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 3px;
+  justify-content: flex-start;
+  align-items: flex-start;
 }
 
 .stock-tag {
@@ -446,7 +544,9 @@
 
 .tag-menu-check {
   color: var(--accent-color);
-  font-size: 11px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
 }
 
 /* Groups Panel */
@@ -661,6 +761,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  justify-content: center;
+  align-items: center;
 }
 
 .tag-cloud-item-wrapper {
@@ -720,11 +822,14 @@
 }
 
 .mini-btn {
-  width: 18px;
+  width: 24px;
   height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
   border: none;
   background-color: transparent;
   color: var(--text-secondary);
@@ -764,4 +869,96 @@
   border-radius: 4px;
   margin-bottom: 4px;
   border: 1px solid var(--border-color);
+}
+
+/* Favorites drag and drop styles */
+.favorites-item {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.favorites-item.dragging {
+  opacity: 0.5;
+  transform: rotate(2deg) scale(0.98);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.favorites-item.drag-over {
+  border-top: 2px solid var(--accent-color);
+  margin-top: 2px;
+  background-color: rgba(0, 172, 204, 0.1);
+}
+
+.drag-handle {
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1;
+  cursor: grab;
+  opacity: 0;
+  transition: all 0.15s ease;
+  z-index: 100;
+  padding: 2px 4px;
+  border-radius: 2px;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  -webkit-user-drag: element;
+}
+
+.drag-handle:active,
+.drag-handle[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* Ensure drag handle is always clickable */
+.drag-handle:hover,
+.favorites-item:hover .drag-handle {
+  opacity: 1;
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.favorites-item:hover .drag-handle {
+  opacity: 1;
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.drag-handle:hover {
+  opacity: 1 !important;
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.favorites-item .stock-info {
+  margin-left: 20px;
+  transition: margin-left 0.2s ease;
+}
+
+.favorites-item.dragging .drag-handle {
+  opacity: 0;
+}
+
+/* Ensure drag operations work properly */
+.favorites-item.dragging {
+  user-select: none;
+}
+
+/* Drag handle must be fully interactive */
+.drag-handle {
+  pointer-events: auto !important;
+}
+
+.toolbar-hint {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-left: auto;
+  padding-right: 8px;
+  user-select: none;
 }

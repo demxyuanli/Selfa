@@ -24,7 +24,7 @@ const AnalysisToolbar: React.FC<AnalysisToolbarProps> = ({
         onClick={onAnalysisClick}
         title="Open comprehensive stock analysis"
       >
-        📊 Analysis
+        Analysis
       </button>
       <button
         className={`tool-btn ${predictionActive ? "active" : ""}`}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useTranslation } from "react-i18next";
 import TitleBar from "./components/TitleBar";
 import ToolBar from "./components/ToolBar";
 import LeftSidebar from "./components/LeftSidebar";
@@ -29,9 +30,11 @@ interface StockTab {
   symbol: string;
   name: string;
   quote: StockQuote | null;
+  type?: "stock" | "heatmap";
 }
 
 function App() {
+  const { t } = useTranslation();
   const [leftSidebarVisible, setLeftSidebarVisible] = useState(true);
   const [rightSidebarVisible, setRightSidebarVisible] = useState(true);
   const [toolbarVisible, setToolbarVisible] = useState(false);
@@ -39,6 +42,18 @@ function App() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    const heatmapTab: StockTab = {
+      id: "tab-heatmap",
+      symbol: "",
+      name: t("favorites.heatmap"),
+      quote: null,
+      type: "heatmap",
+    };
+    setTabs([heatmapTab]);
+    setActiveTabId(heatmapTab.id);
+  }, [t]);
 
   const handleStockSelect = async (symbol: string, name: string) => {
     const existingTab = tabs.find(tab => tab.symbol === symbol);
@@ -55,6 +70,7 @@ function App() {
         symbol,
         name,
         quote,
+        type: "stock",
       };
       setTabs([...tabs, newTab]);
       setActiveTabId(newTab.id);
@@ -66,9 +82,22 @@ function App() {
   };
 
   const handleCloseTab = (tabId: string) => {
+    const tab = tabs.find(t => t.id === tabId);
+    if (tab?.type === "heatmap") {
+      return;
+    }
     const newTabs = tabs.filter(tab => tab.id !== tabId);
     setTabs(newTabs);
     if (activeTabId === tabId) {
+      setActiveTabId(newTabs.length > 0 ? newTabs[newTabs.length - 1].id : null);
+    }
+  };
+
+  const handleStockRemove = (symbol: string) => {
+    // Close all tabs related to the removed stock
+    const newTabs = tabs.filter(tab => tab.symbol !== symbol);
+    setTabs(newTabs);
+    if (activeTabId && !newTabs.find(tab => tab.id === activeTabId)) {
       setActiveTabId(newTabs.length > 0 ? newTabs[newTabs.length - 1].id : null);
     }
   };
@@ -217,6 +246,7 @@ function App() {
           visible={leftSidebarVisible}
           onToggle={() => setLeftSidebarVisible(!leftSidebarVisible)}
           onStockSelect={handleStockSelect}
+          onStockRemove={handleStockRemove}
         />
         <Workspace
           tabs={tabs}

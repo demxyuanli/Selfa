@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
+import ChartDialog from "./ChartDialog";
 import "./StockAnalysis.css";
 
 interface StockData {
@@ -49,15 +50,30 @@ function calculateMACD(data: number[], fast = 12, slow = 26, signal = 9) {
   const emaFast = calculateEMA(data, fast);
   const emaSlow = calculateEMA(data, slow);
   const macdLine = emaFast.map((v, i) => v - emaSlow[i]);
-  const signalLine = calculateEMA(macdLine.slice(slow - 1), signal);
+  const signalLineRaw = calculateEMA(macdLine.slice(slow - 1), signal);
+  
+  // Pad signalLine to match macdLine length
+  const signalLine: (number | null)[] = new Array(slow - 1).fill(null);
+  signalLineRaw.forEach((val) => {
+    signalLine.push(val);
+  });
+  
+  // Calculate histogram
+  const histogram: (number | null)[] = macdLine.map((m, i) => {
+    const s = signalLine[i];
+    return s !== null ? m - s : null;
+  });
+  
   const idx = data.length - 1;
-  const signalIdx = idx - slow + 1 - signal + 1;
-  if (signalIdx < 0) return null;
+  
   return {
     macd: macdLine[idx],
-    signal: signalLine[signalIdx] || 0,
-    histogram: macdLine[idx] - (signalLine[signalIdx] || 0),
-    prevHistogram: macdLine[idx - 1] - (signalLine[signalIdx - 1] || signalLine[signalIdx] || 0),
+    signal: signalLine[idx] || 0,
+    histogram: histogram[idx] || 0,
+    prevHistogram: histogram[idx - 1] || 0,
+    macdLine,
+    signalLine,
+    histogramArray: histogram,
   };
 }
 
@@ -257,17 +273,268 @@ function calculateOBV(closes: number[], volumes: number[]): { value: number; tre
 
 function calculateATR(highs: number[], lows: number[], closes: number[], period = 14): number | null {
   if (closes.length < period + 1) return null;
-  
-  let atr = 0;
-  for (let i = closes.length - period; i < closes.length; i++) {
+
+  // Calculate True Range for each period
+  const trueRanges: number[] = [];
+  for (let i = 1; i < closes.length; i++) {
     const tr = Math.max(
       highs[i] - lows[i],
       Math.abs(highs[i] - closes[i - 1]),
       Math.abs(lows[i] - closes[i - 1])
     );
-    atr += tr;
+    trueRanges.push(tr);
   }
-  return atr / period;
+
+  if (trueRanges.length < period) return null;
+
+  // Calculate initial ATR using simple average (Wilder's method)
+  let atr = 0;
+  for (let i = 0; i < period; i++) {
+    atr += trueRanges[i];
+  }
+  atr /= period;
+
+  // Apply Wilder's smoothing for subsequent values
+  for (let i = period; i < trueRanges.length; i++) {
+    atr = ((atr * (period - 1)) + trueRanges[i]) / period;
+  }
+
+  return atr;
+}
+
+function analyzeMACDSignal(macd: any, closes: number[], volumes: number[]): {
+  action: string;
+  signal: "bullish" | "bearish" | "neutral";
+  strength: number;
+  reason: string;
+} {
+  if (!macd || !macd.macdLine || !macd.signalLine || !macd.histogramArray || 
+      macd.macdLine.length < 2 || macd.signalLine.length < 2 || macd.histogramArray.length < 2) {
+    return { action: "HOLD", signal: "neutral", strength: 0, reason: "analysis.macdSignalHold" };
+  }
+
+  const histogram = macd.histogramArray;
+  const current = {
+    diff: macd.macdLine[macd.macdLine.length - 1] || 0,
+    dea: macd.signalLine[macd.signalLine.length - 1] || 0,
+    macd_histogram: histogram[histogram.length - 1] || 0,
+    prev_histogram: histogram[histogram.length - 2] || 0,
+    zero_axis_position: Math.abs(macd.macdLine[macd.macdLine.length - 1] || 0) < 0.0005 ? "near" :
+                       (macd.macdLine[macd.macdLine.length - 1] || 0) > 0 ? "above" : "below"
+  };
+
+  const prev = {
+    diff: macd.macdLine[macd.macdLine.length - 2] || 0,
+    dea: macd.signalLine[macd.signalLine.length - 2] || 0,
+    macd_histogram: current.prev_histogram,
+    prev_histogram: histogram[histogram.length - 3] || 0,
+    zero_axis_position: Math.abs(macd.macdLine[macd.macdLine.length - 2] || 0) < 0.0005 ? "near" :
+                       (macd.macdLine[macd.macdLine.length - 2] || 0) > 0 ? "above" : "below"
+  };
+
+  // 判断趋势方向（简化版：基于最近20日均线斜率）
+  const recentPrices = closes.slice(-20);
+  const trend_direction = recentPrices.length >= 10 ?
+    (recentPrices[recentPrices.length - 1] > recentPrices[0] ? "uptrend" : "downtrend") : "sideways";
+
+  // 判断成交量趋势（简化版）
+  const recentVolumes = volumes.slice(-5);
+  const volume_trend = recentVolumes.length >= 2 ?
+    (recentVolumes[recentVolumes.length - 1] > recentVolumes[0] * 1.2 ? "explosive" :
+     recentVolumes[recentVolumes.length - 1] > recentVolumes[0] ? "increasing" : "decreasing") : "stable";
+
+  // 判断是否为第一次交叉（简化版：检查最近10天是否有过交叉）
+  const recentCrosses = [];
+  for (let i = Math.max(0, macd.macdLine.length - 10); i < macd.macdLine.length - 1; i++) {
+    const diff1 = macd.macdLine[i] || 0;
+    const diff2 = macd.macdLine[i + 1] || 0;
+    const dea1 = macd.signalLine[i] || 0;
+    const dea2 = macd.signalLine[i + 1] || 0;
+    if ((diff1 <= dea1 && diff2 > dea2) || (diff1 >= dea1 && diff2 < dea2)) {
+      recentCrosses.push(i);
+    }
+  }
+  const is_first_cross = recentCrosses.length <= 1;
+
+  const context = {
+    trend_direction,
+    volume_trend,
+    is_first_cross
+  };
+
+  return evaluateMACDSignal(current, prev, context);
+}
+
+function evaluateMACDSignal(current: any, prev: any, context: any): {
+  action: string;
+  signal: "bullish" | "bearish" | "neutral";
+  strength: number;
+  reason: string;
+} {
+  const signal = { action: "HOLD", signal: "neutral" as "bullish" | "bearish" | "neutral", strength: 0, reason: "analysis.macdSignalHold" };
+
+  // 1. 先看零轴位置（最重要分水岭）
+  let base_strength_multiplier = 1.0;
+  if (current.zero_axis_position === "below") {
+    base_strength_multiplier = 0.4; // 零轴下方信号强度打折严重
+  } else if (current.zero_axis_position === "near") {
+    base_strength_multiplier = 0.7;
+  }
+
+  // 2. 金叉/死叉发生判断
+  const golden_cross = (prev.diff <= prev.dea) && (current.diff > current.dea);
+  const death_cross = (prev.diff >= prev.dea) && (current.diff < current.dea);
+
+  // 3. 柱子形态变化
+  const red_expanding = current.macd_histogram > 0 && current.macd_histogram > prev.macd_histogram;
+  const green_expanding = current.macd_histogram < 0 && Math.abs(current.macd_histogram) > Math.abs(prev.macd_histogram);
+  const red_shrinking = current.macd_histogram > 0 && current.macd_histogram < prev.macd_histogram;
+  const turning_green = current.macd_histogram <= 0 && prev.macd_histogram > 0;
+
+  // 买入信号逻辑
+  if (golden_cross) {
+    if (current.zero_axis_position === "above") {
+      if (context.is_first_cross) {
+        signal.action = "BUY";
+        signal.signal = "bullish";
+        signal.strength = 9 * base_strength_multiplier;
+        signal.reason = "analysis.macdStrongBuy";
+      } else {
+        signal.action = "BUY";
+        signal.signal = "bullish";
+        signal.strength = 7 * base_strength_multiplier;
+        signal.reason = "analysis.macdGoodBuy";
+      }
+
+      if (red_expanding && context.volume_trend === "explosive") {
+        signal.strength += 2;
+      }
+    } else if (current.zero_axis_position === "below") {
+      signal.action = "BUY";
+      signal.signal = "bullish";
+      signal.strength = 4 * base_strength_multiplier;
+      signal.reason = "analysis.macdWeakBuy";
+      if (red_expanding) {
+        signal.strength += 1.5;
+      }
+    }
+  }
+  // 卖出信号逻辑
+  else if (death_cross) {
+    if (current.zero_axis_position === "above") {
+      signal.action = "SELL";
+      signal.signal = "bearish";
+      signal.strength = -7 * base_strength_multiplier;
+      signal.reason = "analysis.macdGoodSell";
+      if (turning_green) {
+        signal.strength -= 1;
+      }
+    } else {
+      signal.action = "SELL";
+      signal.signal = "bearish";
+      signal.strength = -9 * base_strength_multiplier;
+      signal.reason = "analysis.macdStrongSell";
+      if (green_expanding) {
+        signal.strength -= 2;
+      }
+    }
+  }
+  // 特殊形态
+  else if (red_shrinking && current.zero_axis_position === "above" && !golden_cross) {
+    signal.action = "REDUCE";
+    signal.signal = "bearish";
+    signal.strength = -3;
+    signal.reason = "analysis.macdReducing";
+  }
+
+  // 趋势过滤
+  if (context.trend_direction === "downtrend" && signal.signal === "bullish") {
+    signal.strength *= 0.5;
+    signal.reason = "analysis.macdAgainstTrend";
+  }
+
+  // 过滤太弱的信号
+  if (Math.abs(signal.strength) < 4) {
+    signal.action = "HOLD";
+    signal.signal = "neutral";
+    signal.reason = "analysis.macdSignalHold";
+  }
+
+  return signal;
+}
+
+function analyzeMACDRSISignal(macd: any, rsi: number, closes: number[]): {
+  macdAction: string;
+  rsiCondition: string;
+  action: string;
+  signal: "bullish" | "bearish" | "neutral";
+  strength: number;
+  reason: string;
+} {
+  // 获取MACD信号
+  const macdSignal = analyzeMACDSignal(macd, closes, []);
+
+  // RSI条件判断
+  let rsiCondition = "neutral";
+  if (rsi >= 70) rsiCondition = "overbought";
+  else if (rsi <= 30) rsiCondition = "oversold";
+  else if (rsi >= 60) rsiCondition = "bullish";
+  else if (rsi <= 40) rsiCondition = "bearish";
+
+  // 组合信号分析
+  const result = {
+    macdAction: macdSignal.action,
+    rsiCondition,
+    action: "HOLD",
+    signal: "neutral" as "bullish" | "bearish" | "neutral",
+    strength: 0,
+    reason: "analysis.compositeSignalHold"
+  };
+
+  // MACD金叉 + RSI超卖 = 强买入
+  if (macdSignal.action === "BUY" && rsiCondition === "oversold") {
+    result.action = "STRONG_BUY";
+    result.signal = "bullish";
+    result.strength = 9;
+    result.reason = "analysis.compositeStrongBuy";
+  }
+  // MACD金叉 + RSI中性 = 买入
+  else if (macdSignal.action === "BUY" && rsiCondition === "neutral") {
+    result.action = "BUY";
+    result.signal = "bullish";
+    result.strength = 7;
+    result.reason = "analysis.compositeBuy";
+  }
+  // MACD死叉 + RSI超买 = 强卖出
+  else if (macdSignal.action === "SELL" && rsiCondition === "overbought") {
+    result.action = "STRONG_SELL";
+    result.signal = "bearish";
+    result.strength = -9;
+    result.reason = "analysis.compositeStrongSell";
+  }
+  // MACD死叉 + RSI中性 = 卖出
+  else if (macdSignal.action === "SELL" && rsiCondition === "neutral") {
+    result.action = "SELL";
+    result.signal = "bearish";
+    result.strength = -7;
+    result.reason = "analysis.compositeSell";
+  }
+  // MACD金叉 + RSI超买 = 谨慎买入（可能冲高回落）
+  else if (macdSignal.action === "BUY" && rsiCondition === "overbought") {
+    result.action = "CAUTION_BUY";
+    result.signal = "bullish";
+    result.strength = 4;
+    result.reason = "analysis.compositeCautionBuy";
+  }
+  // MACD死叉 + RSI超卖 = 谨慎卖出（可能探底反弹）
+  else if (macdSignal.action === "SELL" && rsiCondition === "oversold") {
+    result.action = "CAUTION_SELL";
+    result.signal = "bearish";
+    result.strength = -4;
+    result.reason = "analysis.compositeCautionSell";
+  }
+
+  return result;
 }
 
 function calculateWilliamsR(highs: number[], lows: number[], closes: number[], period = 14): number | null {
@@ -283,12 +550,62 @@ function calculateWilliamsR(highs: number[], lows: number[], closes: number[], p
   return ((hh - close) / (hh - ll)) * -100;
 }
 
+function calculateSupportResistance(highs: number[], lows: number[], closes: number[], lookbackPeriod = 20) {
+  // Use pivot points and volume profile for better support/resistance
+  const recentData = closes.slice(-lookbackPeriod);
+  const recentHighs = highs.slice(-lookbackPeriod);
+  const recentLows = lows.slice(-lookbackPeriod);
+
+  // Find pivot points (local highs and lows)
+  const pivotHighs: number[] = [];
+  const pivotLows: number[] = [];
+
+  for (let i = 1; i < recentData.length - 1; i++) {
+    if (recentHighs[i] > recentHighs[i - 1] && recentHighs[i] > recentHighs[i + 1]) {
+      pivotHighs.push(recentHighs[i]);
+    }
+    if (recentLows[i] < recentLows[i - 1] && recentLows[i] < recentLows[i + 1]) {
+      pivotLows.push(recentLows[i]);
+    }
+  }
+
+  // Calculate support and resistance from pivot points or recent extremes
+  let support = Math.min(...recentLows);
+  let resistance = Math.max(...recentHighs);
+
+  if (pivotLows.length > 0) {
+    // Use the most recent significant pivot low as support
+    const recentPivotLows = pivotLows.slice(-3); // Last 3 pivot lows
+    support = Math.max(...recentPivotLows); // Use the highest pivot low as support
+  }
+
+  if (pivotHighs.length > 0) {
+    // Use the most recent significant pivot high as resistance
+    const recentPivotHighs = pivotHighs.slice(-3); // Last 3 pivot highs
+    resistance = Math.min(...recentPivotHighs); // Use the lowest pivot high as resistance
+  }
+
+  const currentPrice = closes[closes.length - 1];
+  const position = resistance > support ?
+    ((currentPrice - support) / (resistance - support)) * 100 : 50;
+
+  return {
+    support,
+    resistance,
+    position,
+    pivotHighs,
+    pivotLows
+  };
+}
+
 const StockAnalysis: React.FC<StockAnalysisProps> = ({
   timeSeriesData,
   klineData,
   analysisType,
 }) => {
   const { t } = useTranslation();
+  const [isChartDialogOpen, setIsChartDialogOpen] = useState(false);
+  const chartRef = useRef<ReactECharts>(null);
   
   // Parameters
   const [tsParams, setTsParams] = useState({ maPeriod: 5, volumeMultiplier: 2.0 });
@@ -437,25 +754,53 @@ const StockAnalysis: React.FC<StockAnalysisProps> = ({
       extraKey: maExtraKey,
     });
 
-    // 3. MACD
+    // 3. MACD Advanced Analysis
     const macd = calculateMACD(closes, klParams.macdFast, klParams.macdSlow, klParams.macdSignal);
     if (macd) {
-      const macdExtraKey = macd.histogram > 0 && macd.histogram > macd.prevHistogram ? "analysis.bullishMomentumUp" :
-                          macd.histogram < 0 && macd.histogram < macd.prevHistogram ? "analysis.bearishMomentumUp" :
-                          macd.histogram > 0 ? "analysis.bullishWeakening" : "analysis.bearishWeakening";
+      // 实现高级MACD分析逻辑
+      const macdSignal = analyzeMACDSignal(macd, closes, volumes);
       results.push({
         key: "macd",
         titleKey: "analysis.macdIndicator",
         descKey: "analysis.macdDesc",
-        descParams: { macd: macd.macd.toFixed(3), signal: macd.signal.toFixed(3), histogram: macd.histogram.toFixed(3) },
-        signal: macd.histogram > 0 ? "bullish" : "bearish",
-        confidence: Math.min(Math.abs(macd.histogram) * 1000, 100),
-        extraKey: macdExtraKey,
+        descParams: {
+          macd: macd.macd.toFixed(3),
+          signal: macd.signal.toFixed(3),
+          histogram: macd.histogram.toFixed(3),
+          action: macdSignal.action,
+          strength: macdSignal.strength.toFixed(1)
+        },
+        signal: macdSignal.signal,
+        confidence: Math.abs(macdSignal.strength),
+        extraKey: macdSignal.reason,
       });
     }
 
-    // 4. RSI
+    // 4. RSI (calculate early for composite analysis)
     const rsi = calculateRSI(closes, klParams.rsiPeriod);
+
+    // 3.5. MACD + RSI Composite Analysis
+    if (macd && rsi !== null) {
+      const compositeSignal = analyzeMACDRSISignal(macd, rsi, closes);
+      if (compositeSignal.action !== "HOLD") {
+        results.push({
+          key: "macd_rsi_composite",
+          titleKey: "analysis.macdRsiComposite",
+          descKey: "analysis.macdRsiCompositeDesc",
+          descParams: {
+            macdAction: compositeSignal.macdAction,
+            rsiValue: rsi.toFixed(2),
+            action: compositeSignal.action,
+            strength: compositeSignal.strength.toFixed(1)
+          },
+          signal: compositeSignal.signal,
+          confidence: Math.abs(compositeSignal.strength),
+          extraKey: compositeSignal.reason,
+        });
+      }
+    }
+
+    // RSI analysis (already calculated above)
     if (rsi !== null) {
       const rsiExtraKey = rsi > 70 ? "analysis.overbought" : rsi < 30 ? "analysis.oversold" : 
                           rsi > 50 ? "analysis.bullishZone" : "analysis.bearishZone";
@@ -581,21 +926,22 @@ const StockAnalysis: React.FC<StockAnalysisProps> = ({
       });
     }
 
-    // 10. Support/Resistance
-    const recentLows = lows.slice(-20);
-    const recentHighs = highs.slice(-20);
-    const support = Math.min(...recentLows);
-    const resistance = Math.max(...recentHighs);
-    const pricePosition = ((lastClose - support) / (resistance - support)) * 100;
-    const srExtraKey = pricePosition > 80 ? "analysis.nearResistance" : pricePosition < 20 ? "analysis.nearSupport" : "analysis.middleRange";
+    // 10. Support/Resistance Analysis
+    const supportResistance = calculateSupportResistance(highs, lows, closes, 20);
+    const srExtraKey = supportResistance.position > 80 ? "analysis.nearResistance" :
+                      supportResistance.position < 20 ? "analysis.nearSupport" : "analysis.middleRange";
     
     results.push({
       key: "supportResistance",
       titleKey: "analysis.supportResistance",
       descKey: "analysis.supportResistanceDesc",
-      descParams: { support: support.toFixed(2), resistance: resistance.toFixed(2), position: pricePosition.toFixed(1) },
-      signal: pricePosition < 30 ? "bullish" : pricePosition > 70 ? "bearish" : "neutral",
-      confidence: pricePosition < 20 || pricePosition > 80 ? 70 : 40,
+      descParams: {
+        support: supportResistance.support.toFixed(2),
+        resistance: supportResistance.resistance.toFixed(2),
+        position: supportResistance.position.toFixed(1)
+      },
+      signal: supportResistance.position < 30 ? "bullish" : supportResistance.position > 70 ? "bearish" : "neutral",
+      confidence: supportResistance.position < 20 || supportResistance.position > 80 ? 70 : 40,
       extraKey: srExtraKey,
     });
 
@@ -740,6 +1086,35 @@ const StockAnalysis: React.FC<StockAnalysisProps> = ({
       };
     }
   }, [analysisType, timeSeriesData, klineData, tsParams, t]);
+
+  useEffect(() => {
+    let resizeTimer: number | null = null;
+    const handleResize = () => {
+      if (resizeTimer) {
+        clearTimeout(resizeTimer);
+      }
+      resizeTimer = setTimeout(() => {
+        if (chartRef.current) {
+          try {
+            const instance = chartRef.current.getEchartsInstance();
+            if (instance && !instance.isDisposed()) {
+              instance.resize();
+            }
+          } catch (error) {
+            // Ignore errors during resize
+          }
+        }
+      }, 100);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      if (resizeTimer) {
+        clearTimeout(resizeTimer);
+      }
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   return (
     <div className="stock-analysis">
@@ -950,16 +1325,33 @@ const StockAnalysis: React.FC<StockAnalysisProps> = ({
 
         {/* Right Column: Chart */}
         <div className="analysis-column chart-column">
-          <div className="column-header">{t("analysis.chart")}</div>
+          <div className="column-header">
+            <span>{t("analysis.chart")}</span>
+          </div>
           <div className="chart-content">
             {Object.keys(chartOption).length > 0 ? (
-              <ReactECharts option={chartOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "canvas" }} />
+              <>
+                <button
+                  className="chart-zoom-button-overlay"
+                  onClick={() => setIsChartDialogOpen(true)}
+                  title={t("chart.zoom")}
+                >
+                  ZO
+                </button>
+                <ReactECharts ref={chartRef} option={chartOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "canvas" }} />
+              </>
             ) : (
               <div className="no-data">{t("analysis.noData")}</div>
             )}
           </div>
         </div>
       </div>
+      <ChartDialog
+        isOpen={isChartDialogOpen}
+        onClose={() => setIsChartDialogOpen(false)}
+        title={`${t("analysis.timeSeries")} - ${t("chart.title")}`}
+        chartOption={chartOption}
+      />
     </div>
   );
 };

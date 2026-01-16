@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
+import ChartDialog from "./ChartDialog";
 import "./StockAnalysis.css";
 import "./PredictionAnalysis.css";
 
@@ -45,8 +46,10 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
   const { t } = useTranslation();
   const [method, setMethod] = useState<PredictionMethod>("linear");
   const [period, setPeriod] = useState(5);
+  const [isChartDialogOpen, setIsChartDialogOpen] = useState(false);
   const [predictions, setPredictions] = useState<PredictionResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const chartRef = useRef<ReactECharts>(null);
 
   const getMethodLabel = (m: PredictionMethod): string => {
     const labels: Record<PredictionMethod, string> = {
@@ -70,6 +73,35 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
       generatePrediction();
     }
   }, [method, period, klineData]);
+
+  useEffect(() => {
+    let resizeTimer: number | null = null;
+    const handleResize = () => {
+      if (resizeTimer) {
+        clearTimeout(resizeTimer);
+      }
+      resizeTimer = setTimeout(() => {
+        if (chartRef.current) {
+          try {
+            const instance = chartRef.current.getEchartsInstance();
+            if (instance && !instance.isDisposed()) {
+              instance.resize();
+            }
+          } catch (error) {
+            // Ignore errors during resize
+          }
+        }
+      }, 100);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      if (resizeTimer) {
+        clearTimeout(resizeTimer);
+      }
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   const generatePrediction = async () => {
     if (klineData.length < 20) {
@@ -125,7 +157,7 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
       grid: {
         left: "8%",
         right: "3%",
-        top: "12%",
+        top: "18%",
         bottom: "10%",
       },
       xAxis: {
@@ -161,10 +193,10 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
         {
           type: "text",
           left: "center",
-          top: "2%",
+          top: "1%",
           style: {
             text: `${t("analysis.method")}: ${getMethodLabel(method)} | ${t("analysis.period")}: ${period}${t("stock.periods.1d")}`,
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: "bold",
             fill: "#858585",
           },
@@ -490,22 +522,40 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
 
         {/* Right Column: Chart */}
         <div className="analysis-column chart-column">
-          <div className="column-header">{t("analysis.chart")}</div>
+          <div className="column-header">
+            <span>{t("analysis.chart")}</span>
+          </div>
           <div className="chart-content">
             {loading ? (
               <div className="no-data">{t("app.loading")}</div>
             ) : Object.keys(chartOption).length === 0 ? (
               <div className="no-data">{t("analysis.noData")}</div>
             ) : (
-              <ReactECharts
-                option={chartOption}
-                style={{ height: "100%", width: "100%" }}
-                opts={{ renderer: "canvas" }}
-              />
+              <>
+                <button
+                  className="chart-zoom-button-overlay"
+                  onClick={() => setIsChartDialogOpen(true)}
+                  title={t("chart.zoom")}
+                >
+                  ZO
+                </button>
+                <ReactECharts
+                  ref={chartRef}
+                  option={chartOption}
+                  style={{ height: "100%", width: "100%" }}
+                  opts={{ renderer: "canvas" }}
+                />
+              </>
             )}
           </div>
         </div>
       </div>
+      <ChartDialog
+        isOpen={isChartDialogOpen}
+        onClose={() => setIsChartDialogOpen(false)}
+        title={`${t("analysis.prediction")} - ${t("chart.title")}`}
+        chartOption={chartOption}
+      />
     </div>
   );
 };

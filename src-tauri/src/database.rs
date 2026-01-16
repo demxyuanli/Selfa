@@ -113,6 +113,8 @@ impl Database {
                 change_percent REAL NOT NULL,
                 volume INTEGER NOT NULL,
                 market_cap INTEGER,
+                pe_ratio REAL,
+                turnover INTEGER,
                 high REAL NOT NULL,
                 low REAL NOT NULL,
                 open REAL NOT NULL,
@@ -123,6 +125,16 @@ impl Database {
             )",
             [],
         )?;
+
+        // Migration: Add new columns to stock_quotes if they don't exist
+        let _ = conn.execute(
+            "ALTER TABLE stock_quotes ADD COLUMN pe_ratio REAL",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE stock_quotes ADD COLUMN turnover INTEGER",
+            [],
+        );
 
         // Migration: Add sort_order column to stocks table if it doesn't exist
         // Check if sort_order column exists
@@ -217,6 +229,7 @@ impl Database {
         Ok(groups)
     }
 
+    #[allow(dead_code)]
     pub fn get_group_id_by_name(&self, name: &str) -> Result<Option<i64>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT id FROM stock_groups WHERE name = ?1")?;
@@ -471,6 +484,7 @@ impl Database {
         Ok(stocks)
     }
 
+    #[allow(dead_code)]
     pub fn get_stocks_with_tags(&self) -> Result<Vec<(StockInfo, Vec<(i64, String, String)>)>> {
         let conn = self.conn.lock().unwrap();
         
@@ -666,6 +680,7 @@ impl Database {
         Ok(data)
     }
 
+    #[allow(dead_code)]
     pub fn get_latest_time_series_date(&self, symbol: &str) -> Result<Option<String>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
@@ -776,9 +791,9 @@ impl Database {
         
         conn.execute(
             "INSERT OR REPLACE INTO stock_quotes 
-             (symbol, name, price, change, change_percent, volume, market_cap, 
+             (symbol, name, price, change, change_percent, volume, market_cap, pe_ratio, turnover,
               high, low, open, previous_close, updated_at) 
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 quote.symbol,
                 quote.name,
@@ -787,6 +802,8 @@ impl Database {
                 quote.change_percent,
                 quote.volume,
                 quote.market_cap,
+                quote.pe_ratio,
+                quote.turnover,
                 quote.high,
                 quote.low,
                 quote.open,
@@ -802,7 +819,7 @@ impl Database {
     pub fn get_quote(&self, symbol: &str) -> Result<Option<StockQuote>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT symbol, name, price, change, change_percent, volume, market_cap, 
+            "SELECT symbol, name, price, change, change_percent, volume, market_cap, pe_ratio, turnover,
                     high, low, open, previous_close 
              FROM stock_quotes 
              WHERE symbol = ?1"
@@ -817,10 +834,12 @@ impl Database {
                 change_percent: row.get(4)?,
                 volume: row.get(5)?,
                 market_cap: row.get(6)?,
-                high: row.get(7)?,
-                low: row.get(8)?,
-                open: row.get(9)?,
-                previous_close: row.get(10)?,
+                pe_ratio: row.get(7)?,
+                turnover: row.get(8)?,
+                high: row.get(9)?,
+                low: row.get(10)?,
+                open: row.get(11)?,
+                previous_close: row.get(12)?,
             })
         })?;
         
