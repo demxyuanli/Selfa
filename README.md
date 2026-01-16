@@ -28,6 +28,10 @@
 ![对比分析](docs/screenshots/compare-analysis.png)
 *多股票对比分析*
 
+<!-- 截图 7: AI分析预测 -->
+![对比分析](docs/screenshots/ai-analysis.png)
+*使用AI API实现对股票数据的分析预测*
+
 ## 功能特性
 
 ### 核心功能

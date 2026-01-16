@@ -10,6 +10,7 @@
 4. **prediction-analysis.png**: 预测分析功能
 5. **favorites-heatmap.png**: 收藏夹热力图视图
 6. **compare-analysis.png**: 对比分析功能
+7. **AI-analysis.png**: AI分析预测功能
 
 ## 截图指南
 
