@@ -2119,7 +2119,10 @@ Multiple Prediction Methods Results (综合多种预测方法):
 Average Prediction: {:.2}
 Prediction Range: {:.2} - {:.2} (range: {:.2})
 
-Please provide analysis in the following JSON format (all text fields must be in Chinese):
+CRITICAL REQUIREMENTS - YOU MUST RETURN ALL REQUIRED FIELDS:
+
+Please provide analysis in the following JSON format. ALL FIELDS ARE REQUIRED - DO NOT OMIT ANY FIELD:
+
 {{
   "analysis": "综合分析文本（3-5段，使用中文）",
   "prediction": {{
@@ -2149,12 +2152,23 @@ Please provide analysis in the following JSON format (all text fields must be in
   ]
 }}
 
-IMPORTANT: 
-1. Consider all prediction methods when making your prediction - use the average and range as reference
-2. Analyze the consistency between different methods - if they converge, confidence should be higher
-3. Consider technical indicators, volume patterns, and prediction convergence together
-4. All text content in the JSON response must be in Simplified Chinese
-5. Respond ONLY with valid JSON, no additional text."#,
+REQUIRED FIELDS CHECKLIST (ALL MUST BE PRESENT):
+✓ "analysis" - string (required)
+✓ "prediction" - object with "price", "confidence", "trend", "reasoning" (all required)
+✓ "risk_assessment" - object with "level", "factors" (both required)
+✓ "recommendations" - array with at least 2 items (required)
+✓ "technical_summary" - object with "indicators" (array) and "overall_signal" (both required)
+✓ "price_targets" - array with at least 2 items (required)
+
+IMPORTANT INSTRUCTIONS: 
+1. ALL FIELDS ABOVE ARE MANDATORY - DO NOT SKIP ANY FIELD
+2. Consider all prediction methods when making your prediction - use the average and range as reference
+3. Analyze the consistency between different methods - if they converge, confidence should be higher
+4. Consider technical indicators, volume patterns, and prediction convergence together
+5. All text content in the JSON response must be in Simplified Chinese
+6. Respond ONLY with valid, complete JSON containing ALL required fields
+7. DO NOT include any text before or after the JSON object
+8. Ensure the JSON is properly formatted and complete before responding"#,
         symbol,
         last_price,
         price_change,
@@ -2213,7 +2227,7 @@ IMPORTANT:
         let body = serde_json::json!({
             "model": groq_model,
             "messages": [
-                {"role": "system", "content": "You are a professional stock market analyst. Provide accurate, data-driven analysis in JSON format. IMPORTANT: All text content must be in Simplified Chinese (中文)."},
+                {"role": "system", "content": "You are a professional stock market analyst. Provide accurate, data-driven analysis in JSON format. CRITICAL: You MUST return ALL required fields including 'analysis', 'prediction', 'risk_assessment', 'recommendations', 'technical_summary', and 'price_targets'. Do NOT omit any field. All text content must be in Simplified Chinese (中文)."},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.3,
@@ -2231,7 +2245,7 @@ IMPORTANT:
     } else if api_provider == "anthropic" {
         // Claude API
         let claude_prompt = format!(
-            "You are a professional stock market analyst. Provide accurate, data-driven analysis in JSON format. IMPORTANT: All text content must be in Simplified Chinese (中文).\n\n{}",
+            "You are a professional stock market analyst. Provide accurate, data-driven analysis in JSON format. CRITICAL: You MUST return ALL required fields including 'analysis', 'prediction', 'risk_assessment', 'recommendations', 'technical_summary', and 'price_targets'. Do NOT omit any field. All text content must be in Simplified Chinese (中文).\n\n{}",
             prompt
         );
         let body = serde_json::json!({
@@ -2273,7 +2287,7 @@ IMPORTANT:
         
         // Build the prompt with system instruction (Chinese output required)
         let full_prompt = format!(
-            "You are a professional stock market analyst. Provide accurate, data-driven analysis in JSON format. IMPORTANT: All text content must be in Simplified Chinese (中文).\n\n{}",
+            "You are a professional stock market analyst. Provide accurate, data-driven analysis in JSON format. CRITICAL: You MUST return ALL required fields including 'analysis', 'prediction', 'risk_assessment', 'recommendations', 'technical_summary', and 'price_targets'. Do NOT omit any field. All text content must be in Simplified Chinese (中文).\n\n{}",
             prompt
         );
         
@@ -2394,7 +2408,7 @@ IMPORTANT:
         
         let url = format!("{}/{}", api_url, hf_model);
         let body = serde_json::json!({
-            "inputs": format!("You are a professional stock market analyst. Provide accurate, data-driven analysis in JSON format. IMPORTANT: All text content must be in Simplified Chinese (中文).\n\n{}", prompt),
+            "inputs": format!("You are a professional stock market analyst. Provide accurate, data-driven analysis in JSON format. CRITICAL: You MUST return ALL required fields including 'analysis', 'prediction', 'risk_assessment', 'recommendations', 'technical_summary', and 'price_targets'. Do NOT omit any field. All text content must be in Simplified Chinese (中文).\n\n{}", prompt),
             "parameters": {
                 "max_new_tokens": 2000,
                 "temperature": 0.3,
@@ -2486,39 +2500,116 @@ IMPORTANT:
         return Err("Unsupported API provider for content extraction".to_string());
     };
 
+    // Debug: Log raw content from API
+    eprintln!("=== AI API Response Debug ===");
+    eprintln!("API Provider: {}", api_provider);
+    eprintln!("Raw Content Length: {} chars", content.len());
+    eprintln!("Raw Content (first 500 chars): {}", 
+        if content.len() > 500 { 
+            &content[..500.min(content.len())] 
+        } else { 
+            content 
+        });
+    
     // Clean and extract JSON from content
     let cleaned_content = extract_json_from_text(content);
+    eprintln!("Cleaned Content Length: {} chars", cleaned_content.len());
+    eprintln!("Cleaned Content (first 1000 chars): {}", 
+        if cleaned_content.len() > 1000 { 
+            &cleaned_content[..1000.min(cleaned_content.len())] 
+        } else { 
+            &cleaned_content 
+        });
 
     // Try to parse JSON, with fallback for incomplete responses
+    eprintln!("=== Attempting JSON Parse (Step 1: Direct parse) ===");
     let result: AIAnalysisResult = match serde_json::from_str(&cleaned_content) {
-        Ok(parsed) => parsed,
+        Ok(parsed) => {
+            eprintln!("✓ Direct parse succeeded!");
+            parsed
+        },
         Err(e) => {
+            eprintln!("✗ Direct parse failed: {}", e);
+            eprintln!("=== Attempting JSON Parse (Step 2: Aggressive extraction) ===");
+            
             // Try to find and extract JSON object more aggressively
             let json_candidate = find_json_in_text(&cleaned_content);
+            eprintln!("Extracted JSON candidate length: {} chars", json_candidate.len());
+            eprintln!("JSON candidate (first 800 chars): {}", 
+                if json_candidate.len() > 800 { 
+                    &json_candidate[..800.min(json_candidate.len())] 
+                } else { 
+                    &json_candidate 
+                });
             
             // Try to validate and fix common JSON issues before parsing
             let fixed_candidate = fix_json_common_issues(&json_candidate);
+            eprintln!("Fixed candidate length: {} chars", fixed_candidate.len());
             
             // Try parsing the fixed candidate
+            eprintln!("=== Attempting JSON Parse (Step 3: Parse fixed candidate) ===");
             let parse_result = serde_json::from_str::<AIAnalysisResult>(&fixed_candidate);
             
             match parse_result {
-                Ok(parsed) => parsed,
+                Ok(parsed) => {
+                    eprintln!("✓ Fixed candidate parse succeeded!");
+                    parsed
+                },
                 Err(e2) => {
+                    eprintln!("✗ Fixed candidate parse failed: {}", e2);
+                    eprintln!("=== Attempting JSON Parse (Step 4: Parse as partial JSON) ===");
+                    
                     // Try to parse as partial JSON and fill missing fields
-                    if let Ok(partial_json) = serde_json::from_str::<serde_json::Value>(&fixed_candidate) {
-                        if let Ok(patched_result) = patch_incomplete_ai_result(&partial_json, symbol, data) {
-                            eprintln!("AI API partially failed, patched incomplete JSON. Error: {}", e2);
-                            return Ok(patched_result);
+                    match serde_json::from_str::<serde_json::Value>(&fixed_candidate) {
+                        Ok(partial_json) => {
+                            eprintln!("✓ Successfully parsed as partial JSON Value");
+                            eprintln!("Partial JSON keys: {:?}", partial_json.as_object()
+                                .map(|obj| obj.keys().collect::<Vec<_>>())
+                                .unwrap_or_default());
+                            
+                            if let Ok(patched_result) = patch_incomplete_ai_result(&partial_json, symbol, data) {
+                                eprintln!("✓ Successfully patched incomplete JSON");
+                                eprintln!("=== Patched Result Details ===");
+                                eprintln!("  analysis: {} chars", patched_result.analysis.len());
+                                eprintln!("  prediction: price={:.2}, confidence={:.1}, trend={}, reasoning={} chars",
+                                    patched_result.prediction.price,
+                                    patched_result.prediction.confidence,
+                                    patched_result.prediction.trend,
+                                    patched_result.prediction.reasoning.len());
+                                eprintln!("  risk_assessment: level={}, factors={}",
+                                    patched_result.risk_assessment.level,
+                                    patched_result.risk_assessment.factors.len());
+                                eprintln!("  recommendations: {} items", patched_result.recommendations.len());
+                                eprintln!("  technical_summary: indicators={}, overall_signal={}",
+                                    patched_result.technical_summary.indicators.len(),
+                                    patched_result.technical_summary.overall_signal);
+                                eprintln!("  price_targets: {} items", patched_result.price_targets.len());
+                                eprintln!("================================");
+                                return Ok(patched_result);
+                            } else {
+                                eprintln!("✗ Failed to patch incomplete JSON");
+                            }
+                        },
+                        Err(e3) => {
+                            eprintln!("✗ Failed to parse as partial JSON Value: {}", e3);
+                            eprintln!("Fixed candidate (first 500 chars): {}", 
+                                if fixed_candidate.len() > 500 { 
+                                    &fixed_candidate[..500.min(fixed_candidate.len())] 
+                                } else { 
+                                    &fixed_candidate 
+                                });
                         }
                     }
                     
                     // If JSON parsing still fails, try to extract at least the analysis text
                     // and create a minimal valid response
+                    eprintln!("=== Attempting JSON Parse (Step 5: Extract analysis text for fallback) ===");
                     if let Some(analysis_text) = extract_analysis_text(&cleaned_content) {
+                        eprintln!("✓ Extracted analysis text: {} chars", analysis_text.len());
                         eprintln!("AI API partially failed, using fallback analysis. Error: {}", e2);
                         create_fallback_analysis(analysis_text, symbol, data)
                     } else {
+                        eprintln!("✗ Failed to extract analysis text");
                         // Log the problematic content for debugging
                         let preview = if cleaned_content.len() > 1000 {
                             // Find the last valid UTF-8 character boundary before 1000 bytes
@@ -2533,6 +2624,11 @@ IMPORTANT:
                         } else {
                             cleaned_content.clone()
                         };
+                        eprintln!("=== Final Error: All parsing attempts failed ===");
+                        eprintln!("Original error: {}", e);
+                        eprintln!("Final error: {}", e2);
+                        eprintln!("Content length: {}", cleaned_content.len());
+                        eprintln!("Content preview: {}", preview);
                         return Err(format!("Failed to parse AI response: {}. Original error: {}. Content length: {}. Preview: {}",
                             e2, e, cleaned_content.len(), preview));
                     }
@@ -2540,6 +2636,18 @@ IMPORTANT:
             }
         }
     };
+
+    eprintln!("=== Parse Success: Final result ===");
+    eprintln!("Analysis length: {} chars", result.analysis.len());
+    eprintln!("Prediction: price={:.2}, confidence={:.1}, trend={}", 
+        result.prediction.price, 
+        result.prediction.confidence,
+        result.prediction.trend);
+    eprintln!("Risk level: {}", result.risk_assessment.level);
+    eprintln!("Recommendations count: {}", result.recommendations.len());
+    eprintln!("Indicators count: {}", result.technical_summary.indicators.len());
+    eprintln!("Price targets count: {}", result.price_targets.len());
+    eprintln!("================================");
 
     Ok(result)
 }
