@@ -94,24 +94,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ onMenuAction, onSettingsClick }) =>
   };
 
   const fileMenuItems: MenuItem[] = [
-    { label: t("menu.fileNew"), action: "file:new", shortcut: "Ctrl+N" },
-    { label: t("menu.fileOpen"), action: "file:open", shortcut: "Ctrl+O" },
-    { label: t("menu.fileSave"), action: "file:save", shortcut: "Ctrl+S" },
-    { separator: true },
-    { label: t("menu.fileExport"), action: "file:export" },
-    { separator: true },
     { label: t("menu.fileExit"), action: "file:exit" },
-  ];
-
-  const editMenuItems: MenuItem[] = [
-    { label: t("menu.editUndo"), action: "edit:undo", shortcut: "Ctrl+Z", disabled: true },
-    { label: t("menu.editRedo"), action: "edit:redo", shortcut: "Ctrl+Y", disabled: true },
-    { separator: true },
-    { label: t("menu.editCut"), action: "edit:cut", shortcut: "Ctrl+X", disabled: true },
-    { label: t("menu.editCopy"), action: "edit:copy", shortcut: "Ctrl+C", disabled: true },
-    { label: t("menu.editPaste"), action: "edit:paste", shortcut: "Ctrl+V", disabled: true },
-    { separator: true },
-    { label: t("menu.editFind"), action: "edit:find", shortcut: "Ctrl+F" },
   ];
 
   const viewMenuItems: MenuItem[] = [
@@ -125,13 +108,13 @@ const TitleBar: React.FC<TitleBarProps> = ({ onMenuAction, onSettingsClick }) =>
   ];
 
   const analysisMenuItems: MenuItem[] = [
-    { label: t("menu.analysisIndicators"), action: "analysis:indicators" },
-    { label: t("menu.analysisCompare"), action: "analysis:compare" },
+    { label: t("menu.analysisPriceAlert"), action: "analysis:priceAlert" },
+    { separator: true },
+    { label: t("menu.portfolioManagement"), action: "portfolio:open" },
   ];
 
   const helpMenuItems: MenuItem[] = [
     { label: t("menu.helpAbout"), action: "help:about" },
-    { label: t("menu.helpDocumentation"), action: "help:documentation" },
   ];
 
   return (
@@ -144,11 +127,6 @@ const TitleBar: React.FC<TitleBarProps> = ({ onMenuAction, onSettingsClick }) =>
           <MenuDropdown
             label={t("menu.file")}
             items={fileMenuItems}
-            onItemClick={handleMenuAction}
-          />
-          <MenuDropdown
-            label={t("menu.edit")}
-            items={editMenuItems}
             onItemClick={handleMenuAction}
           />
           <MenuDropdown

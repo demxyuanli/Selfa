@@ -80,14 +80,16 @@ pub async fn fetch_stock_quote(symbol: &str) -> Result<StockQuote, String> {
         "http://push2.eastmoney.com/api/qt/stock/get?secid={}&fields={}",
         secid, fields
     );
-    
+
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0")
+        .timeout(std::time::Duration::from_secs(10))
         .build()
         .map_err(|e| format!("Client error: {}", e))?;
-    
+
     let response = client
         .get(&url)
+        .timeout(std::time::Duration::from_secs(5))
         .send()
         .await
         .map_err(|e| format!("Network error: {}", e))?;
@@ -117,10 +119,46 @@ pub async fn fetch_stock_quote(symbol: &str) -> Result<StockQuote, String> {
     
     // f116: total market cap (total market capitalization) in yuan (元)
     // f117: circulation market cap (free float market value) in yuan (元)
-    let market_cap = data["f116"].as_i64().or_else(|| {
-        // Fallback to circulation market cap if total market cap is not available
-        data["f117"].as_i64()
-    });
+    // Try multiple parsing methods as API might return different formats
+    let market_cap = data["f116"].as_i64()
+        .or_else(|| {
+            // Try parsing as f64 then converting to i64
+            data["f116"].as_f64().and_then(|v| {
+                if v.is_finite() && v >= 0.0 {
+                    Some(v as i64)
+                } else {
+                    None
+                }
+            })
+        })
+        .or_else(|| {
+            // Try parsing as string then converting to i64
+            data["f116"].as_str().and_then(|s| {
+                s.trim().parse::<i64>().ok()
+                    .or_else(|| s.trim().parse::<f64>().ok().map(|v| v as i64))
+            })
+        })
+        .or_else(|| {
+            // Fallback to circulation market cap (f117)
+            data["f117"].as_i64()
+        })
+        .or_else(|| {
+            // Try f117 as f64
+            data["f117"].as_f64().and_then(|v| {
+                if v.is_finite() && v >= 0.0 {
+                    Some(v as i64)
+                } else {
+                    None
+                }
+            })
+        })
+        .or_else(|| {
+            // Try f117 as string
+            data["f117"].as_str().and_then(|s| {
+                s.trim().parse::<i64>().ok()
+                    .or_else(|| s.trim().parse::<f64>().ok().map(|v| v as i64))
+            })
+        });
     
     // f115: pe_ratio (TTM PE / 滚动市盈率) - value is already in correct format, no scaling needed
     let pe_ratio = data["f115"].as_f64();
@@ -304,33 +342,50 @@ pub async fn search_stocks_by_query(query: &str) -> Result<Vec<StockInfo>, Strin
     
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0")
+        .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| format!("Client error: {}", e))?;
-    
+
     let response = client
         .get(&url)
+        .timeout(std::time::Duration::from_secs(8))
         .send()
         .await
         .map_err(|e| format!("Network error: {}", e))?;
-    
+
     if !response.status().is_success() {
         return Err(format!("API error: {}", response.status()));
     }
-    
+
     let json: serde_json::Value = response
         .json()
         .await
         .map_err(|e| format!("Parse error: {}", e))?;
-    
-    let quotes = json["QuotationCodeTable"]["Data"]
-        .as_array()
-        .ok_or("Invalid response format")?;
+
+    let quotes = match json["QuotationCodeTable"]["Data"].as_array() {
+        Some(data) => data,
+        None => {
+            // Try alternative response format
+            if let Some(data) = json["Data"].as_array() {
+                data
+            } else {
+                return Err("Invalid response format: missing Data array".to_string());
+            }
+        }
+    };
     
     let mut results = Vec::new();
     
-    for quote in quotes.iter().take(10) {
+    // Return all available results (API typically returns up to 20-30 results)
+    for quote in quotes.iter() {
         let code = quote["Code"].as_str().unwrap_or("");
         let name = quote["Name"].as_str().unwrap_or("");
+        
+        // Skip empty results
+        if code.is_empty() || name.is_empty() {
+            continue;
+        }
+        
         let market = quote["Market"].as_i64().unwrap_or(1);
         
         let exchange = if market == 1 {
@@ -347,6 +402,163 @@ pub async fn search_stocks_by_query(query: &str) -> Result<Vec<StockInfo>, Strin
     }
     
     Ok(results)
+}
+
+// Fetch all A-share stocks in batches
+// This function attempts to fetch stock lists by searching common keywords
+pub async fn fetch_all_a_stocks() -> Result<Vec<StockInfo>, String> {
+    let mut all_stocks: Vec<StockInfo> = Vec::new();
+    let mut seen_symbols = std::collections::HashSet::new();
+
+    // Use a more comprehensive approach to get A-share stocks
+    // First try to get some well-known stocks directly
+    let known_stocks = vec![
+        ("000001", "平安银行", "SZ"),
+        ("000002", "万科A", "SZ"),
+        ("600000", "浦发银行", "SH"),
+        ("600036", "招商银行", "SH"),
+        ("000858", "五粮液", "SZ"),
+        ("300124", "汇川技术", "SZ"),
+        ("002142", "宁波银行", "SZ"),
+        ("600519", "贵州茅台", "SH"),
+    ];
+
+    for (symbol, name, exchange) in known_stocks {
+        if !seen_symbols.contains(symbol) {
+            all_stocks.push(StockInfo {
+                symbol: symbol.to_string(),
+                name: name.to_string(),
+                exchange: exchange.to_string(),
+            });
+            seen_symbols.insert(symbol.to_string());
+        }
+    }
+
+    // Search with common keywords to get more comprehensive stock list
+    let keywords = vec![
+        "",           // Empty query might return popular stocks
+        "A",          // Common prefix
+        "银行",        // Banks
+        "科技",        // Technology
+        "医疗",        // Healthcare
+        "地产",        // Real estate
+    ];
+    
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0")
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Client error: {}", e))?;
+    
+    for keyword in keywords {
+        let encoded_query = urlencoding::encode(keyword);
+        let url = format!(
+            "http://searchapi.eastmoney.com/api/suggest/get?input={}&type=14&token=D43BF722C8E33BDC906FB84D85E326E8",
+            encoded_query
+        );
+        
+        match client.get(&url).send().await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    match response.json::<serde_json::Value>().await {
+                        Ok(json) => {
+                            if let Some(quotes) = json["QuotationCodeTable"]["Data"].as_array() {
+                                for quote in quotes {
+                                    let code = quote["Code"].as_str().unwrap_or("");
+                                    let name = quote["Name"].as_str().unwrap_or("");
+                                    
+                                    if code.is_empty() || name.is_empty() {
+                                        continue;
+                                    }
+                                    
+                                    // Only include A-shares (exclude indices and other securities)
+                                    if !code.starts_with("6") && !code.starts_with("0") && !code.starts_with("3") {
+                                        continue;
+                                    }
+                                    
+                                    if !seen_symbols.contains(code) {
+                                        let market = quote["Market"].as_i64().unwrap_or(1);
+                                        let exchange = if market == 1 {
+                                            "SH".to_string()
+                                        } else {
+                                            "SZ".to_string()
+                                        };
+                                        
+                                        all_stocks.push(StockInfo {
+                                            symbol: code.to_string(),
+                                            name: name.to_string(),
+                                            exchange,
+                                        });
+                                        
+                                        seen_symbols.insert(code.to_string());
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to parse response for keyword '{}': {}", keyword, e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to fetch stocks for keyword '{}': {}", keyword, e);
+            }
+        }
+        
+        // Small delay between requests to avoid rate limiting
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    }
+    
+    // Also try fetching by searching common stock code prefixes
+    let prefixes = vec!["60", "68", "00", "30"];  // SH main, STAR, SZ main, ChiNext
+    
+    for prefix in prefixes {
+        let encoded_query = urlencoding::encode(prefix);
+        let url = format!(
+            "http://searchapi.eastmoney.com/api/suggest/get?input={}&type=14&token=D43BF722C8E33BDC906FB84D85E326E8",
+            encoded_query
+        );
+        
+        if let Ok(response) = client.get(&url).send().await {
+            if response.status().is_success() {
+                if let Ok(json) = response.json::<serde_json::Value>().await {
+                    if let Some(quotes) = json["QuotationCodeTable"]["Data"].as_array() {
+                        for quote in quotes {
+                            let code = quote["Code"].as_str().unwrap_or("");
+                            let name = quote["Name"].as_str().unwrap_or("");
+                            
+                            if code.is_empty() || name.is_empty() {
+                                continue;
+                            }
+                            
+                            if !seen_symbols.contains(code) {
+                                let market = quote["Market"].as_i64().unwrap_or(1);
+                                let exchange = if market == 1 {
+                                    "SH".to_string()
+                                } else {
+                                    "SZ".to_string()
+                                };
+                                
+                                all_stocks.push(StockInfo {
+                                    symbol: code.to_string(),
+                                    name: name.to_string(),
+                                    exchange,
+                                });
+                                
+                                seen_symbols.insert(code.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    }
+    
+    println!("Fetched {} unique A-share stocks for cache", all_stocks.len());
+    Ok(all_stocks)
 }
 
 pub fn calculate_indicators(data: Vec<StockData>) -> TechnicalIndicators {
@@ -504,6 +716,8 @@ pub fn predict_stock_price(
         "pattern" => predict_pattern_recognition(data, &last_date, period)?,
         "similarity" => predict_similarity_match(&closes, &last_date, period)?,
         "ensemble" => predict_ensemble(data, &last_date, period)?,
+        "fibonacci" => predict_fibonacci_retracement(data, &last_date, period)?,
+        "fibonacci_extension" => predict_fibonacci_extension(data, &last_date, period)?,
         _ => return Err(format!("Unknown prediction method: {}", method)),
     };
 
@@ -762,72 +976,360 @@ fn polynomial_predict(data: &[f64], x: f64, degree: usize) -> f64 {
     result
 }
 
-// ARIMA (simplified - AutoRegressive Integrated Moving Average)
+// ARIMA (AutoRegressive Integrated Moving Average)
 fn predict_arima(
     closes: &[f64],
     start_date: &str,
     period: usize,
 ) -> Result<Vec<PredictionResult>, String> {
-    if closes.len() < 20 {
-        return Err("Need at least 20 data points for ARIMA".to_string());
+    if closes.len() < 30 {
+        return Err("Need at least 30 data points for ARIMA".to_string());
     }
 
-    let recent_data = &closes[closes.len().saturating_sub(30)..];
+    let recent_data = &closes[closes.len().saturating_sub(50)..];
     let n = recent_data.len();
-    
-    // Calculate first difference (I=1)
-    let mut diff: Vec<f64> = Vec::new();
-    for i in 1..n {
-        diff.push(recent_data[i] - recent_data[i - 1]);
+
+    // Step 1: Determine differencing order (d) - check stationarity
+    let (d, stationary_data) = determine_differencing_order(recent_data)?;
+
+    if stationary_data.len() < 20 {
+        return Err("Insufficient stationary data for ARIMA modeling".to_string());
     }
-    
-    // Simple AR(1) model: y_t = c + φ*y_{t-1} + ε
-    let mut phi = 0.0;
-    let mut sum_prev = 0.0;
-    let mut sum_curr = 0.0;
-    let mut sum_prev_sq = 0.0;
-    
-    for i in 1..diff.len() {
-        sum_prev += diff[i - 1];
-        sum_curr += diff[i];
-        sum_prev_sq += diff[i - 1] * diff[i - 1];
-    }
-    
-    if sum_prev_sq > 0.0 {
-        phi = sum_curr / sum_prev;
-    }
-    
-    // MA component (simplified)
-    let ma_coeff = 0.3;
-    
+
+    // Step 2: Fit ARIMA model and select optimal p,q using AIC
+    let (p, q, ar_coeffs, ma_coeffs, residual_variance) =
+        fit_arima_model(&stationary_data)?;
+
+    // Step 3: Generate predictions
     let mut results = Vec::new();
     let base_date = parse_date(start_date)?;
-    let last_value = recent_data[n - 1];
-    let mut last_diff = diff.last().copied().unwrap_or(0.0);
-    
+    let last_original_price = recent_data[n - 1];
+
+    // For predictions, we need to work with the differenced series
+    let mut prediction_history = stationary_data.clone();
+
     for i in 1..=period {
-        // ARIMA(1,1,1) prediction
-        let predicted_diff = phi * last_diff * (1.0 - ma_coeff);
-        last_diff = predicted_diff;
-        let predicted = last_value + predicted_diff * i as f64;
-        
-        let variance = calculate_variance(&diff);
-        let std_dev = variance.sqrt();
-        let confidence = (100.0 - (std_dev / predicted.abs().max(0.01) * 100.0).min(45.0)).max(40.0);
-        
+        // Generate next prediction using fitted ARMA(p,q) model
+        let next_diff = predict_next_value(&prediction_history, &ar_coeffs, &ma_coeffs, residual_variance);
+        prediction_history.push(next_diff);
+
+        // Convert back to original scale by reverse differencing
+        let mut predicted_price = last_original_price;
+        for j in 0..i {
+            predicted_price += prediction_history[stationary_data.len() + j];
+        }
+
+        // Calculate confidence interval
+        let std_dev = (residual_variance * (i as f64)).sqrt();
+        let confidence = (85.0 - (std_dev / predicted_price.abs().max(0.01) * 100.0).min(35.0)).max(50.0);
+
+        let upper_bound = predicted_price + 1.96 * std_dev;
+        let lower_bound = predicted_price - 1.96 * std_dev;
+
+        // Determine signal based on trend and prediction
+        let trend_slope = calculate_trend_slope(&stationary_data);
+        let signal = determine_signal(predicted_price, last_original_price, trend_slope);
+
         let date = add_days(&base_date, i as i32)?;
         results.push(PredictionResult {
             date,
-            predicted_price: predicted,
+            predicted_price,
             confidence,
-            signal: determine_signal(predicted, closes[closes.len() - 1], phi),
-            upper_bound: predicted + std_dev,
-            lower_bound: predicted - std_dev,
-            method: "arima".to_string(),
+            signal,
+            upper_bound,
+            lower_bound,
+            method: format!("ARIMA({},{},{})", p, d, q),
         });
     }
-    
+
     Ok(results)
+}
+
+// Determine optimal differencing order using Augmented Dickey-Fuller test approximation
+fn determine_differencing_order(data: &[f64]) -> Result<(usize, Vec<f64>), String> {
+    if data.len() < 10 {
+        return Ok((0, data.to_vec()));
+    }
+
+    // Test for stationarity (simplified ADF test)
+    let is_stationary = test_stationarity(data);
+
+    if is_stationary {
+        return Ok((0, data.to_vec()));
+    }
+
+    // Apply first differencing
+    let mut diff_data = Vec::new();
+    for i in 1..data.len() {
+        diff_data.push(data[i] - data[i - 1]);
+    }
+
+    // Test again
+    let is_stationary_after_diff = test_stationarity(&diff_data);
+
+    if is_stationary_after_diff {
+        Ok((1, diff_data))
+    } else {
+        // Apply second differencing if needed
+        let mut diff2_data = Vec::new();
+        for i in 1..diff_data.len() {
+            diff2_data.push(diff_data[i] - diff_data[i - 1]);
+        }
+        Ok((2, diff2_data))
+    }
+}
+
+// Simplified stationarity test (approximation of ADF test)
+fn test_stationarity(data: &[f64]) -> bool {
+    if data.len() < 5 {
+        return false;
+    }
+
+    // Calculate autocorrelation at lag 1
+    let mean = data.iter().sum::<f64>() / data.len() as f64;
+    let mut numerator = 0.0;
+    let mut denominator = 0.0;
+
+    for i in 1..data.len() {
+        let diff = data[i] - mean;
+        let lag_diff = data[i - 1] - mean;
+        numerator += diff * lag_diff;
+        denominator += lag_diff * lag_diff;
+    }
+
+    if denominator == 0.0 {
+        return false;
+    }
+
+    let rho = numerator / denominator;
+
+    // If autocorrelation is high (> 0.8), likely non-stationary
+    rho.abs() < 0.8
+}
+
+// Fit ARIMA model and select optimal p,q using AIC
+fn fit_arima_model(data: &[f64]) -> Result<(usize, usize, Vec<f64>, Vec<f64>, f64), String> {
+    if data.len() < 10 {
+        return Err("Insufficient data for model fitting".to_string());
+    }
+
+    let mut best_aic = f64::INFINITY;
+    let mut best_p = 1;
+    let mut best_q = 1;
+    let mut best_ar_coeffs = Vec::new();
+    let mut best_ma_coeffs = Vec::new();
+    let mut best_residual_variance = 0.0;
+
+    // Try different combinations of p and q (keep it simple: p,q <= 3)
+    for p in 0..=3 {
+        for q in 0..=3 {
+            if p == 0 && q == 0 {
+                continue; // Skip ARMA(0,0)
+            }
+
+            match fit_arma_model(data, p, q) {
+                Ok((ar_coeffs, ma_coeffs, residual_variance)) => {
+                    // Calculate AIC
+                    let k = (p + q) as f64; // number of parameters
+                    let n = data.len() as f64;
+                    let aic = n * residual_variance.ln() + 2.0 * k;
+
+                    if aic < best_aic {
+                        best_aic = aic;
+                        best_p = p;
+                        best_q = q;
+                        best_ar_coeffs = ar_coeffs;
+                        best_ma_coeffs = ma_coeffs;
+                        best_residual_variance = residual_variance;
+                    }
+                }
+                Err(_) => continue,
+            }
+        }
+    }
+
+    Ok((best_p, best_q, best_ar_coeffs, best_ma_coeffs, best_residual_variance))
+}
+
+// Fit ARMA(p,q) model using simplified method
+fn fit_arma_model(data: &[f64], p: usize, q: usize) -> Result<(Vec<f64>, Vec<f64>, f64), String> {
+    if data.len() < p.max(q) + 5 {
+        return Err("Insufficient data for ARMA fitting".to_string());
+    }
+
+    // Use Yule-Walker equations for AR coefficients
+    let ar_coeffs = if p > 0 {
+        estimate_ar_coefficients(data, p)?
+    } else {
+        Vec::new()
+    };
+
+    // Estimate MA coefficients (simplified approach)
+    let ma_coeffs = if q > 0 {
+        estimate_ma_coefficients(data, q)?
+    } else {
+        Vec::new()
+    };
+
+    // Calculate residual variance
+    let residual_variance = calculate_residual_variance(data, &ar_coeffs, &ma_coeffs);
+
+    Ok((ar_coeffs, ma_coeffs, residual_variance))
+}
+
+// Estimate AR coefficients using Yule-Walker method
+fn estimate_ar_coefficients(data: &[f64], p: usize) -> Result<Vec<f64>, String> {
+    if data.len() < p + 1 {
+        return Err("Insufficient data for AR coefficient estimation".to_string());
+    }
+
+    // Calculate autocorrelations
+    let mut autocorr = vec![0.0; p + 1];
+    let mean = data.iter().sum::<f64>() / data.len() as f64;
+
+    for lag in 0..=p {
+        let mut sum = 0.0;
+        let mut count = 0;
+
+        for i in lag..data.len() {
+            sum += (data[i] - mean) * (data[i - lag] - mean);
+            count += 1;
+        }
+
+        autocorr[lag] = if count > 0 { sum / count as f64 } else { 0.0 };
+    }
+
+    // Variance of the series
+    let variance = autocorr[0];
+
+    if variance <= 0.0 {
+        return Ok(vec![0.0; p]);
+    }
+
+    // Solve Yule-Walker equations (simplified for p <= 3)
+    let mut coeffs = vec![0.0; p];
+
+    match p {
+        1 => {
+            coeffs[0] = autocorr[1] / variance;
+        }
+        2 => {
+            let det = variance * variance - autocorr[1] * autocorr[1];
+            if det != 0.0 {
+                coeffs[0] = (variance * autocorr[1] - autocorr[1] * autocorr[2]) / det;
+                coeffs[1] = (autocorr[1] * autocorr[1] - variance * autocorr[2]) / det;
+            }
+        }
+        3 => {
+            // Simplified solution for AR(3)
+            coeffs[0] = autocorr[1] / variance;
+            coeffs[1] = (autocorr[2] - coeffs[0] * autocorr[1]) / variance;
+            coeffs[2] = (autocorr[3] - coeffs[0] * autocorr[2] - coeffs[1] * autocorr[1]) / variance;
+        }
+        _ => return Err("AR order too high for current implementation".to_string()),
+    }
+
+    Ok(coeffs)
+}
+
+// Estimate MA coefficients (simplified)
+fn estimate_ma_coefficients(_data: &[f64], q: usize) -> Result<Vec<f64>, String> {
+    // Simplified MA estimation - use small positive values
+    let mut coeffs = Vec::new();
+    for i in 0..q {
+        coeffs.push(0.1 + (i as f64) * 0.1); // 0.1, 0.2, 0.3, ...
+    }
+    Ok(coeffs)
+}
+
+// Calculate residual variance
+fn calculate_residual_variance(data: &[f64], ar_coeffs: &[f64], ma_coeffs: &[f64]) -> f64 {
+    if data.len() < ar_coeffs.len().max(ma_coeffs.len()) + 1 {
+        return calculate_variance(data);
+    }
+
+    let mut residuals = Vec::new();
+    let p = ar_coeffs.len();
+    let q = ma_coeffs.len();
+
+    for i in (p.max(q))..data.len() {
+        let mut predicted = 0.0;
+
+        // AR part
+        for j in 0..p {
+            if i > j {
+                predicted += ar_coeffs[j] * data[i - 1 - j];
+            }
+        }
+
+        // MA part (simplified - would need error terms in full implementation)
+        for j in 0..q {
+            if i > j {
+                predicted += ma_coeffs[j] * (data[i - 1 - j] - predicted) * 0.1;
+            }
+        }
+
+        residuals.push(data[i] - predicted);
+    }
+
+    if residuals.is_empty() {
+        calculate_variance(data)
+    } else {
+        calculate_variance(&residuals)
+    }
+}
+
+// Predict next value using fitted ARMA model
+fn predict_next_value(history: &[f64], ar_coeffs: &[f64], ma_coeffs: &[f64], residual_variance: f64) -> f64 {
+    let n = history.len();
+    let p = ar_coeffs.len();
+    let q = ma_coeffs.len();
+
+    let mut prediction = 0.0;
+
+    // AR part
+    for i in 0..p {
+        if n > i {
+            prediction += ar_coeffs[i] * history[n - 1 - i];
+        }
+    }
+
+    // MA part (simplified)
+    for i in 0..q {
+        if n > i {
+            prediction += ma_coeffs[i] * 0.1; // Simplified MA contribution
+        }
+    }
+
+    // Add small random component based on residual variance
+    prediction += (residual_variance.sqrt() * 0.1).max(0.01);
+
+    prediction
+}
+
+// Calculate trend slope for signal determination
+fn calculate_trend_slope(data: &[f64]) -> f64 {
+    if data.len() < 5 {
+        return 0.0;
+    }
+
+    let n = data.len() as f64;
+    let mut sum_x = 0.0;
+    let mut sum_y = 0.0;
+    let mut sum_xy = 0.0;
+    let mut sum_xx = 0.0;
+
+    for i in 0..data.len() {
+        let x = i as f64;
+        let y = data[i];
+        sum_x += x;
+        sum_y += y;
+        sum_xy += x * y;
+        sum_xx += x * x;
+    }
+
+    let slope = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x);
+    slope
 }
 
 // Exponential Smoothing (Holt-Winters simplified)
@@ -1208,6 +1710,177 @@ fn predict_ensemble(
     Ok(results)
 }
 
+fn find_significant_highs_lows(data: &[StockData], lookback: usize) -> (f64, f64, usize, usize) {
+    let n = data.len();
+    if n < lookback * 2 {
+        let high_idx = data.iter().enumerate().max_by(|a, b| a.1.high.partial_cmp(&b.1.high).unwrap()).map(|(i, _)| i).unwrap_or(0);
+        let low_idx = data.iter().enumerate().min_by(|a, b| a.1.low.partial_cmp(&b.1.low).unwrap()).map(|(i, _)| i).unwrap_or(0);
+        return (data[high_idx].high, data[low_idx].low, high_idx, low_idx);
+    }
+    
+    let recent_data = &data[n.saturating_sub(lookback * 2)..];
+    let recent_high_idx = recent_data.iter().enumerate().max_by(|a, b| a.1.high.partial_cmp(&b.1.high).unwrap()).map(|(i, _)| i).unwrap_or(0);
+    let recent_low_idx = recent_data.iter().enumerate().min_by(|a, b| a.1.low.partial_cmp(&b.1.low).unwrap()).map(|(i, _)| i).unwrap_or(0);
+    
+    let high_idx = n - lookback * 2 + recent_high_idx;
+    let low_idx = n - lookback * 2 + recent_low_idx;
+    
+    (data[high_idx].high, data[low_idx].low, high_idx, low_idx)
+}
+
+fn predict_fibonacci_retracement(
+    data: &[StockData],
+    start_date: &str,
+    period: usize,
+) -> Result<Vec<PredictionResult>, String> {
+    if data.len() < 30 {
+        return Err("Need at least 30 data points for Fibonacci retracement".to_string());
+    }
+    
+    let closes: Vec<f64> = data.iter().map(|d| d.close).collect();
+    let last_price = closes[closes.len() - 1];
+    
+    let lookback = 30.min(data.len() / 2);
+    let (high_price, low_price, high_idx, low_idx) = find_significant_highs_lows(data, lookback);
+    
+    let is_uptrend = high_idx > low_idx;
+    let range = if is_uptrend {
+        high_price - low_price
+    } else {
+        low_price - high_price
+    };
+    
+    if range < 0.01 {
+        return Err("Price range too small for Fibonacci analysis".to_string());
+    }
+    
+    let fibonacci_ratios = vec![0.236, 0.382, 0.5, 0.618, 0.786];
+    let base_price = if is_uptrend { low_price } else { high_price };
+    let target_direction = if is_uptrend { -1.0 } else { 1.0 };
+    
+    let mut results = Vec::new();
+    let base_date = parse_date(start_date)?;
+    let variance = calculate_variance(&closes);
+    let std_dev = variance.sqrt();
+    
+    for i in 1..=period {
+        let days_ratio = i as f64 / period as f64;
+        let closest_ratio_idx = fibonacci_ratios.iter()
+            .enumerate()
+            .min_by(|a, b| {
+                let dist_a = (days_ratio - *a.1).abs();
+                let dist_b = (days_ratio - *b.1).abs();
+                dist_a.partial_cmp(&dist_b).unwrap()
+            })
+            .map(|(idx, _)| idx)
+            .unwrap_or(2);
+        
+        let target_ratio = fibonacci_ratios[closest_ratio_idx];
+        let predicted = base_price + target_direction * range * target_ratio;
+        
+        let confidence = match target_ratio {
+            0.618 => 75.0,
+            0.5 => 70.0,
+            0.382 => 65.0,
+            0.236 => 60.0,
+            0.786 => 65.0,
+            _ => 60.0,
+        };
+        
+        let trend_signal = if is_uptrend {
+            if predicted < last_price * 0.98 { "buy" } else { "hold" }
+        } else {
+            if predicted > last_price * 1.02 { "sell" } else { "hold" }
+        };
+        
+        let date = add_days(&base_date, i as i32)?;
+        results.push(PredictionResult {
+            date,
+            predicted_price: predicted,
+            confidence,
+            signal: trend_signal.to_string(),
+            upper_bound: predicted + std_dev * 0.5,
+            lower_bound: predicted - std_dev * 0.5,
+            method: "fibonacci".to_string(),
+        });
+    }
+    
+    Ok(results)
+}
+
+fn predict_fibonacci_extension(
+    data: &[StockData],
+    start_date: &str,
+    period: usize,
+) -> Result<Vec<PredictionResult>, String> {
+    if data.len() < 50 {
+        return Err("Need at least 50 data points for Fibonacci extension".to_string());
+    }
+    
+    let closes: Vec<f64> = data.iter().map(|d| d.close).collect();
+    let last_price = closes[closes.len() - 1];
+    
+    let lookback = 40.min(data.len() / 2);
+    let (high_price, low_price, high_idx, low_idx) = find_significant_highs_lows(data, lookback);
+    
+    let is_uptrend = high_idx > low_idx;
+    let a_price = if is_uptrend { low_price } else { high_price };
+    let b_price = if is_uptrend { high_price } else { low_price };
+    let c_price = last_price;
+    
+    let ab_range = (b_price - a_price).abs();
+    
+    if ab_range < 0.01 {
+        return Err("Price range too small for Fibonacci extension".to_string());
+    }
+    
+    let fibonacci_extensions = vec![1.0, 1.618, 2.618, 4.236];
+    let mut results = Vec::new();
+    let base_date = parse_date(start_date)?;
+    let variance = calculate_variance(&closes);
+    let std_dev = variance.sqrt();
+    
+    for i in 1..=period {
+        let days_progress = i as f64 / period as f64;
+        let extension_idx = (days_progress * (fibonacci_extensions.len() - 1) as f64).floor() as usize;
+        let extension_idx = extension_idx.min(fibonacci_extensions.len() - 1);
+        let extension_ratio = fibonacci_extensions[extension_idx];
+        
+        let predicted = if is_uptrend {
+            c_price + ab_range * extension_ratio
+        } else {
+            c_price - ab_range * extension_ratio
+        };
+        
+        let confidence = match extension_ratio {
+            1.0 => 70.0,
+            1.618 => 75.0,
+            2.618 => 65.0,
+            4.236 => 55.0,
+            _ => 60.0,
+        };
+        
+        let trend_signal = if is_uptrend {
+            if predicted > last_price * 1.05 { "buy" } else { "hold" }
+        } else {
+            if predicted < last_price * 0.95 { "sell" } else { "hold" }
+        };
+        
+        let date = add_days(&base_date, i as i32)?;
+        results.push(PredictionResult {
+            date,
+            predicted_price: predicted,
+            confidence,
+            signal: trend_signal.to_string(),
+            upper_bound: predicted + std_dev * 0.8,
+            lower_bound: predicted - std_dev * 0.8,
+            method: "fibonacci_extension".to_string(),
+        });
+    }
+    
+    Ok(results)
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AIAnalysisResult {
     pub analysis: String,
@@ -1317,22 +1990,109 @@ async fn call_ai_api(
 ) -> Result<AIAnalysisResult, String> {
     let closes: Vec<f64> = data.iter().map(|d| d.close).collect();
     let last_price = closes[closes.len() - 1];
+    let last_date = data.last().map(|d| d.date.as_str()).unwrap_or("");
     let price_change = if closes.len() >= 2 {
         ((last_price - closes[closes.len() - 2]) / closes[closes.len() - 2]) * 100.0
     } else {
         0.0
     };
 
+    // Calculate technical indicators
     let rsi = calculate_rsi(&closes, 14);
     let macd_result = calculate_macd(&closes, 12, 26, 9);
     let ma20 = calculate_sma(&closes, 20);
     let ma50 = calculate_sma(&closes, 50);
+    let ema12 = calculate_ema(&closes, 12);
+    let ema26 = calculate_ema(&closes, 26);
 
     let last_rsi = rsi.last().copied().unwrap_or(50.0);
     let last_macd = macd_result.macd.last().copied().unwrap_or(0.0);
     let last_signal = macd_result.signal.last().copied().unwrap_or(0.0);
     let last_ma20 = ma20.iter().rev().find(|&&x| x > 0.0).copied().unwrap_or(last_price);
     let last_ma50 = ma50.iter().rev().find(|&&x| x > 0.0).copied().unwrap_or(last_price);
+    let last_ema12 = ema12.last().copied().unwrap_or(last_price);
+    let last_ema26 = ema26.last().copied().unwrap_or(last_price);
+
+    // Run multiple prediction methods to get comprehensive forecasts
+    let prediction_periods = vec![5, 10, 20]; // 1 week, 2 weeks, 1 month
+    let prediction_methods = vec!["linear", "ma", "technical", "polynomial", "ensemble", "exponential"];
+    
+    let mut prediction_summary = String::new();
+    let mut all_predictions: Vec<f64> = Vec::new();
+    
+    for method in &prediction_methods {
+        for &period in &prediction_periods {
+            if let Ok(predictions) = match *method {
+                "linear" => predict_linear_regression(&closes, last_date, period),
+                "ma" => predict_moving_average(&closes, last_date, period),
+                "technical" => predict_technical_indicator(&closes, last_date, period),
+                "polynomial" => predict_polynomial(&closes, last_date, period),
+                "exponential" => predict_exponential_smoothing(&closes, last_date, period),
+                "ensemble" => predict_ensemble(data, last_date, period),
+                _ => continue,
+            } {
+                if let Some(last_pred) = predictions.last() {
+                    all_predictions.push(last_pred.predicted_price);
+                    let method_label = match *method {
+                        "linear" => "线性回归",
+                        "ma" => "移动平均",
+                        "technical" => "技术指标",
+                        "polynomial" => "多项式",
+                        "exponential" => "指数平滑",
+                        "ensemble" => "集成方法",
+                        _ => method,
+                    };
+                    prediction_summary.push_str(&format!(
+                        "- {} ({}天): {:.2}, 置信度: {:.1}%\n",
+                        method_label, period, last_pred.predicted_price, last_pred.confidence
+                    ));
+                }
+            }
+        }
+    }
+    
+    // Calculate prediction statistics
+    let avg_prediction = if !all_predictions.is_empty() {
+        all_predictions.iter().sum::<f64>() / all_predictions.len() as f64
+    } else {
+        last_price
+    };
+    let min_prediction = all_predictions.iter().copied().fold(last_price, f64::min);
+    let max_prediction = all_predictions.iter().copied().fold(last_price, f64::max);
+    let prediction_range = max_prediction - min_prediction;
+
+    // Calculate additional technical indicators
+    let highs: Vec<f64> = data.iter().map(|d| d.high).collect();
+    let lows: Vec<f64> = data.iter().map(|d| d.low).collect();
+    
+    // Bollinger Bands
+    let bb_period = 20;
+    let bb_multiplier = 2.0;
+    let mut bb_upper = Vec::new();
+    let mut bb_middle = Vec::new();
+    let mut bb_lower = Vec::new();
+    
+    // Ensure we have enough data for Bollinger Bands calculation
+    if closes.len() >= bb_period {
+        for i in bb_period - 1..closes.len() {
+            let start = i.saturating_sub(bb_period - 1);
+            let slice = &closes[start..=i];
+            let mean = slice.iter().sum::<f64>() / slice.len() as f64;
+            let variance = slice.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / slice.len() as f64;
+            let std_dev = variance.sqrt();
+            bb_middle.push(mean);
+            bb_upper.push(mean + bb_multiplier * std_dev);
+            bb_lower.push(mean - bb_multiplier * std_dev);
+        }
+    }
+    let last_bb_upper = bb_upper.last().copied().unwrap_or(last_price * 1.05);
+    let last_bb_lower = bb_lower.last().copied().unwrap_or(last_price * 0.95);
+    
+    // Volume analysis
+    let volumes: Vec<f64> = data.iter().map(|d| d.volume as f64).collect();
+    let avg_volume = volumes.iter().sum::<f64>() / volumes.len() as f64;
+    let recent_volume = volumes.iter().rev().take(5).sum::<f64>() / 5.0;
+    let volume_ratio = if avg_volume > 0.0 { recent_volume / avg_volume } else { 1.0 };
 
     let prompt = format!(
         r#"Please analyze the following stock data and provide a comprehensive analysis in JSON format. IMPORTANT: All text content must be in Chinese (Simplified Chinese).
@@ -1345,11 +2105,19 @@ Recent Price Data (last 10 days):
 {}
 
 Technical Indicators:
-- RSI (14): {:.2}
+- RSI (14): {:.2} (超买>70, 超卖<30)
 - MACD: {:.2}, Signal: {:.2}
 - MA20: {:.2}, MA50: {:.2}
+- EMA12: {:.2}, EMA26: {:.2}
 - Current Price vs MA20: {:.2}%
 - Current Price vs MA50: {:.2}%
+- Bollinger Bands: Upper={:.2}, Lower={:.2}, Position={:.1}%
+- Volume Ratio (recent/avg): {:.2}x
+
+Multiple Prediction Methods Results (综合多种预测方法):
+{}
+Average Prediction: {:.2}
+Prediction Range: {:.2} - {:.2} (range: {:.2})
 
 Please provide analysis in the following JSON format (all text fields must be in Chinese):
 {{
@@ -1381,7 +2149,12 @@ Please provide analysis in the following JSON format (all text fields must be in
   ]
 }}
 
-IMPORTANT: All text content in the JSON response must be in Simplified Chinese. Respond ONLY with valid JSON, no additional text."#,
+IMPORTANT: 
+1. Consider all prediction methods when making your prediction - use the average and range as reference
+2. Analyze the consistency between different methods - if they converge, confidence should be higher
+3. Consider technical indicators, volume patterns, and prediction convergence together
+4. All text content in the JSON response must be in Simplified Chinese
+5. Respond ONLY with valid JSON, no additional text."#,
         symbol,
         last_price,
         price_change,
@@ -1391,8 +2164,19 @@ IMPORTANT: All text content in the JSON response must be in Simplified Chinese. 
         last_signal,
         last_ma20,
         last_ma50,
+        last_ema12,
+        last_ema26,
         ((last_price - last_ma20) / last_ma20) * 100.0,
         ((last_price - last_ma50) / last_ma50) * 100.0,
+        last_bb_upper,
+        last_bb_lower,
+        ((last_price - last_bb_lower) / (last_bb_upper - last_bb_lower)) * 100.0,
+        volume_ratio,
+        prediction_summary,
+        avg_prediction,
+        min_prediction,
+        max_prediction,
+        prediction_range,
     );
 
     let (api_url, api_provider) = if model.starts_with("gpt") {
@@ -1711,9 +2495,24 @@ IMPORTANT: All text content in the JSON response must be in Simplified Chinese. 
         Err(e) => {
             // Try to find and extract JSON object more aggressively
             let json_candidate = find_json_in_text(&cleaned_content);
-            match serde_json::from_str(&json_candidate) {
+            
+            // Try to validate and fix common JSON issues before parsing
+            let fixed_candidate = fix_json_common_issues(&json_candidate);
+            
+            // Try parsing the fixed candidate
+            let parse_result = serde_json::from_str::<AIAnalysisResult>(&fixed_candidate);
+            
+            match parse_result {
                 Ok(parsed) => parsed,
                 Err(e2) => {
+                    // Try to parse as partial JSON and fill missing fields
+                    if let Ok(partial_json) = serde_json::from_str::<serde_json::Value>(&fixed_candidate) {
+                        if let Ok(patched_result) = patch_incomplete_ai_result(&partial_json, symbol, data) {
+                            eprintln!("AI API partially failed, patched incomplete JSON. Error: {}", e2);
+                            return Ok(patched_result);
+                        }
+                    }
+                    
                     // If JSON parsing still fails, try to extract at least the analysis text
                     // and create a minimal valid response
                     if let Some(analysis_text) = extract_analysis_text(&cleaned_content) {
@@ -1878,7 +2677,7 @@ fn extract_analysis_text(text: &str) -> Option<String> {
 }
 
 // Create a fallback analysis when AI response is malformed
-fn create_fallback_analysis(analysis_text: String, symbol: &str, data: &[StockData]) -> AIAnalysisResult {
+fn create_fallback_analysis(analysis_text: String, _symbol: &str, data: &[StockData]) -> AIAnalysisResult {
     let closes: Vec<f64> = data.iter().map(|d| d.close).collect();
     let last_price = closes[closes.len() - 1];
     let price_change = if closes.len() >= 2 {
@@ -1964,9 +2763,23 @@ fn create_fallback_analysis(analysis_text: String, symbol: &str, data: &[StockDa
 fn extract_json_object(text: &str) -> String {
     let mut result = String::new();
     let mut depth = 0;
+    let mut array_depth = 0;
     let mut in_string = false;
     let mut escape_next = false;
     let mut chars = text.chars().peekable();
+    let mut started_with_array = false;
+    
+    // Skip whitespace to find first meaningful character
+    while let Some(&ch) = chars.peek() {
+        if ch.is_whitespace() {
+            chars.next();
+        } else if ch == '[' {
+            started_with_array = true;
+            break;
+        } else {
+            break;
+        }
+    }
     
     while let Some(ch) = chars.next() {
         if escape_next {
@@ -1994,8 +2807,24 @@ fn extract_json_object(text: &str) -> String {
                 result.push(ch);
                 if !in_string {
                     depth -= 1;
-                    if depth == 0 {
+                    if depth == 0 && array_depth == 0 && !started_with_array {
                         // Found complete JSON object
+                        return result;
+                    }
+                }
+            }
+            '[' => {
+                result.push(ch);
+                if !in_string {
+                    array_depth += 1;
+                }
+            }
+            ']' => {
+                result.push(ch);
+                if !in_string {
+                    array_depth -= 1;
+                    if array_depth == 0 && depth == 0 && started_with_array {
+                        // Found complete JSON array
                         return result;
                     }
                 }
@@ -2007,18 +2836,231 @@ fn extract_json_object(text: &str) -> String {
     }
     
     // If we didn't find a complete object, try to fix common truncation issues
-    if depth > 0 {
-        // Try to close unclosed objects/arrays
+    if depth > 0 || array_depth > 0 {
+        // Check if we're in the middle of a string
+        if in_string {
+            // Close the string
+            result.push('"');
+            in_string = false;
+        }
+        
+        // Close unclosed arrays first
+        while array_depth > 0 {
+            result.push(']');
+            array_depth -= 1;
+        }
+        
+        // Close unclosed objects
         while depth > 0 {
-            // Check if we're in the middle of a string
-            if in_string {
-                // Close the string
-                result.push('"');
-                in_string = false;
-            }
-            // Close objects/arrays
             result.push('}');
             depth -= 1;
+        }
+    }
+    
+    result
+}
+
+// Patch incomplete AI result by filling missing fields with calculated defaults
+fn patch_incomplete_ai_result(
+    partial_json: &serde_json::Value,
+    symbol: &str,
+    data: &[StockData],
+) -> Result<AIAnalysisResult, String> {
+    let closes: Vec<f64> = data.iter().map(|d| d.close).collect();
+    let last_price = closes[closes.len() - 1];
+    let price_change = if closes.len() >= 2 {
+        ((last_price - closes[closes.len() - 2]) / closes[closes.len() - 2]) * 100.0
+    } else {
+        0.0
+    };
+
+    let rsi = calculate_rsi(&closes, 14);
+    let macd_result = calculate_macd(&closes, 12, 26, 9);
+    let ma20 = calculate_sma(&closes, 20);
+    
+    let last_rsi = rsi.last().copied().unwrap_or(50.0);
+    let last_macd = macd_result.macd.last().copied().unwrap_or(0.0);
+    let last_signal = macd_result.signal.last().copied().unwrap_or(0.0);
+    let last_ma20 = ma20.iter().rev().find(|&&x| x > 0.0).copied().unwrap_or(last_price);
+
+    // Extract available fields or use defaults
+    let analysis = partial_json.get("analysis")
+        .and_then(|v| v.as_str())
+        .unwrap_or("基于技术指标的分析")
+        .to_string();
+
+    // Build prediction from partial JSON or calculate defaults
+    let prediction = if let Some(pred_obj) = partial_json.get("prediction") {
+        AIPrediction {
+            price: pred_obj.get("price")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(last_price),
+            confidence: pred_obj.get("confidence")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(65.0),
+            trend: pred_obj.get("trend")
+                .and_then(|v| v.as_str())
+                .unwrap_or("neutral")
+                .to_string(),
+            reasoning: pred_obj.get("reasoning")
+                .and_then(|v| v.as_str())
+                .unwrap_or("基于技术指标分析")
+                .to_string(),
+        }
+    } else {
+        // Calculate prediction from technical indicators
+        let trend = if last_price > last_ma20 && last_rsi > 50.0 {
+            "bullish"
+        } else if last_price < last_ma20 && last_rsi < 50.0 {
+            "bearish"
+        } else {
+            "neutral"
+        };
+        
+        AIPrediction {
+            price: last_price * (1.0 + price_change / 100.0 * 0.1),
+            confidence: 60.0,
+            trend: trend.to_string(),
+            reasoning: format!("基于技术指标计算：RSI={:.1}, MACD={:.2}", last_rsi, last_macd),
+        }
+    };
+
+    // Build risk assessment
+    let risk_assessment = if let Some(risk_obj) = partial_json.get("risk_assessment") {
+        AIRiskAssessment {
+            level: risk_obj.get("level")
+                .and_then(|v| v.as_str())
+                .unwrap_or("medium")
+                .to_string(),
+            factors: risk_obj.get("factors")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect())
+                .unwrap_or_else(|| vec!["数据不完整".to_string()]),
+        }
+    } else {
+        AIRiskAssessment {
+            level: if last_rsi > 70.0 || last_rsi < 30.0 { "high" } else { "medium" }.to_string(),
+            factors: vec!["技术指标分析".to_string()],
+        }
+    };
+
+    // Build recommendations
+    let recommendations = partial_json.get("recommendations")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect())
+        .unwrap_or_else(|| vec!["建议谨慎投资".to_string(), "关注市场变化".to_string()]);
+
+    // Build technical summary
+    let technical_summary = if let Some(tech_obj) = partial_json.get("technical_summary") {
+        AITechnicalSummary {
+            indicators: tech_obj.get("indicators")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter()
+                    .filter_map(|v| {
+                        Some(AIIndicator {
+                            name: v.get("name")?.as_str()?.to_string(),
+                            value: v.get("value")?.as_f64()?,
+                            signal: v.get("signal")?.as_str()?.to_string(),
+                        })
+                    })
+                    .collect())
+                .unwrap_or_default(),
+            overall_signal: tech_obj.get("overall_signal")
+                .and_then(|v| v.as_str())
+                .unwrap_or("hold")
+                .to_string(),
+        }
+    } else {
+        AITechnicalSummary {
+            indicators: vec![
+                AIIndicator {
+                    name: "RSI".to_string(),
+                    value: last_rsi,
+                    signal: if last_rsi > 70.0 { "sell" } else if last_rsi < 30.0 { "buy" } else { "hold" }.to_string(),
+                },
+            ],
+            overall_signal: "hold".to_string(),
+        }
+    };
+
+    // Build price targets
+    let price_targets = partial_json.get("price_targets")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter()
+            .filter_map(|v| {
+                Some(AIPriceTarget {
+                    period: v.get("period")?.as_str()?.to_string(),
+                    target: v.get("target")?.as_f64()?,
+                    probability: v.get("probability")?.as_f64()?,
+                })
+            })
+            .collect())
+        .unwrap_or_else(|| vec![
+            AIPriceTarget {
+                period: "1周".to_string(),
+                target: last_price * 1.05,
+                probability: 60.0,
+            },
+        ]);
+
+    Ok(AIAnalysisResult {
+        analysis,
+        prediction,
+        risk_assessment,
+        recommendations,
+        technical_summary,
+        price_targets,
+    })
+}
+
+// Fix common JSON formatting issues that might cause parsing errors
+fn fix_json_common_issues(json_str: &str) -> String {
+    let mut fixed = json_str.to_string();
+    
+    // Remove trailing commas before closing brackets/braces (but not inside strings)
+    // We need to be careful not to replace commas that are inside strings
+    let mut result = String::new();
+    let mut in_string = false;
+    let mut escape_next = false;
+    let chars: Vec<char> = fixed.chars().collect();
+    
+    for i in 0..chars.len() {
+        let ch = chars[i];
+        
+        if escape_next {
+            result.push(ch);
+            escape_next = false;
+            continue;
+        }
+        
+        match ch {
+            '\\' => {
+                result.push(ch);
+                escape_next = true;
+            }
+            '"' => {
+                result.push(ch);
+                in_string = !in_string;
+            }
+            ',' if !in_string => {
+                // Check if next non-whitespace char is ] or }
+                let mut next_idx = i + 1;
+                while next_idx < chars.len() && chars[next_idx].is_whitespace() {
+                    next_idx += 1;
+                }
+                if next_idx < chars.len() && (chars[next_idx] == ']' || chars[next_idx] == '}') {
+                    // Skip this trailing comma
+                    continue;
+                }
+                result.push(ch);
+            }
+            _ => {
+                result.push(ch);
+            }
         }
     }
     
@@ -2071,6 +3113,64 @@ fn generate_local_ai_analysis(
         0.0
     };
 
+    // Run multiple prediction methods and aggregate results
+    let last_date = data.last().map(|d| d.date.as_str()).unwrap_or("");
+    let prediction_methods = vec!["linear", "ma", "technical", "polynomial", "exponential", "ensemble"];
+    let prediction_period = 10; // Use 10 days for medium-term prediction
+    
+    let mut prediction_prices: Vec<f64> = Vec::new();
+    let mut prediction_confidences: Vec<f64> = Vec::new();
+    
+    for method in &prediction_methods {
+        if let Ok(predictions) = match *method {
+            "linear" => predict_linear_regression(&closes, last_date, prediction_period),
+            "ma" => predict_moving_average(&closes, last_date, prediction_period),
+            "technical" => predict_technical_indicator(&closes, last_date, prediction_period),
+            "polynomial" => predict_polynomial(&closes, last_date, prediction_period),
+            "exponential" => predict_exponential_smoothing(&closes, last_date, prediction_period),
+            "ensemble" => predict_ensemble(data, last_date, prediction_period),
+            _ => continue,
+        } {
+            if let Some(last_pred) = predictions.last() {
+                prediction_prices.push(last_pred.predicted_price);
+                prediction_confidences.push(last_pred.confidence);
+            }
+        }
+    }
+    
+    // Calculate weighted average prediction based on confidences
+    let predicted_price = if !prediction_prices.is_empty() && !prediction_confidences.is_empty() {
+        let total_weight: f64 = prediction_confidences.iter().sum();
+        if total_weight > 0.0 {
+            prediction_prices.iter()
+                .zip(prediction_confidences.iter())
+                .map(|(price, conf)| price * conf)
+                .sum::<f64>() / total_weight
+        } else {
+            prediction_prices.iter().sum::<f64>() / prediction_prices.len() as f64
+        }
+    } else {
+        // Fallback to trend-based prediction
+        last_price * (1.0 + trend_slope / 100.0 * 0.1)
+    };
+    
+    // Calculate prediction consistency (lower variance = higher confidence)
+    let prediction_std_dev = if prediction_prices.len() > 1 {
+        let avg = prediction_prices.iter().sum::<f64>() / prediction_prices.len() as f64;
+        let variance = prediction_prices.iter()
+            .map(|p| (p - avg).powi(2))
+            .sum::<f64>() / prediction_prices.len() as f64;
+        variance.sqrt()
+    } else {
+        0.0
+    };
+    
+    let prediction_consistency = if last_price > 0.0 {
+        (1.0 - (prediction_std_dev / last_price).min(0.5)) * 100.0
+    } else {
+        50.0
+    };
+
     let mut bullish_signals = 0;
     let mut bearish_signals = 0;
 
@@ -2080,6 +3180,7 @@ fn generate_local_ai_analysis(
     if last_ema12 > last_ema26 { bullish_signals += 1; } else { bearish_signals += 1; }
     if last_macd > last_signal { bullish_signals += 1; } else { bearish_signals += 1; }
     if last_rsi > 50.0 { bullish_signals += 1; } else { bearish_signals += 1; }
+    if predicted_price > last_price { bullish_signals += 1; } else { bearish_signals += 1; }
 
     let overall_signal = if bullish_signals > bearish_signals {
         "buy"
@@ -2097,13 +3198,16 @@ fn generate_local_ai_analysis(
         "neutral"
     };
 
-    let predicted_price = if trend_slope > 0.0 {
-        last_price * (1.0 + trend_slope / 100.0 * 0.1)
+    // Combine technical signals confidence with prediction consistency
+    let base_confidence = (50.0 + (bullish_signals + bearish_signals) as f64 * 5.0).min(85.0);
+    let avg_prediction_confidence = if !prediction_confidences.is_empty() {
+        prediction_confidences.iter().sum::<f64>() / prediction_confidences.len() as f64
     } else {
-        last_price * (1.0 + trend_slope / 100.0 * 0.1)
+        60.0
     };
-
-    let confidence = (50.0 + (bullish_signals + bearish_signals) as f64 * 5.0).min(85.0);
+    
+    // Weighted combination: 60% prediction methods, 40% technical signals
+    let confidence = (base_confidence * 0.4 + avg_prediction_confidence * 0.6 * (prediction_consistency / 100.0)).min(90.0);
 
     let volatility = calculate_variance(&closes).sqrt() / last_price * 100.0;
     let risk_level = if volatility > 5.0 {
@@ -2113,6 +3217,34 @@ fn generate_local_ai_analysis(
     } else {
         "low"
     };
+
+    // Build comprehensive analysis text
+    let method_count = prediction_prices.len();
+    let analysis_text = format!(
+        "综合分析了{}种预测方法（线性回归、移动平均、技术指标、多项式、指数平滑、集成方法），",
+        method_count
+    );
+    
+    let analysis_text = format!(
+        "{}\
+        当前价格{:.2}，基于技术指标分析：RSI为{:.1}（{}），MACD{}，\
+        价格位于MA20（{:.2}）{}，MA50（{:.2}）{}。\
+        多种预测方法平均预测价格为{:.2}，预测一致性{:.1}%。\
+        综合分析显示{}趋势，建议{}操作。",
+        analysis_text,
+        last_price,
+        last_rsi,
+        if last_rsi > 70.0 { "超买" } else if last_rsi < 30.0 { "超卖" } else { "中性" },
+        if last_macd > last_signal { "金叉看涨" } else { "死叉看跌" },
+        last_ma20,
+        if last_price > last_ma20 { "之上" } else { "之下" },
+        last_ma50,
+        if last_price > last_ma50 { "之上" } else { "之下" },
+        predicted_price,
+        prediction_consistency,
+        trend,
+        overall_signal
+    );
 
     let risk_factors = vec![
         format!("Volatility: {:.2}%", volatility),
@@ -2127,6 +3259,11 @@ fn generate_local_ai_analysis(
             "Low trend strength".to_string()
         } else {
             format!("Trend strength: {:.2}%", trend_slope.abs())
+        },
+        if prediction_std_dev > last_price * 0.1 {
+            format!("High prediction variance: {:.2}%", (prediction_std_dev / last_price) * 100.0)
+        } else {
+            format!("Prediction consistency: {:.1}%", prediction_consistency)
         },
     ];
 

@@ -9,6 +9,7 @@ import RightSidebar from "./components/RightSidebar";
 import Workspace from "./components/Workspace";
 import StatusBar from "./components/StatusBar";
 import SettingsDialog from "./components/SettingsDialog";
+import PriceAlertDialog from "./components/PriceAlertDialog";
 import "./App.css";
 
 interface StockQuote {
@@ -30,7 +31,7 @@ interface StockTab {
   symbol: string;
   name: string;
   quote: StockQuote | null;
-  type?: "stock" | "heatmap";
+  type?: "stock" | "heatmap" | "portfolio";
 }
 
 function App() {
@@ -42,6 +43,7 @@ function App() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [priceAlertOpen, setPriceAlertOpen] = useState(false);
 
   useEffect(() => {
     const heatmapTab: StockTab = {
@@ -54,6 +56,24 @@ function App() {
     setTabs([heatmapTab]);
     setActiveTabId(heatmapTab.id);
   }, [t]);
+
+  const handlePortfolioClick = () => {
+    const existingTab = tabs.find(tab => tab.type === "portfolio");
+    if (existingTab) {
+      setActiveTabId(existingTab.id);
+      return;
+    }
+
+    const portfolioTab: StockTab = {
+      id: "tab-portfolio",
+      symbol: "",
+      name: t("portfolio.title"),
+      quote: null,
+      type: "portfolio",
+    };
+    setTabs([...tabs, portfolioTab]);
+    setActiveTabId(portfolioTab.id);
+  };
 
   const handleStockSelect = async (symbol: string, name: string) => {
     const existingTab = tabs.find(tab => tab.symbol === symbol);
@@ -106,23 +126,8 @@ function App() {
     const appWindow = getCurrentWindow();
     
     switch (action) {
-      case "file:new":
-        console.log("New file");
-        break;
-      case "file:open":
-        console.log("Open file");
-        break;
-      case "file:save":
-        console.log("Save file");
-        break;
-      case "file:export":
-        console.log("Export data");
-        break;
       case "file:exit":
         await appWindow.close();
-        break;
-      case "edit:find":
-        console.log("Find");
         break;
       case "view:refresh":
         if (activeTabId) {
@@ -159,17 +164,14 @@ function App() {
         const isFullscreen = await appWindow.isFullscreen();
         await appWindow.setFullscreen(!isFullscreen);
         break;
-      case "analysis:indicators":
-        console.log("Show technical indicators");
+      case "analysis:priceAlert":
+        setPriceAlertOpen(true);
         break;
-      case "analysis:compare":
-        console.log("Compare analysis");
+      case "portfolio:open":
+        handlePortfolioClick();
         break;
       case "help:about":
         alert("Stock Analyzer v1.0.0\nA multi-language stock data viewer and analyzer");
-        break;
-      case "help:documentation":
-        console.log("Open documentation");
         break;
       default:
         console.log("Unknown action:", action);
@@ -180,26 +182,7 @@ function App() {
     const handleKeyDown = async (e: KeyboardEvent) => {
       const appWindow = getCurrentWindow();
       
-      if (e.ctrlKey || e.metaKey) {
-        switch (e.key.toLowerCase()) {
-          case "n":
-            e.preventDefault();
-            console.log("New file");
-            break;
-          case "o":
-            e.preventDefault();
-            console.log("Open file");
-            break;
-          case "s":
-            e.preventDefault();
-            console.log("Save file");
-            break;
-          case "f":
-            e.preventDefault();
-            console.log("Find");
-            break;
-        }
-      } else if (e.key === "F5") {
+      if (e.key === "F5") {
         e.preventDefault();
         if (activeTabId) {
           const activeTab = tabs.find(tab => tab.id === activeTabId);
@@ -234,6 +217,36 @@ function App() {
     };
   }, [activeTabId, tabs]);
 
+  useEffect(() => {
+    const checkAlerts = async () => {
+      try {
+        const triggeredAlerts = await invoke<Array<{
+          id: number;
+          symbol: string;
+          threshold_price: number;
+          direction: string;
+          enabled: boolean;
+          triggered: boolean;
+        }>>("check_price_alerts");
+        
+        if (triggeredAlerts && triggeredAlerts.length > 0) {
+          triggeredAlerts.forEach(alert => {
+            const direction = alert.direction === "above" ? t("priceAlert.above") : t("priceAlert.below");
+            const message = `${alert.symbol} ${t("priceAlert.triggered")}: ${direction} ${alert.threshold_price.toFixed(2)}`;
+            window.alert(message);
+          });
+        }
+      } catch (err) {
+        console.error("Error checking price alerts:", err);
+      }
+    };
+
+    const interval = setInterval(checkAlerts, 60000);
+    checkAlerts();
+
+    return () => clearInterval(interval);
+  }, [t]);
+
   return (
     <div className="app">
       <TitleBar
@@ -262,6 +275,18 @@ function App() {
       </div>
       <StatusBar />
       <SettingsDialog isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <PriceAlertDialog
+        isOpen={priceAlertOpen}
+        onClose={() => setPriceAlertOpen(false)}
+        symbol={
+          tabs.find(tab => tab.id === activeTabId)?.symbol ||
+          undefined
+        }
+        currentPrice={
+          tabs.find(tab => tab.id === activeTabId)?.quote?.price ||
+          undefined
+        }
+      />
     </div>
   );
 }

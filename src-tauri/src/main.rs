@@ -9,6 +9,15 @@ use database::Database;
 use std::sync::Arc;
 use tauri::Manager;
 
+// Internal function for background cache refresh
+async fn refresh_stock_cache_internal(db: &Database) -> Result<usize, String> {
+    let stocks = fetch_all_a_stocks().await?;
+    let count = stocks.len();
+    db.update_stock_cache(&stocks)
+        .map_err(|e| format!("Failed to update stock cache: {}", e))?;
+    Ok(count)
+}
+
 #[tauri::command]
 async fn get_stock_quote(
     symbol: String,
@@ -159,8 +168,122 @@ async fn get_time_series(
 }
 
 #[tauri::command]
-async fn search_stocks(query: String) -> Result<Vec<StockInfo>, String> {
+async fn search_stocks(
+    query: String,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<Vec<StockInfo>, String> {
+    // First try to search from cache
+    let cache_results = db.search_stocks_from_cache(&query, 50)
+        .map_err(|e| format!("Cache search error: {}", e))?;
+    
+    if !cache_results.is_empty() {
+        return Ok(cache_results);
+    }
+    
+    // Fallback to API search if cache is empty
     search_stocks_by_query(&query).await
+}
+
+#[tauri::command]
+async fn refresh_stock_cache(
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<usize, String> {
+    let stocks = fetch_all_a_stocks().await?;
+    let count = stocks.len();
+    db.update_stock_cache(&stocks)
+        .map_err(|e| format!("Failed to update stock cache: {}", e))?;
+    Ok(count)
+}
+
+#[tauri::command]
+fn get_stock_cache_count(
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<i64, String> {
+    db.get_stock_cache_count()
+        .map_err(|e| format!("Failed to get cache count: {}", e))
+}
+
+// ============= Portfolio Commands =============
+
+#[tauri::command]
+fn add_portfolio_position(
+    symbol: String,
+    name: String,
+    quantity: i64,
+    avgCost: f64,
+    currentPrice: Option<f64>,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<i64, String> {
+    db.add_portfolio_position(&symbol, &name, quantity, avgCost, currentPrice)
+        .map_err(|e| format!("Failed to add position: {}", e))
+}
+
+#[tauri::command]
+fn get_portfolio_positions(
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<Vec<(i64, String, String, i64, f64, Option<f64>)>, String> {
+    db.get_portfolio_positions()
+        .map_err(|e| format!("Failed to get positions: {}", e))
+}
+
+#[tauri::command]
+fn update_portfolio_position_price(
+    symbol: String,
+    currentPrice: f64,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<(), String> {
+    db.update_portfolio_position_price(&symbol, currentPrice)
+        .map_err(|e| format!("Failed to update position price: {}", e))
+}
+
+#[tauri::command]
+fn delete_portfolio_position(
+    id: i64,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<(), String> {
+    db.delete_portfolio_position(id)
+        .map_err(|e| format!("Failed to delete position: {}", e))
+}
+
+#[tauri::command]
+fn add_portfolio_transaction(
+    symbol: String,
+    transaction_type: String,
+    quantity: i64,
+    price: f64,
+    commission: f64,
+    transaction_date: String,
+    notes: Option<String>,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<i64, String> {
+    db.add_portfolio_transaction(
+        &symbol,
+        &transaction_type,
+        quantity,
+        price,
+        commission,
+        &transaction_date,
+        notes.as_deref(),
+    )
+    .map_err(|e| format!("Failed to add transaction: {}", e))
+}
+
+#[tauri::command]
+fn get_portfolio_transactions(
+    symbol: Option<String>,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<Vec<(i64, String, String, i64, f64, f64, f64, String, Option<String>)>, String> {
+    db.get_portfolio_transactions(symbol.as_deref())
+        .map_err(|e| format!("Failed to get transactions: {}", e))
+}
+
+#[tauri::command]
+fn delete_portfolio_transaction(
+    id: i64,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<(), String> {
+    db.delete_portfolio_transaction(id)
+        .map_err(|e| format!("Failed to delete transaction: {}", e))
 }
 
 #[tauri::command]
@@ -257,6 +380,15 @@ fn remove_stock(
 ) -> Result<(), String> {
     db.remove_stock(&symbol)
         .map_err(|e| format!("Failed to remove stock: {}", e))
+}
+
+#[tauri::command]
+fn restore_stock(
+    symbol: String,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<(), String> {
+    db.restore_stock(&symbol)
+        .map_err(|e| format!("Failed to restore stock: {}", e))
 }
 
 // ============= Tag Commands =============
@@ -392,6 +524,148 @@ async fn ai_analyze_stock(
     .await
 }
 
+// ============= Price Alert Commands =============
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PriceAlertInfo {
+    id: i64,
+    symbol: String,
+    threshold_price: f64,
+    direction: String,
+    enabled: bool,
+    triggered: bool,
+}
+
+#[tauri::command]
+fn create_price_alert(
+    symbol: String,
+    threshold_price: f64,
+    direction: String,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<i64, String> {
+    if direction != "above" && direction != "below" {
+        return Err("Direction must be 'above' or 'below'".to_string());
+    }
+    db.create_price_alert(&symbol, threshold_price, &direction)
+        .map_err(|e| format!("Failed to create price alert: {}", e))
+}
+
+#[tauri::command]
+fn get_price_alerts(
+    symbol: Option<String>,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<Vec<PriceAlertInfo>, String> {
+    db.get_price_alerts(symbol.as_deref())
+        .map(|alerts| {
+            alerts
+                .into_iter()
+                .map(|(id, symbol, threshold_price, direction, enabled, triggered)| {
+                    PriceAlertInfo {
+                        id,
+                        symbol,
+                        threshold_price,
+                        direction,
+                        enabled,
+                        triggered,
+                    }
+                })
+                .collect()
+        })
+        .map_err(|e| format!("Failed to get price alerts: {}", e))
+}
+
+#[tauri::command]
+fn update_price_alert(
+    alert_id: i64,
+    threshold_price: Option<f64>,
+    direction: Option<String>,
+    enabled: Option<bool>,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<(), String> {
+    if let Some(ref dir) = direction {
+        if dir != "above" && dir != "below" {
+            return Err("Direction must be 'above' or 'below'".to_string());
+        }
+    }
+    db.update_price_alert(alert_id, threshold_price, direction.as_deref(), enabled)
+        .map_err(|e| format!("Failed to update price alert: {}", e))
+}
+
+#[tauri::command]
+fn delete_price_alert(
+    alert_id: i64,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<(), String> {
+    db.delete_price_alert(alert_id)
+        .map_err(|e| format!("Failed to delete price alert: {}", e))
+}
+
+#[tauri::command]
+async fn check_price_alerts(
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<Vec<PriceAlertInfo>, String> {
+    let active_alerts = db.get_active_price_alerts()
+        .map_err(|e| format!("Failed to get active alerts: {}", e))?;
+    
+    let mut triggered_alerts = Vec::new();
+    
+    for (alert_id, symbol, threshold_price, direction) in active_alerts {
+        // Add retry logic for network requests
+        let mut retry_count = 0;
+        let max_retries = 2;
+
+        let quote_result = loop {
+            match fetch_stock_quote(&symbol).await {
+                Ok(quote) => break Some(quote),
+                Err(e) => {
+                    retry_count += 1;
+                    if retry_count >= max_retries {
+                        eprintln!("Failed to fetch quote for {} after {} retries: {}", symbol, max_retries, e);
+                        break None;
+                    }
+                    // Wait before retry
+                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                }
+            }
+        };
+
+        if let Some(quote) = quote_result {
+            let should_trigger = match direction.as_str() {
+                "above" => quote.price >= threshold_price,
+                "below" => quote.price <= threshold_price,
+                _ => false,
+            };
+
+            if should_trigger {
+                if let Err(e) = db.mark_alert_triggered(alert_id) {
+                    eprintln!("Failed to mark alert as triggered: {}", e);
+                    continue;
+                }
+
+                triggered_alerts.push(PriceAlertInfo {
+                    id: alert_id,
+                    symbol,
+                    threshold_price,
+                    direction,
+                    enabled: true,
+                    triggered: true,
+                });
+            }
+        }
+    }
+    
+    Ok(triggered_alerts)
+}
+
+#[tauri::command]
+fn reset_price_alert(
+    alert_id: i64,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<(), String> {
+    db.reset_alert_triggered(alert_id)
+        .map_err(|e| format!("Failed to reset price alert: {}", e))
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
@@ -411,7 +685,59 @@ fn main() {
                 let _ = db.add_stock(&stock, None); // Ignore errors if stock already exists
             }
 
-            app.manage(Arc::new(db));
+            let db_arc = Arc::new(db);
+            
+            // Start background task to initialize and periodically update stock cache
+            let db_for_cache = db_arc.clone();
+            tauri::async_runtime::spawn(async move {
+                // Wait a bit for app to fully initialize
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                
+                // Check if cache already exists
+                let cache_count = match db_for_cache.get_stock_cache_count() {
+                    Ok(count) => count,
+                    Err(e) => {
+                        eprintln!("Failed to check stock cache: {}", e);
+                        return;
+                    }
+                };
+                
+                // If cache is empty, initialize it once
+                if cache_count == 0 {
+                    println!("Initializing stock cache for the first time...");
+                    match refresh_stock_cache_internal(&db_for_cache).await {
+                        Ok(count) => {
+                            println!("Stock cache initialized with {} stocks", count);
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to initialize stock cache: {}", e);
+                        }
+                    }
+                } else {
+                    println!("Stock cache already exists with {} stocks", cache_count);
+                }
+                
+                // Set up periodic cache update (every 24 hours)
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(24 * 60 * 60));
+                // Skip the first tick since we just initialized
+                interval.tick().await;
+                
+                // Periodically update cache
+                loop {
+                    interval.tick().await;
+                    println!("Updating stock cache...");
+                    match refresh_stock_cache_internal(&db_for_cache).await {
+                        Ok(count) => {
+                            println!("Stock cache updated with {} stocks", count);
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to update stock cache: {}", e);
+                        }
+                    }
+                }
+            });
+            
+            app.manage(db_arc);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -429,6 +755,7 @@ fn main() {
             move_stock_to_group,
             update_stocks_order,
             remove_stock,
+            restore_stock,
             create_tag,
             get_all_tags,
             update_tag,
@@ -439,7 +766,22 @@ fn main() {
             get_stocks_by_tag,
             predict_stock_price,
             ai_analyze_stock,
-            get_all_favorites_quotes
+            get_all_favorites_quotes,
+            create_price_alert,
+            get_price_alerts,
+            update_price_alert,
+            delete_price_alert,
+            check_price_alerts,
+            reset_price_alert,
+            refresh_stock_cache,
+            get_stock_cache_count,
+            add_portfolio_position,
+            get_portfolio_positions,
+            update_portfolio_position_price,
+            delete_portfolio_position,
+            add_portfolio_transaction,
+            get_portfolio_transactions,
+            delete_portfolio_transaction
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

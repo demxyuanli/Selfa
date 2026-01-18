@@ -18,6 +18,7 @@ interface StockData {
 interface CompareAnalysisProps {
   currentSymbol: string;
   currentData: StockData[];
+  currentName?: string;
 }
 
 interface CompareStock {
@@ -26,7 +27,7 @@ interface CompareStock {
   data: StockData[];
 }
 
-const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, currentData }) => {
+const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, currentData, currentName }) => {
   const { t } = useTranslation();
   const [compareStocks, setCompareStocks] = useState<CompareStock[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,14 +38,33 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
   const chartRef = useRef<ReactECharts>(null);
 
   useEffect(() => {
-    if (currentData.length > 0) {
-      setCompareStocks([{
-        symbol: currentSymbol,
-        name: "",
-        data: currentData,
-      }]);
+    if (currentData.length > 0 && currentSymbol) {
+      // If currentName is not provided, try to get it from search results or fetch from API
+      const getName = async () => {
+        if (currentName) {
+          return currentName;
+        }
+        // Try to fetch stock name from API if not provided
+        try {
+          const results: Array<{ symbol: string; name: string }> = await invoke("search_stocks", {
+            query: currentSymbol,
+          });
+          const found = results.find(r => r.symbol === currentSymbol);
+          return found?.name || currentSymbol;
+        } catch {
+          return currentSymbol;
+        }
+      };
+
+      getName().then(name => {
+        setCompareStocks([{
+          symbol: currentSymbol,
+          name: name || currentSymbol,
+          data: currentData,
+        }]);
+      });
     }
-  }, [currentSymbol, currentData]);
+  }, [currentSymbol, currentData, currentName]);
 
   useEffect(() => {
     let resizeTimer: number | null = null;
@@ -396,7 +416,10 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
               <div className="stock-list">
                 {compareStocks.map((stock) => (
                   <div key={stock.symbol} className="stock-item">
-                    <span className="stock-label">{stock.symbol}</span>
+                    <div className="stock-label-wrapper">
+                      <span className="stock-label">{stock.symbol}</span>
+                      {stock.name && <span className="stock-name-label">{stock.name}</span>}
+                    </div>
                     {compareStocks.length > 1 && (
                       <button
                         className="remove-btn"

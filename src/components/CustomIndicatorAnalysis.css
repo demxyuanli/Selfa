@@ -1,0 +1,126 @@
+.custom-indicator-analysis {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary, #1e1e1e);
+  overflow: hidden;
+}
+
+.custom-indicator-analysis .analysis-columns {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.custom-indicator-analysis .param-textarea {
+  width: 100%;
+  padding: 6px;
+  font-size: 11px;
+  font-family: monospace;
+  background: var(--input-bg, #2d2d30);
+  border: 1px solid var(--border-color, #3c3c3c);
+  border-radius: 3px;
+  color: var(--text-primary, #cccccc);
+  resize: vertical;
+}
+
+.custom-indicator-analysis .param-textarea:focus {
+  outline: none;
+  border-color: var(--accent-color, #007acc);
+}
+
+.custom-indicator-analysis .param-color {
+  width: 60px;
+  height: 30px;
+  padding: 2px;
+  background: var(--input-bg, #2d2d30);
+  border: 1px solid var(--border-color, #3c3c3c);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.formula-help {
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--bg-tertiary, #252526);
+  border-radius: 3px;
+  font-size: 9px;
+  color: var(--text-secondary, #858585);
+}
+
+.formula-help .help-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--text-primary, #cccccc);
+}
+
+.formula-help .help-item {
+  margin: 2px 0;
+  padding-left: 8px;
+}
+
+.indicators-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.indicator-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  background: var(--bg-tertiary, #252526);
+  border-radius: 3px;
+  border-left: 3px solid;
+}
+
+.indicator-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.indicator-name {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.indicator-formula {
+  font-size: 9px;
+  color: var(--text-secondary, #858585);
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.indicator-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.indicator-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--border-color, #3c3c3c);
+  border-radius: 3px;
+  color: var(--text-primary, #cccccc);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.indicator-btn:hover {
+  background: var(--bg-hover, #2d2d30);
+  border-color: var(--accent-color, #007acc);
+}

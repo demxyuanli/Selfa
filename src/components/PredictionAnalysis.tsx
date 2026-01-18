@@ -1,10 +1,166 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import ReactECharts from "echarts-for-react";
+import * as echarts from "echarts";
 import ChartDialog from "./ChartDialog";
 import "./StockAnalysis.css";
 import "./PredictionAnalysis.css";
+
+// Custom ECharts component with proper lifecycle management
+interface CustomEChartsProps {
+  option: any;
+  style?: React.CSSProperties;
+  className?: string;
+}
+
+const CustomECharts: React.FC<CustomEChartsProps> = ({ option, style, className }) => {
+  const chartRef = useRef<HTMLDivElement>(null);
+  const chartInstanceRef = useRef<echarts.ECharts | null>(null);
+
+  useEffect(() => {
+    if (!chartRef.current) return;
+
+    // Initialize chart
+    try {
+      if (!chartRef.current) return;
+      
+      const instance = echarts.init(chartRef.current, undefined, {
+        renderer: 'canvas',
+        devicePixelRatio: window.devicePixelRatio || 1
+      });
+      chartInstanceRef.current = instance;
+
+      // Set initial option
+      if (option) {
+        instance.setOption(option, true);
+      }
+
+      // Ensure chart resizes to container size
+      setTimeout(() => {
+        if (chartInstanceRef.current && chartRef.current) {
+          try {
+            chartInstanceRef.current.resize({
+              width: chartRef.current.clientWidth,
+              height: chartRef.current.clientHeight,
+            });
+          } catch (error) {
+            console.debug("Error in initial resize:", error);
+          }
+        }
+      }, 0);
+    } catch (error) {
+      console.error("Failed to initialize chart:", error);
+    }
+
+    // Cleanup function
+    return () => {
+      if (chartInstanceRef.current) {
+        try {
+          // Dispose chart instance
+          if (!chartInstanceRef.current.isDisposed()) {
+            chartInstanceRef.current.dispose();
+          }
+        } catch (error) {
+          console.debug("Error disposing chart:", error);
+        }
+        chartInstanceRef.current = null;
+      }
+    };
+  }, []);
+
+  // Update chart when option changes
+  useEffect(() => {
+    if (chartInstanceRef.current && option) {
+      try {
+        chartInstanceRef.current.setOption(option, true);
+      } catch (error) {
+        console.error("Failed to update chart option:", error);
+      }
+    }
+  }, [option]);
+
+  // Handle window resize and container resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (chartInstanceRef.current && chartRef.current) {
+        try {
+          chartInstanceRef.current.resize({
+            width: chartRef.current.clientWidth,
+            height: chartRef.current.clientHeight,
+          });
+        } catch (error) {
+          console.debug("Error resizing chart:", error);
+        }
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    
+    // Use ResizeObserver to watch container size changes
+    let resizeObserver: ResizeObserver | null = null;
+    if (chartRef.current && window.ResizeObserver) {
+      resizeObserver = new ResizeObserver(() => {
+        handleResize();
+      });
+      resizeObserver.observe(chartRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (resizeObserver && chartRef.current) {
+        resizeObserver.unobserve(chartRef.current);
+        resizeObserver.disconnect();
+      }
+    };
+  }, []);
+
+  return (
+    <div
+      ref={chartRef}
+      style={{ ...style, height: '100%', width: '100%' }}
+      className={className}
+    />
+  );
+};
+
+// Error boundary for chart components
+class ChartErrorBoundary extends React.Component<
+  { children: React.ReactNode; onError?: (error: Error) => void },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode; onError?: (error: Error) => void }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(_error: Error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("Chart error boundary caught an error:", error, errorInfo);
+    this.props.onError?.(error);
+    this.setState({ hasError: true });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="chart-error">
+          <div className="error-message">图表加载失败，请刷新页面</div>
+          <button
+            onClick={() => window.location.reload()}
+            className="retry-button"
+          >
+            刷新页面
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 interface StockData {
   date: string;
@@ -40,7 +196,9 @@ type PredictionMethod =
   | "wma"
   | "pattern"
   | "similarity"
-  | "ensemble";
+  | "ensemble"
+  | "fibonacci"
+  | "fibonacci_extension";
 
 const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) => {
   const { t } = useTranslation();
@@ -49,7 +207,7 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
   const [isChartDialogOpen, setIsChartDialogOpen] = useState(false);
   const [predictions, setPredictions] = useState<PredictionResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const chartRef = useRef<ReactECharts>(null);
+  const [chartResetKey, setChartResetKey] = useState(0);
 
   const getMethodLabel = (m: PredictionMethod): string => {
     const labels: Record<PredictionMethod, string> = {
@@ -64,6 +222,8 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
       mean_reversion: t("analysis.methodMeanReversion"),
       similarity: t("analysis.methodSimilarity"),
       ensemble: t("analysis.methodEnsemble"),
+      fibonacci: t("analysis.methodFibonacci"),
+      fibonacci_extension: t("analysis.methodFibonacciExtension"),
     };
     return labels[m] || m;
   };
@@ -74,34 +234,6 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
     }
   }, [method, period, klineData]);
 
-  useEffect(() => {
-    let resizeTimer: number | null = null;
-    const handleResize = () => {
-      if (resizeTimer) {
-        clearTimeout(resizeTimer);
-      }
-      resizeTimer = setTimeout(() => {
-        if (chartRef.current) {
-          try {
-            const instance = chartRef.current.getEchartsInstance();
-            if (instance && !instance.isDisposed()) {
-              instance.resize();
-            }
-          } catch (error) {
-            // Ignore errors during resize
-          }
-        }
-      }, 100);
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => {
-      if (resizeTimer) {
-        clearTimeout(resizeTimer);
-      }
-      window.removeEventListener("resize", handleResize);
-    };
-  }, []);
 
   const generatePrediction = async () => {
     if (klineData.length < 20) {
@@ -127,7 +259,20 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
 
   const chartOption = useMemo(() => {
     if (klineData.length === 0 || predictions.length === 0) {
-      return {};
+      return {
+        graphic: {
+          elements: [{
+            type: "text",
+            left: "center",
+            top: "middle",
+            style: {
+              text: "暂无数据",
+              fontSize: 14,
+              fill: "#999",
+            },
+          }],
+        },
+      };
     }
 
     const dates = klineData.map((d) => {
@@ -152,13 +297,24 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
     const lowerData = [lastPrice, ...lowerBounds];
     const predictionStartIdx = dates.length - 1;
 
+    // Calculate trend and signals with validation
+    const lastPred = predictions[predictions.length - 1]?.predicted_price || lastPrice;
+    const trendDirection = lastPred > lastPrice * 1.001 ? "up" : lastPred < lastPrice * 0.999 ? "down" : "flat";
+    const trendPercent = lastPrice > 0 ? ((lastPred - lastPrice) / lastPrice * 100) : 0;
+
+    // Calculate average confidence with validation
+    const validPredictions = predictions.filter(p => p.confidence > 0);
+    const avgConfidence = validPredictions.length > 0
+      ? validPredictions.reduce((sum, p) => sum + p.confidence, 0) / validPredictions.length
+      : 50.0;
+
     return {
       backgroundColor: "transparent",
       grid: {
-        left: "8%",
-        right: "3%",
-        top: "18%",
-        bottom: "10%",
+        left: "10%",
+        right: "6%",
+        top: "15%",
+        bottom: "22%",
       },
       xAxis: {
         type: "category",
@@ -168,6 +324,9 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
         axisLabel: {
           color: "#858585",
           fontSize: 9,
+          interval: allDates.length > 30 ? Math.max(1, Math.floor(allDates.length / 12)) : 0,
+          rotate: allDates.length > 30 ? 45 : 0,
+          margin: 8,
         },
         splitLine: {
           show: false,
@@ -179,6 +338,8 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
         axisLabel: {
           color: "#858585",
           fontSize: 9,
+          formatter: (value: number) => value.toFixed(2),
+          margin: 8,
         },
         splitLine: {
           show: true,
@@ -188,21 +349,29 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
             width: 1,
           },
         },
+        splitNumber: 6,
       },
       graphic: [
+        // Compact info panel - top left, single line
         {
-          type: "text",
-          left: "center",
-          top: "1%",
-          style: {
-            text: `${t("analysis.method")}: ${getMethodLabel(method)} | ${t("analysis.period")}: ${period}${t("stock.periods.1d")}`,
-            fontSize: 10,
-            fontWeight: "bold",
-            fill: "#858585",
-          },
+          type: "group",
+          left: "2%",
+          top: "2%",
+          children: [
+            {
+              type: "text",
+              style: {
+                text: `${t("analysis.method")}: ${getMethodLabel(method)} | ${t("analysis.period")}: ${period}${t("stock.periods.1d")} | 趋势: ${trendDirection === "up" ? "📈上涨" : trendDirection === "down" ? "📉下跌" : "➡️平盘"} ${Math.abs(trendPercent).toFixed(2)}% | 置信度: ${avgConfidence.toFixed(1)}%`,
+                fontSize: 10,
+                fill: "#666",
+                fontWeight: "normal",
+              },
+            },
+          ],
         },
       ],
       series: [
+        // Historical price line
         {
           name: t("stock.price"),
           type: "line",
@@ -211,88 +380,8 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
           lineStyle: {
             color: "#007acc",
             width: 2,
-          },
-          markPoint: {
-            data: [
-              {
-                name: t("analysis.currentPrice"),
-                coord: [predictionStartIdx, lastPrice],
-                symbol: "circle",
-                symbolSize: 8,
-                itemStyle: { color: "#007acc" },
-                label: {
-                  show: true,
-                  position: "top",
-                  formatter: t("analysis.currentPrice") + "\n" + lastPrice.toFixed(2),
-                  fontSize: 9,
-                  color: "#007acc",
-                },
-              },
-            ],
-          },
-          markLine: {
-            data: [
-              {
-                xAxis: predictionStartIdx,
-                lineStyle: {
-                  color: "#ff9800",
-                  type: "dashed",
-                  width: 2,
-                },
-                label: {
-                  show: true,
-                  position: "insideEndTop",
-                  formatter: t("analysis.predictionStart"),
-                  fontSize: 9,
-                  color: "#ff9800",
-                },
-              },
-            ],
-          },
-        },
-        {
-          name: t("analysis.prediction"),
-          type: "line",
-          data: [...new Array(dates.length).fill(null), ...predData],
-          smooth: false,
-          symbol: "circle",
-          symbolSize: 5,
-          lineStyle: {
-            color: "#ff9800",
-            width: 2.5,
-            type: "dashed",
-          },
-          itemStyle: {
-            color: "#ff9800",
-          },
-          markPoint: {
-            data: predictions.map((pred, idx) => ({
-              name: t("analysis.predictedPrice"),
-              coord: [dates.length + idx, pred.predicted_price],
-              symbol: "circle",
-              symbolSize: 6,
-              itemStyle: { color: "#ff9800" },
-              label: {
-                show: idx === 0 || idx === predictions.length - 1,
-                position: "top",
-                formatter: `${pred.date}\n${pred.predicted_price.toFixed(2)}`,
-                fontSize: 8,
-                color: "#ff9800",
-              },
-            })),
-          },
-        },
-        {
-          name: t("analysis.upperBound"),
-          type: "line",
-          data: [...new Array(dates.length).fill(null), ...upperData],
-          smooth: false,
-          symbol: "none",
-          lineStyle: {
-            color: "#ff9800",
-            width: 1,
-            type: "dotted",
-            opacity: 0.6,
+            shadowColor: "rgba(0, 122, 204, 0.3)",
+            shadowBlur: 4,
           },
           areaStyle: {
             color: {
@@ -302,96 +391,193 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
               x2: 0,
               y2: 1,
               colorStops: [
-                { offset: 0, color: "rgba(255, 152, 0, 0.1)" },
-                { offset: 1, color: "rgba(255, 152, 0, 0.05)" },
+                { offset: 0, color: "rgba(0, 122, 204, 0.1)" },
+                { offset: 1, color: "rgba(0, 122, 204, 0.02)" },
               ],
             },
           },
+          markPoint: {
+            data: [
+              {
+                name: t("analysis.currentPrice"),
+                coord: [predictionStartIdx, lastPrice],
+                symbol: "circle",
+                symbolSize: 10,
+                itemStyle: {
+                  color: "#007acc",
+                  borderColor: "#fff",
+                  borderWidth: 2,
+                  shadowColor: "rgba(0, 122, 204, 0.5)",
+                  shadowBlur: 6,
+                },
+                label: {
+                  show: true,
+                  position: "top",
+                  formatter: `${t("analysis.currentPrice")}\n¥${lastPrice.toFixed(2)}`,
+                  fontSize: 11,
+                  color: "#007acc",
+                  fontWeight: "bold",
+                  textBorderColor: "#fff",
+                  textBorderWidth: 2,
+                  distance: 8,
+                },
+              },
+            ],
+          },
         },
+        // Prediction line with improved styling
         {
-          name: t("analysis.lowerBound"),
+          name: t("analysis.prediction"),
           type: "line",
-          data: [...new Array(dates.length).fill(null), ...lowerData],
-          smooth: false,
+          data: [...new Array(dates.length).fill(null), ...predData],
+          smooth: true,
+          symbol: "circle",
+          symbolSize: 6,
+          lineStyle: {
+            color: trendDirection === "up" ? "#4caf50" : trendDirection === "down" ? "#f44336" : "#ff9800",
+            width: 3,
+            type: "solid",
+            shadowColor: trendDirection === "up" ? "rgba(76, 175, 80, 0.5)" :
+                        trendDirection === "down" ? "rgba(244, 67, 54, 0.5)" : "rgba(255, 152, 0, 0.5)",
+            shadowBlur: 6,
+          },
+          itemStyle: {
+            color: trendDirection === "up" ? "#4caf50" : trendDirection === "down" ? "#f44336" : "#ff9800",
+            borderColor: "#fff",
+            borderWidth: 2,
+          },
+          markPoint: {
+            data: predictions.map((pred, idx) => {
+              const signalIcon = pred.signal === "buy" ? "🟢" : pred.signal === "sell" ? "🔴" : "🟡";
+              return {
+                name: t("analysis.predictedPrice"),
+                coord: [dates.length + idx, pred.predicted_price],
+                symbol: "circle",
+                symbolSize: 8,
+                itemStyle: {
+                  color: pred.signal === "buy" ? "#4caf50" : pred.signal === "sell" ? "#f44336" : "#ff9800",
+                  borderColor: "#fff",
+                  borderWidth: 2,
+                  shadowBlur: 4,
+                },
+                label: {
+                  show: idx === 0 || idx === predictions.length - 1,
+                  position: idx === 0 ? "top" : "bottom",
+                  formatter: `${signalIcon} ${pred.date}\n¥${pred.predicted_price.toFixed(2)}`,
+                  fontSize: 9,
+                  color: pred.signal === "buy" ? "#4caf50" : pred.signal === "sell" ? "#f44336" : "#ff9800",
+                  fontWeight: "bold",
+                  distance: 8,
+                  textBorderColor: "#fff",
+                  textBorderWidth: 2,
+                },
+              };
+            }),
+          },
+        },
+        // Upper bound line (subtle)
+        {
+          name: t("analysis.upperBound"),
+          type: "line",
+          data: [...new Array(dates.length).fill(null), ...upperData],
+          smooth: true,
           symbol: "none",
           lineStyle: {
-            color: "#ff9800",
+            color: trendDirection === "up" ? "#81c784" : trendDirection === "down" ? "#ef5350" : "#ffb74d",
             width: 1,
             type: "dotted",
             opacity: 0.6,
           },
         },
+        // Lower bound line (subtle)
         {
-          name: t("analysis.confidenceInterval"),
+          name: t("analysis.lowerBound"),
           type: "line",
-          data: [...new Array(dates.length).fill(null), ...predData],
-          markArea: {
-            itemStyle: {
-              color: "rgba(255, 152, 0, 0.15)",
-            },
-            data: [
-              [
-                { xAxis: predictionStartIdx, yAxis: lowerData[0] },
-                { xAxis: allDates.length - 1, yAxis: upperData[upperData.length - 1] },
-              ],
-            ],
-            label: {
-              show: true,
-              position: "inside",
-              formatter: t("analysis.confidenceInterval"),
-              fontSize: 9,
-              color: "#ff9800",
-            },
-          },
-          lineStyle: { opacity: 0 },
+          data: [...new Array(dates.length).fill(null), ...lowerData],
+          smooth: true,
           symbol: "none",
+          lineStyle: {
+            color: trendDirection === "up" ? "#81c784" : trendDirection === "down" ? "#ef5350" : "#ffb74d",
+            width: 1,
+            type: "dotted",
+            opacity: 0.6,
+          },
         },
       ],
       tooltip: {
         trigger: "axis",
-        backgroundColor: "rgba(37, 37, 38, 0.95)",
-        borderColor: "#555",
+        backgroundColor: "rgba(255, 255, 255, 0.98)",
+        borderColor: "#ddd",
         borderWidth: 1,
+        borderRadius: 8,
         textStyle: {
-          color: "#ccc",
-          fontSize: 10,
+          color: "#333",
+          fontSize: 12,
         },
         formatter: (params: any) => {
           if (!params || params.length === 0) return "";
           const param = params[0];
           const idx = param.dataIndex;
-          let result = `<div style="margin-bottom: 4px;"><strong>${param.axisValue}</strong></div>`;
-          
+
+          let result = `<div style="margin-bottom: 8px;"><strong style="font-size: 14px; color: #007acc;">${param.axisValue}</strong></div>`;
+
           params.forEach((p: any) => {
             if (p.value !== null && p.value !== undefined) {
-              const value = typeof p.value === "number" ? p.value.toFixed(2) : p.value;
-              result += `<div style="margin: 2px 0;">
-                <span style="display:inline-block;width:8px;height:8px;background:${p.color};border-radius:50%;margin-right:4px;"></span>
-                ${p.seriesName}: <strong>${value}</strong>
+              const value = typeof p.value === "number" ? `¥${p.value.toFixed(2)}` : p.value;
+              const icon = p.seriesName === t("stock.price") ? "📈" :
+                          p.seriesName === t("analysis.prediction") ? "🔮" :
+                          p.seriesName === t("analysis.upperBound") ? "⬆️" :
+                          p.seriesName === t("analysis.lowerBound") ? "⬇️" : "📊";
+
+              result += `<div style="margin: 4px 0; padding: 2px 0;">
+                <span style="display:inline-block;width:10px;height:10px;background:${p.color};border-radius:50%;margin-right:6px;border: 1px solid #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.1);"></span>
+                ${icon} ${p.seriesName}: <strong style="color: ${p.color}">${value}</strong>
               </div>`;
             }
           });
-          
+
           if (idx >= dates.length && predictions[idx - dates.length]) {
             const pred = predictions[idx - dates.length];
-            result += `<div style="margin-top: 6px;padding-top: 6px;border-top: 1px solid #555;">
-              <div>${t("analysis.confidence")}: ${pred.confidence}%</div>
-              <div>${t("analysis.priceRange")}: ${pred.lower_bound.toFixed(2)} - ${pred.upper_bound.toFixed(2)}</div>
+            const signalEmoji = pred.signal === "buy" ? "🟢" : pred.signal === "sell" ? "🔴" : "🟡";
+            const signalText = pred.signal === "buy" ? t("analysis.bullish") : pred.signal === "sell" ? t("analysis.bearish") : t("analysis.neutral");
+
+            result += `<div style="margin-top: 8px;padding-top: 8px;border-top: 2px solid #eee;">
+              <div style="margin: 4px 0;"><strong>${signalEmoji} ${t("analysis.signal")}: ${signalText}</strong></div>
+              <div style="margin: 4px 0;">${t("analysis.confidence")}: <strong style="color: ${pred.confidence > 70 ? '#4caf50' : pred.confidence > 50 ? '#ff9800' : '#f44336'}">${pred.confidence.toFixed(1)}%</strong></div>
+              <div style="margin: 4px 0;">${t("analysis.priceRange")}: ¥${pred.lower_bound.toFixed(2)} - ¥${pred.upper_bound.toFixed(2)}</div>
+              <div style="margin: 4px 0; font-size: 11px; color: #666;">${t("analysis.method")}: ${pred.method}</div>
             </div>`;
           }
-          
+
           return result;
         },
+      axisPointer: {
+        type: "line",
+        lineStyle: {
+          color: "#666",
+          width: 1,
+          type: "solid",
+        },
+      },
       },
       legend: {
-        data: [t("stock.price"), t("analysis.prediction"), t("analysis.upperBound"), t("analysis.lowerBound")],
+        data: [
+          t("stock.price"),
+          t("analysis.prediction"),
+          t("analysis.upperBound"),
+          t("analysis.lowerBound")
+        ],
         textStyle: {
-          color: "#858585",
-          fontSize: 8,
+          color: "#666",
+          fontSize: 10,
+          fontWeight: "normal",
         },
-        itemWidth: 8,
+        itemWidth: 14,
         itemHeight: 8,
-        top: 0,
+        itemGap: 20,
+        top: "4%",
+        left: "center",
+        orient: "horizontal",
       },
     };
   }, [klineData, predictions, method, period, t]);
@@ -434,6 +620,8 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
                       <option value="ma">{t("analysis.methodMA")}</option>
                       <option value="wma">{t("analysis.methodWMA")}</option>
                       <option value="pattern">{t("analysis.methodPattern")}</option>
+                      <option value="fibonacci">{t("analysis.methodFibonacci")}</option>
+                      <option value="fibonacci_extension">{t("analysis.methodFibonacciExtension")}</option>
                     </optgroup>
                     <optgroup label={t("analysis.groupStatistical")}>
                       <option value="linear">{t("analysis.methodLinear")}</option>
@@ -531,21 +719,35 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
             ) : Object.keys(chartOption).length === 0 ? (
               <div className="no-data">{t("analysis.noData")}</div>
             ) : (
-              <>
-                <button
-                  className="chart-zoom-button-overlay"
-                  onClick={() => setIsChartDialogOpen(true)}
-                  title={t("chart.zoom")}
-                >
-                  ZO
-                </button>
-                <ReactECharts
-                  ref={chartRef}
-                  option={chartOption}
-                  style={{ height: "100%", width: "100%" }}
-                  opts={{ renderer: "canvas" }}
-                />
-              </>
+              <ChartErrorBoundary
+                onError={(error) => {
+                  console.error("Prediction chart error:", error);
+                  // Force chart reset by incrementing reset key
+                  setChartResetKey(prev => prev + 1);
+                  // Clear predictions temporarily
+                  setPredictions([]);
+                  setTimeout(() => {
+                    if (klineData.length > 0) {
+                      generatePrediction();
+                    }
+                  }, 100);
+                }}
+              >
+                <div style={{ position: "relative", height: "100%", width: "100%" }}>
+                  <button
+                    className="chart-zoom-button-overlay"
+                    onClick={() => setIsChartDialogOpen(true)}
+                    title={t("chart.zoom")}
+                  >
+                    ZO
+                  </button>
+                  <CustomECharts
+                    key={chartResetKey}
+                    option={chartOption}
+                    style={{ height: "100%", width: "100%" }}
+                  />
+                </div>
+              </ChartErrorBoundary>
             )}
           </div>
         </div>

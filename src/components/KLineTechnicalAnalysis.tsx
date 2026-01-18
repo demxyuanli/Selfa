@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
 import ChartDialog from "./ChartDialog";
+import { calculateGannSquareOf9, calculateReferencePrice, GannLevel } from "../utils/gannSquareOf9";
 import "./StockAnalysis.css";
 import "./KLineTechnicalAnalysis.css";
 
@@ -20,6 +21,7 @@ interface KLineTechnicalAnalysisProps {
 
 type IndicatorType = "sma" | "ema" | "bollinger" | "vwap" | "none";
 type OscillatorType = "rsi" | "macd" | "kdj" | "momentum" | "cci" | "adx" | "dmi" | "stochrsi" | "bbpercent" | "none";
+type GannReferenceMode = "current" | "swingLow" | "swingHigh" | "average" | "custom";
 
 
 const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineData }) => {
@@ -43,6 +45,19 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
     stochRsiDPeriod: 3,
     bbPercentPeriod: 20,
   });
+  
+  // Gann Square of 9 parameters
+  const [showGann, setShowGann] = useState(false);
+  const [gannConfig, setGannConfig] = useState({
+    referenceMode: "current" as GannReferenceMode,
+    customReferencePrice: 0,
+    angles: [45, 90, 135, 180, 225, 270, 315, 360] as number[],
+    cycles: 1,
+    showSupport: true,
+    showResistance: true,
+    showMajorAngles: true, // Only show 90, 180, 270, 360
+  });
+  
   const [showSignals, setShowSignals] = useState(true);
   const [isChartDialogOpen, setIsChartDialogOpen] = useState(false);
   const [selectedDateIndex, setSelectedDateIndex] = useState<number | null>(null);
@@ -499,6 +514,97 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
     } else if (overlayIndicator === "vwap") {
       const vwap = calculateVWAP(klineData);
       series.push({ name: t("analysis.overlayVWAP"), type: "line", data: vwap, symbol: "none", lineStyle: { color: "#00bcd4", width: 1.5 } });
+    }
+
+    // Gann Square of 9 (independent tool, can be displayed with any overlay indicator)
+    if (showGann) {
+      // Calculate Gann Square of 9 levels
+      const referencePrice = calculateReferencePrice(
+        gannConfig.referenceMode,
+        klineData,
+        gannConfig.customReferencePrice || undefined
+      );
+      
+      const anglesToUse = gannConfig.showMajorAngles 
+        ? [90, 180, 270, 360]
+        : gannConfig.angles;
+      
+      const gannResult = calculateGannSquareOf9({
+        referencePrice,
+        angles: anglesToUse,
+        cycles: gannConfig.cycles,
+      });
+
+      // Filter levels based on visibility settings
+      const visibleLevels = gannResult.levels.filter(level => {
+        if (level.type === "support" && !gannConfig.showSupport) return false;
+        if (level.type === "resistance" && !gannConfig.showResistance) return false;
+        return true;
+      });
+
+      // Get price range for filtering levels
+      const priceMin = Math.min(...lows);
+      const priceMax = Math.max(...highs);
+      const priceRange = priceMax - priceMin;
+      const extendedMin = priceMin - priceRange * 0.1;
+      const extendedMax = priceMax + priceRange * 0.1;
+
+      // Filter levels within visible range
+      const filteredLevels = visibleLevels.filter(
+        level => level.price >= extendedMin && level.price <= extendedMax
+      );
+
+      // Group levels by angle for better visualization
+      const levelsByAngle = new Map<number, GannLevel[]>();
+      filteredLevels.forEach(level => {
+        if (!levelsByAngle.has(level.angle)) {
+          levelsByAngle.set(level.angle, []);
+        }
+        levelsByAngle.get(level.angle)!.push(level);
+      });
+
+      // Add Gann levels as horizontal lines
+      const gannMarkLines: any[] = [];
+      filteredLevels.forEach(level => {
+        const isMajorAngle = [90, 180, 270, 360].includes(level.angle);
+        const lineColor = level.type === "support" 
+          ? (isMajorAngle ? "#4caf50" : "rgba(76, 175, 80, 0.5)")
+          : (isMajorAngle ? "#f44336" : "rgba(244, 67, 54, 0.5)");
+        const lineWidth = isMajorAngle ? 1.5 : 1;
+        const lineType = isMajorAngle ? "solid" : "dashed";
+
+        gannMarkLines.push({
+          yAxis: level.price,
+          label: {
+            show: isMajorAngle,
+            position: "insideEndRight",
+            formatter: `${level.type === "support" ? t("analysis.gannSupport") : t("analysis.gannResistance")} ${level.angle}°: ${level.price.toFixed(2)}`,
+            fontSize: 9,
+            color: lineColor,
+          },
+          lineStyle: {
+            color: lineColor,
+            width: lineWidth,
+            type: lineType,
+          },
+        });
+      });
+
+      // Add Gann levels series with markLine
+      if (gannMarkLines.length > 0) {
+        series.push({
+          name: t("analysis.gannSquareOf9"),
+          type: "line",
+          data: new Array(dates.length).fill(null),
+          symbol: "none",
+          lineStyle: { opacity: 0 },
+          markLine: {
+            silent: true,
+            symbol: "none",
+            data: gannMarkLines,
+          },
+        });
+      }
     }
 
     // Trading signals
@@ -1183,7 +1289,7 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
         { show: true, type: "slider", xAxisIndex: [0, 1, oscillatorType !== "none" ? 2 : 1], top: "95%", height: 15 },
       ],
     };
-  }, [klineData, overlayIndicator, oscillatorType, showSignals, indicatorParams]);
+  }, [klineData, overlayIndicator, oscillatorType, showSignals, indicatorParams, showGann, gannConfig, t]);
 
   useEffect(() => {
     let resizeTimer: number | null = null;
@@ -1271,6 +1377,19 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
                 </label>
               </div>
             </div>
+            <div className="param-section">
+              <label className="param-section-label">{t("analysis.gannSquareOf9")}</label>
+              <div className="param-inputs">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={showGann}
+                    onChange={(e) => setShowGann(e.target.checked)}
+                  />
+                  <span>{t("analysis.showGann")}</span>
+                </label>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1292,6 +1411,92 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
                   </div>
                 </div>
               )}
+              
+              {/* Gann Square of 9 (independent tool) */}
+              {showGann && (
+                <>
+                  <div className="summary-card">
+                    <div className="summary-title">{t("analysis.gannSquareOf9")}</div>
+                    <div className="summary-desc">{t("analysis.overlayDescGann")}</div>
+                  </div>
+                  
+                  {/* Gann Square of 9 Parameters */}
+                  <div className="param-section">
+                    <label className="param-section-label">{t("analysis.gannParams")}</label>
+                      <div className="param-inputs">
+                        <div className="param-row">
+                          <label>{t("analysis.gannReferenceMode")}</label>
+                          <select
+                            value={gannConfig.referenceMode}
+                            onChange={(e) => setGannConfig({...gannConfig, referenceMode: e.target.value as GannReferenceMode})}
+                            className="param-select"
+                          >
+                            <option value="current">{t("analysis.gannReferenceCurrent")}</option>
+                            <option value="swingLow">{t("analysis.gannReferenceSwingLow")}</option>
+                            <option value="swingHigh">{t("analysis.gannReferenceSwingHigh")}</option>
+                            <option value="average">{t("analysis.gannReferenceAverage")}</option>
+                            <option value="custom">{t("analysis.gannReferenceCustom")}</option>
+                          </select>
+                        </div>
+                        {gannConfig.referenceMode === "custom" && (
+                          <div className="param-row">
+                            <label>{t("analysis.gannCustomPrice")}</label>
+                            <input
+                              type="number"
+                              value={gannConfig.customReferencePrice}
+                              onChange={(e) => setGannConfig({...gannConfig, customReferencePrice: parseFloat(e.target.value) || 0})}
+                              step="0.01"
+                              min="0"
+                              className="param-input"
+                            />
+                          </div>
+                        )}
+                        <div className="param-row">
+                          <label>{t("analysis.gannCycles")}</label>
+                          <input
+                            type="number"
+                            value={gannConfig.cycles}
+                            onChange={(e) => setGannConfig({...gannConfig, cycles: parseInt(e.target.value) || 1})}
+                            min="1"
+                            max="5"
+                            className="param-input"
+                          />
+                        </div>
+                        <div className="param-row">
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={gannConfig.showMajorAngles}
+                              onChange={(e) => setGannConfig({...gannConfig, showMajorAngles: e.target.checked})}
+                            />
+                            <span>{t("analysis.gannShowMajorAngles")}</span>
+                          </label>
+                        </div>
+                        <div className="param-row">
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={gannConfig.showSupport}
+                              onChange={(e) => setGannConfig({...gannConfig, showSupport: e.target.checked})}
+                            />
+                            <span>{t("analysis.gannShowSupport")}</span>
+                          </label>
+                        </div>
+                        <div className="param-row">
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={gannConfig.showResistance}
+                              onChange={(e) => setGannConfig({...gannConfig, showResistance: e.target.checked})}
+                            />
+                            <span>{t("analysis.gannShowResistance")}</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+              )}
+              
               {oscillatorType !== "none" && (
                 <>
                   {/* Dynamic Parameter Controls */}

@@ -1,0 +1,310 @@
+.price-alert-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.price-alert-dialog {
+  background: var(--background-color, #1e1e1e);
+  border: 1px solid var(--border-color, #3e3e3e);
+  border-radius: 8px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.price-alert-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #3e3e3e);
+}
+
+.price-alert-dialog-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-color, #ffffff);
+}
+
+.price-alert-dialog-close {
+  background: none;
+  border: none;
+  color: var(--text-color, #ffffff);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.price-alert-dialog-close:hover {
+  background: var(--hover-background, #3e3e3e);
+}
+
+.price-alert-dialog-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.price-alert-form {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border-color, #3e3e3e);
+}
+
+.price-alert-form-row {
+  margin-bottom: 16px;
+}
+
+.price-alert-form-row label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-color, #ffffff);
+  font-size: 14px;
+}
+
+.price-alert-form-row input[type="text"],
+.price-alert-form-row input[type="number"],
+.price-alert-form-row select {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--input-background, #2d2d2d);
+  border: 1px solid var(--border-color, #3e3e3e);
+  border-radius: 4px;
+  color: var(--text-color, #ffffff);
+  font-size: 14px;
+}
+
+.price-alert-symbol-input-container {
+  position: relative;
+  width: 100%;
+}
+
+.price-alert-form-row input[type="text"]:disabled,
+.price-alert-form-row input[type="number"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.price-alert-form-row input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.price-alert-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.price-alert-button {
+  padding: 8px 16px;
+  border: 1px solid var(--border-color, #3e3e3e);
+  border-radius: 4px;
+  background: var(--button-background, #2d2d2d);
+  color: var(--text-color, #ffffff);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.price-alert-button:hover:not(:disabled) {
+  background: var(--hover-background, #3e3e3e);
+}
+
+.price-alert-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.price-alert-button-primary {
+  background: var(--primary-color, #007acc);
+  border-color: var(--primary-color, #007acc);
+}
+
+.price-alert-button-primary:hover:not(:disabled) {
+  background: var(--primary-hover, #0098ff);
+}
+
+.price-alert-list h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  color: var(--text-color, #ffffff);
+}
+
+.price-alert-loading,
+.price-alert-empty {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-secondary, #999999);
+}
+
+.price-alert-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.price-alert-table thead {
+  background: var(--table-header-background, #2d2d2d);
+}
+
+.price-alert-table th {
+  padding: 12px;
+  text-align: left;
+  color: var(--text-color, #ffffff);
+  font-weight: 600;
+  border-bottom: 2px solid var(--border-color, #3e3e3e);
+}
+
+.price-alert-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color, #3e3e3e);
+  color: var(--text-color, #ffffff);
+}
+
+.price-alert-table tbody tr:hover {
+  background: var(--hover-background, #2d2d2d);
+}
+
+.price-alert-triggered {
+  background: rgba(255, 193, 7, 0.1);
+}
+
+.price-alert-status-active {
+  color: #4caf50;
+}
+
+.price-alert-status-disabled {
+  color: var(--text-secondary, #999999);
+}
+
+.price-alert-status-triggered {
+  color: #ff9800;
+  font-weight: 600;
+}
+
+.price-alert-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.price-alert-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.price-alert-action-btn:hover {
+  background: var(--hover-background, #3e3e3e);
+}
+
+.price-alert-action-delete:hover {
+  background: rgba(244, 67, 54, 0.2);
+}
+
+.price-alert-dialog-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-color, #3e3e3e);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.price-alert-search-spinner {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-color, #3e3e3e);
+  border-top: 2px solid var(--primary-color, #007acc);
+  border-radius: 50%;
+  animation: price-alert-spin 1s linear infinite;
+}
+
+@keyframes price-alert-spin {
+  0% { transform: translateY(-50%) rotate(0deg); }
+  100% { transform: translateY(-50%) rotate(360deg); }
+}
+
+.price-alert-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--background-color, #1e1e1e);
+  border: 1px solid var(--border-color, #3e3e3e);
+  border-radius: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 1001;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.price-alert-dropdown-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-secondary, #999999);
+  font-size: 14px;
+}
+
+.price-alert-dropdown-item {
+  padding: 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-color, #3e3e3e);
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.price-alert-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.price-alert-dropdown-item:hover {
+  background: var(--hover-background, #2d2d2d);
+}
+
+.price-alert-dropdown-symbol {
+  font-weight: 600;
+  color: var(--text-color, #ffffff);
+  font-size: 14px;
+  min-width: 80px;
+}
+
+.price-alert-dropdown-name {
+  flex: 1;
+  color: var(--text-color, #ffffff);
+  font-size: 14px;
+}
+
+.price-alert-dropdown-exchange {
+  color: var(--text-secondary, #999999);
+  font-size: 12px;
+  padding: 2px 6px;
+  background: var(--input-background, #2d2d2d);
+  border-radius: 3px;
+}

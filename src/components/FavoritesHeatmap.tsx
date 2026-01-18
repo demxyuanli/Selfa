@@ -92,6 +92,15 @@ const FavoritesHeatmap: React.FC = () => {
       return {};
     }
 
+    // Debug: Log market cap data
+    if (heatmapType === "marketCap") {
+      console.log("Market Cap Debug:", stocksWithQuotes.map(s => ({
+        symbol: s.stock.symbol,
+        market_cap: s.quote?.market_cap,
+        hasMarketCap: !!s.quote?.market_cap && s.quote.market_cap > 0
+      })));
+    }
+
     // Prepare treemap data based on selected type
     let treemapData: Array<any>;
     let colorValues: number[];
@@ -103,29 +112,58 @@ const FavoritesHeatmap: React.FC = () => {
     switch (heatmapType) {
       case "marketCap": {
         // Size: market cap, Color: market cap rank (higher = lighter red)
-        const sorted = [...stocksWithQuotes].sort((a, b) => {
-          const capA = a.quote!.market_cap || 0;
-          const capB = b.quote!.market_cap || 0;
+        // Filter out stocks without valid market cap data
+        const validStocks = stocksWithQuotes.filter(s => {
+          const marketCap = s.quote!.market_cap;
+          // Check if market cap exists and is a valid positive number
+          return marketCap !== null && marketCap !== undefined && Number(marketCap) > 0;
+        });
+
+        // Debug logging
+        console.log("Market Cap Analysis:", {
+          totalStocks: stocksWithQuotes.length,
+          validStocks: validStocks.length,
+          sampleData: stocksWithQuotes.slice(0, 3).map(s => ({
+            symbol: s.stock.symbol,
+            market_cap: s.quote!.market_cap,
+            type: typeof s.quote!.market_cap
+          }))
+        });
+
+        if (validStocks.length === 0) {
+          // No valid market cap data - return empty option to show "no data" message
+          console.warn("No valid market cap data found for any stocks");
+          return {};
+        }
+
+        const sorted = [...validStocks].sort((a, b) => {
+          const capA = Number(a.quote!.market_cap!) || 0;
+          const capB = Number(b.quote!.market_cap!) || 0;
           return capB - capA;
         });
         treemapData = sorted.map((stock, index) => {
-          const marketCap = stock.quote!.market_cap || stock.quote!.price * 1000000;
+          const marketCap = Number(stock.quote!.market_cap!) || 0;
+          // Ensure value is a valid positive number for treemap
+          const treemapValue = marketCap > 0 ? marketCap : 1;
           return {
             name: stock.stock.symbol,
-            value: marketCap,
-            rank: stocksWithQuotes.length - index,
+            value: treemapValue,
+            rank: validStocks.length - index,
             changePercent: stock.quote!.change_percent ?? 0,
             price: stock.quote!.price ?? 0,
             change: stock.quote!.change ?? 0,
             volume: stock.quote!.volume ?? 0,
             turnover: stock.quote!.turnover ?? 0,
-            marketCap,
+            marketCap: marketCap,
             fullName: stock.stock.name,
           };
         });
+        
+        // Debug: Log treemap data
+        console.log("Treemap Data Sample:", treemapData.slice(0, 3));
         colorValues = treemapData.map(d => d.rank);
         minValue = 1;
-        maxValue = stocksWithQuotes.length;
+        maxValue = validStocks.length;
         colorValueKey = "rank";
         labelFormatter = (params: any) => {
           if (!params) return "";
@@ -146,24 +184,49 @@ const FavoritesHeatmap: React.FC = () => {
       }
 
       case "changePercent": {
-        // Size: change value (涨跌额), Color: change percent (red = positive, green = negative)
-        // Sort by change value (涨跌额) for display
+        // Size: absolute change percent with enhanced scaling (涨跌幅绝对值), Color: change percent (red = positive, green = negative)
+        // Sort by absolute change percent for display
         const sorted = [...stocksWithQuotes].sort((a, b) => {
-          const changeA = Math.abs(a.quote!.change ?? 0);
-          const changeB = Math.abs(b.quote!.change ?? 0);
-          return changeB - changeA; // Sort by absolute change value descending
+          const changeA = Math.abs(a.quote!.change_percent ?? 0);
+          const changeB = Math.abs(b.quote!.change_percent ?? 0);
+          return changeB - changeA; // Sort by absolute change percent descending
         });
         colorValues = sorted.map((s) => s.quote!.change_percent);
         minValue = Math.min(...colorValues);
         maxValue = Math.max(...colorValues);
         colorValueKey = "changePercent";
+
+        // Calculate size values with enhanced scaling
+        const absChanges = sorted.map(s => Math.abs(s.quote!.change_percent ?? 0));
+        const maxAbsChange = Math.max(...absChanges);
+
         treemapData = sorted.map((stock) => {
-          const changeValue = Math.abs(stock.quote!.change ?? 0);
+          const changePct = stock.quote!.change_percent ?? 0;
+          const absChange = Math.abs(changePct);
+
+          // Enhanced size scaling: use a combination of linear and exponential scaling
+          // to make small changes more visible while maintaining large change dominance
+          let sizeValue: number;
+          if (maxAbsChange === 0) {
+            sizeValue = 1; // All zero changes
+          } else if (absChange === 0) {
+            sizeValue = 0.5; // Zero change gets minimum size
+          } else {
+            // Use square root scaling for better visual distribution
+            // This makes small changes more visible while preserving large change dominance
+            const normalized = absChange / maxAbsChange;
+            sizeValue = Math.sqrt(normalized) * maxAbsChange + 0.1; // Add minimum size
+          }
+
+          // Ensure minimum size for visibility
+          sizeValue = Math.max(sizeValue, 0.1);
+
           const marketCap = stock.quote!.market_cap || stock.quote!.price * 1000000;
           return {
             name: stock.stock.symbol,
-            value: changeValue || 0.01, // Use change value for size, minimum 0.01 to ensure visibility
-            changePercent: stock.quote!.change_percent ?? 0,
+            value: sizeValue,
+            changePercent: changePct,
+            absChange: absChange,
             price: stock.quote!.price ?? 0,
             change: stock.quote!.change ?? 0,
             volume: stock.quote!.volume ?? 0,
@@ -465,9 +528,10 @@ const FavoritesHeatmap: React.FC = () => {
                     if (isChangePercent && range[0] < 0 && range[1] > 0) {
                       // Convert colorValue to number for proper comparison
                       const numericValue = Number(colorValue) || 0;
-                      // Split mapping: negative -> green, positive -> red
+                      // Split mapping: negative -> green, positive -> red (红涨绿跌)
+                      // Fix: Correct color mapping - Negative (下跌) should be green, Positive (上涨) should be red
                       if (numericValue < 0) {
-                        // Negative values: map to green palette (first half)
+                        // Negative values (下跌): use GREEN palette (first half) for correct display
                         const negativeRange = Math.abs(range[0]);
                         if (negativeRange === 0) return palette[0] || "#9ca3af";
                         const normalizedValue = Math.abs(numericValue) / negativeRange;
@@ -475,8 +539,8 @@ const FavoritesHeatmap: React.FC = () => {
                         if (greenPalette.length === 0) return "#10b981";
                         const colorIndex = Math.max(0, Math.min(Math.floor(normalizedValue * (greenPalette.length - 1)), greenPalette.length - 1));
                         return greenPalette[colorIndex] || greenPalette[0] || "#10b981";
-                      } else {
-                        // Positive values: map to red palette (second half)
+                      } else if (numericValue > 0) {
+                        // Positive values (上涨): use RED palette (second half) for correct display
                         const positiveRange = range[1];
                         if (positiveRange === 0) return palette[palette.length - 1] || "#9ca3af";
                         const normalizedValue = numericValue / positiveRange;
@@ -484,6 +548,9 @@ const FavoritesHeatmap: React.FC = () => {
                         if (redPalette.length === 0) return "#fca5a5";
                         const colorIndex = Math.max(0, Math.min(Math.floor(normalizedValue * (redPalette.length - 1)), redPalette.length - 1));
                         return redPalette[colorIndex] || redPalette[0] || "#fca5a5";
+                      } else {
+                        // Zero change: use yellow
+                        return "#eab308";
                       }
                     }
                     
@@ -523,9 +590,10 @@ const FavoritesHeatmap: React.FC = () => {
                     if (isChangePercent && range[0] < 0 && range[1] > 0) {
                       // Convert colorValue to number for proper comparison
                       const numericValue = Number(colorValue) || 0;
-                      // Split mapping: negative -> green, positive -> red
+                      // Split mapping: negative -> green, positive -> red (红涨绿跌)
+                      // Fix: Correct color mapping - Negative (下跌) should be green, Positive (上涨) should be red
                       if (numericValue < 0) {
-                        // Negative values: map to green palette (first half)
+                        // Negative values (下跌): use GREEN palette (first half) for correct display
                         const negativeRange = Math.abs(range[0]);
                         if (negativeRange === 0) return palette[0] || "#9ca3af";
                         const normalizedValue = Math.abs(numericValue) / negativeRange;
@@ -533,8 +601,8 @@ const FavoritesHeatmap: React.FC = () => {
                         if (greenPalette.length === 0) return "#10b981";
                         const colorIndex = Math.max(0, Math.min(Math.floor(normalizedValue * (greenPalette.length - 1)), greenPalette.length - 1));
                         return greenPalette[colorIndex] || greenPalette[0] || "#10b981";
-                      } else {
-                        // Positive values: map to red palette (second half)
+                      } else if (numericValue > 0) {
+                        // Positive values (上涨): use RED palette (second half) for correct display
                         const positiveRange = range[1];
                         if (positiveRange === 0) return palette[palette.length - 1] || "#9ca3af";
                         const normalizedValue = numericValue / positiveRange;
@@ -542,6 +610,9 @@ const FavoritesHeatmap: React.FC = () => {
                         if (redPalette.length === 0) return "#fca5a5";
                         const colorIndex = Math.max(0, Math.min(Math.floor(normalizedValue * (redPalette.length - 1)), redPalette.length - 1));
                         return redPalette[colorIndex] || redPalette[0] || "#fca5a5";
+                      } else {
+                        // Zero change: use yellow
+                        return "#eab308";
                       }
                     }
                     
@@ -574,9 +645,8 @@ const FavoritesHeatmap: React.FC = () => {
                   // Ensure readable font size for two-line labels
                   return Math.max(minSize, Math.min(maxSize, Math.sqrt(area) / 8));
                 },
-                color: "var(--text-primary)",
-                textBorderWidth: 1,
-                textBorderColor: "rgba(255, 255, 255, 0.8)",
+                color: "#000000",
+                textBorderWidth: 0,
                 fontWeight: 500,
                 lineHeight: 20, // Increased line height for better spacing between lines
                 padding: [4, 2], // [vertical, horizontal] padding
@@ -603,8 +673,8 @@ const FavoritesHeatmap: React.FC = () => {
                 return Math.max(12, Math.min(18, Math.sqrt(area) / 6));
               },
               fontWeight: "bold",
-              textBorderWidth: 2,
-              textBorderColor: "rgba(255, 255, 255, 0.9)",
+              color: "#000000",
+              textBorderWidth: 0,
             },
           },
         },
@@ -808,7 +878,12 @@ const FavoritesHeatmap: React.FC = () => {
           <div className="heatmap-legend">
             <div className="legend-item">
               <span className="legend-label">方块大小:</span>
-              <span className="legend-value">按市值大小</span>
+              <span className="legend-value">
+                {heatmapType === "marketCap" ? "按市值大小" :
+                 heatmapType === "changePercent" ? "按涨跌幅大小 (平方根缩放)" :
+                 heatmapType === "peRatio" ? "按市盈率大小" :
+                 "按交易额大小"}
+              </span>
             </div>
             <div className="legend-item">
               <span className="legend-label">颜色:</span>

@@ -148,6 +148,11 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
     setLoading(true);
     setError(null);
     try {
+      // Check if running in Tauri environment
+      if (typeof window !== "undefined" && !(window as any).__TAURI__) {
+        console.warn("Warning: Not running in Tauri environment. Some features may not work.");
+      }
+      
       const result: AIAnalysisResult = await invoke("ai_analyze_stock", {
         symbol,
         data: klineData,
@@ -159,7 +164,16 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
       setAnalysisResult(result);
     } catch (err: any) {
       console.error("Error generating AI analysis:", err);
-      setError(err.toString() || t("aiAgent.error"));
+      const errorMsg = err?.toString() || err?.message || t("aiAgent.error");
+      
+      // Provide more helpful error messages
+      if (errorMsg.includes("Failed to fetch") || errorMsg.includes("ERR_CONNECTION_REFUSED")) {
+        setError("无法连接到后端服务。请确保在 Tauri 应用窗口中运行，而不是在浏览器中。");
+      } else if (errorMsg.includes("IPC")) {
+        setError("IPC 通信失败。应用将尝试使用备用通信方式。");
+      } else {
+        setError(errorMsg);
+      }
     } finally {
       setLoading(false);
     }

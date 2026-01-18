@@ -11,6 +11,9 @@ import KLineChipAnalysis from "./KLineChipAnalysis";
 import PredictionAnalysis from "./PredictionAnalysis";
 import CompareAnalysis from "./CompareAnalysis";
 import AIAgentAnalysis from "./AIAgentAnalysis";
+import CustomIndicatorAnalysis from "./CustomIndicatorAnalysis";
+import BacktestAnalysis from "./BacktestAnalysis";
+import LSTMPredictionAnalysis from "./LSTMPredictionAnalysis";
 import "./StockTab.css";
 
 interface StockTab {
@@ -25,7 +28,7 @@ interface StockTabProps {
 }
 
 type KLinePeriod = "1d" | "1w" | "1mo" | "1y";
-type AnalysisTab = "timeseries" | "kline" | "klinechip" | "prediction" | "compare" | "aiagent";
+type AnalysisTab = "timeseries" | "kline" | "klinechip" | "prediction" | "compare" | "aiagent" | "customIndicator" | "backtest" | "lstm";
 
 interface StockData {
   date: string;
@@ -231,6 +234,9 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
       case "prediction":
       case "compare":
       case "aiagent":
+      case "customIndicator":
+      case "backtest":
+      case "lstm":
         return loading;
       default:
         return false;
@@ -278,11 +284,23 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
         );
       case "compare":
         return (
-          <CompareAnalysis currentSymbol={tab.symbol} currentData={klineData} />
+          <CompareAnalysis currentSymbol={tab.symbol} currentData={klineData} currentName={tab.name} />
         );
       case "aiagent":
         return (
           <AIAgentAnalysis klineData={klineData} symbol={tab.symbol} quote={tab.quote} />
+        );
+      case "customIndicator":
+        return (
+          <CustomIndicatorAnalysis klineData={klineData} />
+        );
+      case "backtest":
+        return (
+          <BacktestAnalysis klineData={klineData} />
+        );
+      case "lstm":
+        return (
+          <LSTMPredictionAnalysis klineData={klineData} />
         );
       default:
         return null;
@@ -415,6 +433,27 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
           >
             <span className="tab-icon">AI</span>
             <span className="tab-label">{t("analysis.aiAgent")}</span>
+          </button>
+          <button
+            className={`analysis-tab ${activeAnalysisTab === "customIndicator" ? "active" : ""}`}
+            onClick={() => handleAnalysisTabChange("customIndicator")}
+          >
+            <span className="tab-icon">CI</span>
+            <span className="tab-label">{t("analysis.customIndicator")}</span>
+          </button>
+          <button
+            className={`analysis-tab ${activeAnalysisTab === "backtest" ? "active" : ""}`}
+            onClick={() => handleAnalysisTabChange("backtest")}
+          >
+            <span className="tab-icon">BT</span>
+            <span className="tab-label">{t("analysis.backtest")}</span>
+          </button>
+          <button
+            className={`analysis-tab ${activeAnalysisTab === "lstm" ? "active" : ""}`}
+            onClick={() => handleAnalysisTabChange("lstm")}
+          >
+            <span className="tab-icon">LSTM</span>
+            <span className="tab-label">{t("analysis.lstm")}</span>
           </button>
         </div>
       </div>

@@ -116,9 +116,26 @@
   border-radius: 3px;
 }
 
+.stock-label-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
 .stock-label {
   font-size: 10px;
+  font-weight: 600;
   color: var(--text-primary, #cccccc);
+}
+
+.stock-name-label {
+  font-size: 9px;
+  color: var(--text-secondary, #858585);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .remove-btn {

@@ -2,6 +2,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import StockTabComponent from "./StockTab";
 import FavoritesHeatmap from "./FavoritesHeatmap";
+import PortfolioManagement from "./PortfolioManagement";
 import "./Workspace.css";
 
 interface StockTab {
@@ -9,7 +10,7 @@ interface StockTab {
   symbol: string;
   name: string;
   quote: any;
-  type?: "stock" | "heatmap";
+  type?: "stock" | "heatmap" | "portfolio";
 }
 
 interface WorkspaceProps {
@@ -40,7 +41,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
               onClick={() => onTabChange(tab.id)}
             >
               <span className="tab-label">{tab.name}</span>
-              {tab.type !== "heatmap" && (
+              {tab.type !== "heatmap" && tab.type !== "portfolio" && (
                 <button
                   className="tab-close"
                   onClick={(e) => {
@@ -59,6 +60,8 @@ const Workspace: React.FC<WorkspaceProps> = ({
         {activeTab ? (
           activeTab.type === "heatmap" ? (
             <FavoritesHeatmap />
+          ) : activeTab.type === "portfolio" ? (
+            <PortfolioManagement />
           ) : (
             <StockTabComponent tab={activeTab} />
           )
