@@ -25,11 +25,16 @@ export interface ChipDistributionResult {
 }
 
 // Calculate Chip Distribution (Cost Distribution)
+import { getChipDistributionParams } from "./settings";
+
 export function calculateChipDistribution(
   data: StockData[],
-  priceBins: number = 60,
-  decayFactor: number = 0.95
+  priceBins?: number,
+  decayFactor?: number
 ): ChipDistributionResult | null {
+  const defaults = getChipDistributionParams();
+  const bins = priceBins ?? defaults.priceBins;
+  const decay = decayFactor ?? defaults.decayFactor;
   if (data.length < 20) return null;
 
   const closes = data.map(d => d.close);
@@ -42,14 +47,14 @@ export function calculateChipDistribution(
   const minPrice = Math.min(...lows);
   const maxPrice = Math.max(...highs);
   const priceRange = maxPrice - minPrice;
-  const binSize = priceRange / priceBins;
+  const binSize = priceRange / bins;
 
   // Initialize chip distribution array
-  const chipDistribution = new Array(priceBins).fill(0);
+  const chipDistribution = new Array(bins).fill(0);
   const priceLevels: number[] = [];
 
   // Calculate price level for each bin
-  for (let i = 0; i < priceBins; i++) {
+  for (let i = 0; i < bins; i++) {
     priceLevels.push(minPrice + (i + 0.5) * binSize);
   }
 
@@ -66,7 +71,7 @@ export function calculateChipDistribution(
     
     // Distribute volume across price bins
     // More volume concentrated around typical price
-    for (let bin = 0; bin < priceBins; bin++) {
+    for (let bin = 0; bin < bins; bin++) {
       const binPrice = priceLevels[bin];
       
       if (binPrice >= dayLow && binPrice <= dayHigh) {
@@ -76,7 +81,7 @@ export function calculateChipDistribution(
         const weight = maxDistance > 0 ? 1 - (distance / maxDistance) : 1;
         
         // Apply decay factor (older chips decay)
-        const ageFactor = Math.pow(decayFactor, data.length - day - 1);
+        const ageFactor = Math.pow(decay, data.length - day - 1);
         chipDistribution[bin] += dayVolume * weight * ageFactor;
       }
     }
@@ -86,7 +91,7 @@ export function calculateChipDistribution(
   let totalChips = 0;
   let weightedPriceSum = 0;
   
-  for (let i = 0; i < priceBins; i++) {
+  for (let i = 0; i < bins; i++) {
     totalChips += chipDistribution[i];
     weightedPriceSum += chipDistribution[i] * priceLevels[i];
   }
@@ -95,7 +100,7 @@ export function calculateChipDistribution(
 
   // Calculate profit ratio (chips below current price / total chips)
   let profitChips = 0;
-  for (let i = 0; i < priceBins; i++) {
+  for (let i = 0; i < bins; i++) {
     if (priceLevels[i] < currentPrice) {
       profitChips += chipDistribution[i];
     }
@@ -103,17 +108,17 @@ export function calculateChipDistribution(
   const profitRatio = totalChips > 0 ? (profitChips / totalChips) * 100 : 50;
 
   // Calculate concentration (A股标准：数值越小越集中)
-  const meanChip = totalChips / priceBins;
+  const meanChip = totalChips / bins;
   let variance = 0;
-  for (let i = 0; i < priceBins; i++) {
+  for (let i = 0; i < bins; i++) {
     variance += Math.pow(chipDistribution[i] - meanChip, 2);
   }
-  const stdDev = Math.sqrt(variance / priceBins);
+  const stdDev = Math.sqrt(variance / bins);
   const concentration = meanChip > 0 ? (stdDev / meanChip) * 100 : 100;
 
   // Find main peaks (local maxima)
   const mainPeaks: Array<{ price: number; amount: number }> = [];
-  for (let i = 1; i < priceBins - 1; i++) {
+  for (let i = 1; i < bins - 1; i++) {
     if (chipDistribution[i] > chipDistribution[i - 1] && 
         chipDistribution[i] > chipDistribution[i + 1] &&
         chipDistribution[i] > meanChip * 1.5) {
@@ -156,7 +161,7 @@ export function calculateChipDistribution(
   
   for (let day = 0; day < data.length; day++) {
     // Calculate cumulative distribution up to this day
-    const dayChipDistribution = new Array(priceBins).fill(0);
+    const dayChipDistribution = new Array(bins).fill(0);
     
     for (let d = 0; d <= day; d++) {
       const dVolume = volumes[d];
@@ -165,13 +170,13 @@ export function calculateChipDistribution(
       const dClose = closes[d];
       const dTypicalPrice = (dHigh + dLow + dClose * 2) / 4;
       
-      for (let bin = 0; bin < priceBins; bin++) {
+      for (let bin = 0; bin < bins; bin++) {
         const binPrice = priceLevels[bin];
         if (binPrice >= dLow && binPrice <= dHigh) {
           const distance = Math.abs(binPrice - dTypicalPrice);
           const maxDistance = Math.max(dTypicalPrice - dLow, dHigh - dTypicalPrice);
           const weight = maxDistance > 0 ? 1 - (distance / maxDistance) : 1;
-          const ageFactor = Math.pow(decayFactor, day - d);
+          const ageFactor = Math.pow(decay, day - d);
           dayChipDistribution[bin] += dVolume * weight * ageFactor;
         }
       }
@@ -180,7 +185,7 @@ export function calculateChipDistribution(
     // Calculate average cost for this day
     let dayTotalChips = 0;
     let dayWeightedPriceSum = 0;
-    for (let i = 0; i < priceBins; i++) {
+    for (let i = 0; i < bins; i++) {
       dayTotalChips += dayChipDistribution[i];
       dayWeightedPriceSum += dayChipDistribution[i] * priceLevels[i];
     }

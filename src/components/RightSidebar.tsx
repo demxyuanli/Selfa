@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import TimeSeriesChart from "./TimeSeriesChart";
 import KLineChart from "./KLineChart";
+import Icon from "./Icon";
 import "./RightSidebar.css";
 
 interface StockData {
@@ -135,7 +136,9 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
         {visible && (
           <div className="sidebar-expanded-content">
             <div className="sidebar-header">
-              <button onClick={onToggle} className="toggle-btn">▶</button>
+              <button onClick={onToggle} className="toggle-btn">
+                <Icon name="chevronRight" size={14} />
+              </button>
               <span>{t("sidebar.indices")}</span>
             </div>
             <div className="sidebar-content">
@@ -249,7 +252,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
             }}
             title={t("index.timeSeries")}
           >
-            TS
+            <Icon name="timeSeries" size={16} filled={activePanel === "timeSeries"} />
           </button>
           <button
             className={`sidebar-icon ${activePanel === "dailyK" ? "active" : ""}`}
@@ -259,7 +262,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
             }}
             title={t("index.dailyK")}
           >
-            KL
+            <Icon name="kline" size={16} filled={activePanel === "dailyK"} />
           </button>
         </div>
       </div>

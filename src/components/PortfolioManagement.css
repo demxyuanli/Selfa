@@ -39,11 +39,11 @@
 }
 
 .stat-value.positive {
-  color: #4caf50;
+  color: #00ff00;
 }
 
 .stat-value.negative {
-  color: #f44336;
+  color: #ff0000;
 }
 
 .portfolio-actions {
@@ -117,6 +117,61 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.transaction-filter-cards {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.filter-card {
+  padding: 4px 10px;
+  font-size: 11px;
+  background: var(--bg-secondary, #2d2d30);
+  border: 1px solid var(--border-color, #3c3c3c);
+  border-radius: 4px;
+  color: var(--text-secondary, #858585);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-card:hover {
+  background: var(--bg-tertiary, #252526);
+  border-color: var(--accent-color, #007acc);
+  color: var(--text-primary, #cccccc);
+}
+
+.filter-card.active {
+  background: var(--accent-color, #007acc);
+  border-color: var(--accent-color, #007acc);
+  color: white;
+}
+
+.filter-card-symbol {
+  font-weight: 600;
+  font-family: var(--number-font-family);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.filter-card-count {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 1px 5px;
+  border-radius: 10px;
+  font-size: 10px;
+  min-width: 16px;
+  text-align: center;
+}
+
+.filter-card.active .filter-card-count {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .positions-table {
@@ -154,11 +209,23 @@
 }
 
 .positions-table td.positive {
-  color: #4caf50;
+  color: #00ff00;
 }
 
 .positions-table td.negative {
-  color: #f44336;
+  color: #ff0000;
+}
+
+.portfolio-name {
+  color: var(--text-primary, #cccccc);
+}
+
+.portfolio-name.up {
+  color: var(--error-color, #ff0000);
+}
+
+.portfolio-name.down {
+  color: var(--success-color, #00ff00);
 }
 
 .positions-table td.empty-cell {
@@ -209,17 +276,131 @@
 }
 
 .transactions-table td.positive {
-  color: #4caf50;
+  color: #00ff00;
 }
 
 .transactions-table td.negative {
-  color: #f44336;
+  color: #ff0000;
+}
+
+.transactions-table td.transaction-name {
+  color: var(--text-primary, #cccccc);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .transactions-table td.empty-cell {
   text-align: center;
   padding: 20px;
   color: var(--text-secondary, #858585);
+}
+
+.transactions-table td.editable-quantity {
+  cursor: pointer;
+  padding: 4px 8px;
+  position: relative;
+}
+
+.transactions-table td.editable-quantity:hover .quantity-display {
+  background: var(--bg-tertiary, #252526);
+  border: 1px dashed var(--border-color, #3c3c3c);
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+.transactions-table td.editable-quantity .quantity-display {
+  display: inline-block;
+  min-width: 40px;
+  padding: 2px 4px;
+  border-radius: 2px;
+  transition: all 0.15s;
+}
+
+.transactions-table td.editable-quantity .quantity-input {
+  width: 60px;
+  padding: 2px 4px;
+  font-size: 10px;
+  background: var(--bg-primary, #1e1e1e);
+  border: 1px solid var(--accent-color, #007acc);
+  border-radius: 2px;
+  color: var(--text-primary, #cccccc);
+  font-family: var(--number-font-family);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.transactions-table td.editable-quantity .quantity-input:focus {
+  outline: none;
+  border-color: var(--accent-color, #007acc);
+  box-shadow: 0 0 0 1px var(--accent-color, #007acc);
+}
+
+.transactions-table tr.subtotal-row {
+  background: var(--bg-tertiary, #252526);
+  font-weight: 600;
+}
+
+.transactions-table tr.subtotal-row td {
+  border-top: 2px solid var(--border-color, #3c3c3c);
+  border-bottom: 2px solid var(--border-color, #3c3c3c);
+  padding: 8px;
+  color: var(--text-primary, #cccccc);
+}
+
+.transactions-table td.subtotal-label {
+  font-weight: 600;
+  color: var(--accent-color, #007acc);
+}
+
+.transactions-table td.subtotal-value {
+  font-family: var(--number-font-family);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.transactions-table td.subtotal-value .subtotal-item {
+  margin-bottom: 2px;
+}
+
+.transactions-table td.subtotal-value .subtotal-item:last-child {
+  margin-bottom: 0;
+}
+
+.transactions-table td.subtotal-value .subtotal-label-small {
+  font-size: 9px;
+  color: var(--text-secondary, #858585);
+  margin-right: 4px;
+}
+
+.transactions-table td.subtotal-value .subtotal-item.mismatch {
+  color: var(--error-color, #ff0000);
+  font-weight: 600;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.edit-btn {
+  padding: 2px 6px;
+  font-size: 12px;
+  background: var(--bg-secondary, #2d2d30);
+  border: 1px solid var(--border-color, #3c3c3c);
+  border-radius: 3px;
+  color: var(--text-primary, #cccccc);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.edit-btn:hover {
+  background: var(--bg-hover, #3c3c3c);
+  border-color: var(--accent-color, #007acc);
 }
 
 .delete-btn {
@@ -233,11 +414,14 @@
   color: var(--text-secondary, #858585);
   cursor: pointer;
   border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .delete-btn:hover {
   background: var(--bg-hover, #3c3c3c);
-  color: #f44336;
+  color: #ff0000;
 }
 
 .portfolio-chart {
@@ -263,8 +447,8 @@
   background: var(--bg-secondary, #1e1e1e);
   border: 1px solid var(--border-color, #3c3c3c);
   border-radius: 4px;
-  min-width: 400px;
-  max-width: 500px;
+  min-width: 600px;
+  max-width: 800px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
@@ -282,6 +466,50 @@
   padding: 16px;
   overflow-y: auto;
   flex: 1;
+}
+
+.dialog-body-split {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+}
+
+.dialog-left-panel {
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border-color, #3c3c3c);
+  padding-right: 16px;
+}
+
+.dialog-left-panel .search-input-wrapper {
+  width: 240px;
+}
+
+.dialog-left-panel .search-input-wrapper .form-input {
+  width: 240px;
+  box-sizing: border-box;
+}
+
+.dialog-left-panel .search-dropdown-left {
+  width: 240px;
+}
+
+.dialog-right-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding-left: 16px;
+}
+
+.panel-header {
+  margin-bottom: 8px;
+}
+
+.panel-header label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #cccccc);
 }
 
 .dialog-footer {
@@ -320,6 +548,17 @@
   width: 100%;
 }
 
+.search-input-wrapper-horizontal {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.search-input-container {
+  flex: 1;
+  position: relative;
+}
+
 .search-loading {
   position: absolute;
   right: 12px;
@@ -344,14 +583,28 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
+.search-dropdown-left {
+  flex: 1;
+  background: var(--bg-secondary, #1e1e1e);
+  border: 1px solid var(--border-color, #3c3c3c);
+  border-radius: 3px;
+  max-height: 400px;
+  min-height: 200px;
+  margin-top: 8px;
+  overflow-y: auto;
+  z-index: 1001;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  width: 240px;
+}
+
 .search-dropdown-item {
-  padding: 8px 12px;
+  padding: 4px 8px;
   cursor: pointer;
   border-bottom: 1px solid var(--border-color, #3c3c3c);
   transition: background-color 0.15s;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .search-dropdown-item:last-child {
@@ -362,20 +615,41 @@
   background: var(--bg-tertiary, #252526);
 }
 
+.search-dropdown-item.favorite-item {
+  background: var(--bg-secondary, #252526);
+  border-left: 3px solid #ffa500;
+}
+
+.search-dropdown-item.favorite-item:hover {
+  background: var(--bg-hover, #2a2d2e);
+}
+
+.favorite-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffa500;
+  font-size: 14px;
+  margin-left: auto;
+  padding-left: 8px;
+}
+
 .search-symbol {
   font-weight: 600;
   color: var(--text-primary, #cccccc);
   font-size: 11px;
-  min-width: 70px;
+  min-width: 60px;
+  flex-shrink: 0;
 }
 
 .search-name {
   flex: 1;
   color: var(--text-secondary, #858585);
-  font-size: 10px;
+  font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .form-group input:focus,
@@ -388,6 +662,11 @@
 .form-group textarea {
   resize: vertical;
   font-family: inherit;
+}
+
+.dialog-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .dialog-btn {

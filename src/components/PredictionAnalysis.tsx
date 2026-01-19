@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import * as echarts from "echarts";
 import ChartDialog from "./ChartDialog";
+import { getIconSvg } from "./IconUtils";
 import "./StockAnalysis.css";
 import "./PredictionAnalysis.css";
 
@@ -125,10 +126,10 @@ const CustomECharts: React.FC<CustomEChartsProps> = ({ option, style, className 
 
 // Error boundary for chart components
 class ChartErrorBoundary extends React.Component<
-  { children: React.ReactNode; onError?: (error: Error) => void },
+  { children: React.ReactNode; onError?: (error: Error) => void; t: (key: string) => string },
   { hasError: boolean }
 > {
-  constructor(props: { children: React.ReactNode; onError?: (error: Error) => void }) {
+  constructor(props: { children: React.ReactNode; onError?: (error: Error) => void; t: (key: string) => string }) {
     super(props);
     this.state = { hasError: false };
   }
@@ -147,12 +148,12 @@ class ChartErrorBoundary extends React.Component<
     if (this.state.hasError) {
       return (
         <div className="chart-error">
-          <div className="error-message">图表加载失败，请刷新页面</div>
+          <div className="error-message">{this.props.t("chart.loadFailed")}</div>
           <button
             onClick={() => window.location.reload()}
             className="retry-button"
           >
-            刷新页面
+            {this.props.t("chart.refreshPage")}
           </button>
         </div>
       );
@@ -266,7 +267,7 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
             left: "center",
             top: "middle",
             style: {
-              text: "暂无数据",
+              text: t("chart.noData"),
               fontSize: 14,
               fill: "#999",
             },
@@ -361,7 +362,7 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
             {
               type: "text",
               style: {
-                text: `${t("analysis.method")}: ${getMethodLabel(method)} | ${t("analysis.period")}: ${period}${t("stock.periods.1d")} | 趋势: ${trendDirection === "up" ? "📈上涨" : trendDirection === "down" ? "📉下跌" : "➡️平盘"} ${Math.abs(trendPercent).toFixed(2)}% | 置信度: ${avgConfidence.toFixed(1)}%`,
+                text: `${t("analysis.method")}: ${getMethodLabel(method)} | ${t("analysis.period")}: ${period}${t("stock.periods.1d")} | ${t("chart.trend")}: ${trendDirection === "up" ? "↑ " + t("chart.trendUp") : trendDirection === "down" ? "↓ " + t("chart.trendDown") : "→ " + t("chart.trendSideways")} ${Math.abs(trendPercent).toFixed(2)}% | ${t("chart.confidence")}: ${avgConfidence.toFixed(1)}%`,
                 fontSize: 10,
                 fill: "#666",
                 fontWeight: "normal",
@@ -434,28 +435,29 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
           symbol: "circle",
           symbolSize: 6,
           lineStyle: {
-            color: trendDirection === "up" ? "#4caf50" : trendDirection === "down" ? "#f44336" : "#ff9800",
+            color: trendDirection === "up" ? "#00ff00" : trendDirection === "down" ? "#ff0000" : "#ff9800",
             width: 3,
             type: "solid",
-            shadowColor: trendDirection === "up" ? "rgba(76, 175, 80, 0.5)" :
-                        trendDirection === "down" ? "rgba(244, 67, 54, 0.5)" : "rgba(255, 152, 0, 0.5)",
+            shadowColor: trendDirection === "up" ? "rgba(0, 255, 0, 0.5)" :
+                        trendDirection === "down" ? "rgba(255, 0, 0, 0.5)" : "rgba(255, 152, 0, 0.5)",
             shadowBlur: 6,
           },
           itemStyle: {
-            color: trendDirection === "up" ? "#4caf50" : trendDirection === "down" ? "#f44336" : "#ff9800",
+            color: trendDirection === "up" ? "#00ff00" : trendDirection === "down" ? "#ff0000" : "#ff9800",
             borderColor: "#fff",
             borderWidth: 2,
           },
           markPoint: {
             data: predictions.map((pred, idx) => {
-              const signalIcon = pred.signal === "buy" ? "🟢" : pred.signal === "sell" ? "🔴" : "🟡";
+              const signalIconName = pred.signal === "buy" ? "buy" : pred.signal === "sell" ? "sell" : "neutral";
+              const signalIconSvg = getIconSvg(signalIconName, 10);
               return {
                 name: t("analysis.predictedPrice"),
                 coord: [dates.length + idx, pred.predicted_price],
                 symbol: "circle",
                 symbolSize: 8,
                 itemStyle: {
-                  color: pred.signal === "buy" ? "#4caf50" : pred.signal === "sell" ? "#f44336" : "#ff9800",
+                  color: pred.signal === "buy" ? "#00ff00" : pred.signal === "sell" ? "#ff0000" : "#ff9800",
                   borderColor: "#fff",
                   borderWidth: 2,
                   shadowBlur: 4,
@@ -463,9 +465,9 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
                 label: {
                   show: idx === 0 || idx === predictions.length - 1,
                   position: idx === 0 ? "top" : "bottom",
-                  formatter: `${signalIcon} ${pred.date}\n¥${pred.predicted_price.toFixed(2)}`,
+                  formatter: `${signalIconSvg} ${pred.date}\n¥${pred.predicted_price.toFixed(2)}`,
                   fontSize: 9,
-                  color: pred.signal === "buy" ? "#4caf50" : pred.signal === "sell" ? "#f44336" : "#ff9800",
+                  color: pred.signal === "buy" ? "#00ff00" : pred.signal === "sell" ? "#ff0000" : "#ff9800",
                   fontWeight: "bold",
                   distance: 8,
                   textBorderColor: "#fff",
@@ -524,26 +526,28 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
           params.forEach((p: any) => {
             if (p.value !== null && p.value !== undefined) {
               const value = typeof p.value === "number" ? `¥${p.value.toFixed(2)}` : p.value;
-              const icon = p.seriesName === t("stock.price") ? "📈" :
-                          p.seriesName === t("analysis.prediction") ? "🔮" :
-                          p.seriesName === t("analysis.upperBound") ? "⬆️" :
-                          p.seriesName === t("analysis.lowerBound") ? "⬇️" : "📊";
+              const iconName = p.seriesName === t("stock.price") ? "trendUp" :
+                          p.seriesName === t("analysis.prediction") ? "prediction" :
+                          p.seriesName === t("analysis.upperBound") ? "arrowUp" :
+                          p.seriesName === t("analysis.lowerBound") ? "arrowDown" : "chart";
+              const iconSvg = getIconSvg(iconName, 12, p.color);
 
               result += `<div style="margin: 4px 0; padding: 2px 0;">
                 <span style="display:inline-block;width:10px;height:10px;background:${p.color};border-radius:50%;margin-right:6px;border: 1px solid #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.1);"></span>
-                ${icon} ${p.seriesName}: <strong style="color: ${p.color}">${value}</strong>
+                ${iconSvg} ${p.seriesName}: <strong style="color: ${p.color}">${value}</strong>
               </div>`;
             }
           });
 
           if (idx >= dates.length && predictions[idx - dates.length]) {
             const pred = predictions[idx - dates.length];
-            const signalEmoji = pred.signal === "buy" ? "🟢" : pred.signal === "sell" ? "🔴" : "🟡";
+            const signalIconName = pred.signal === "buy" ? "buy" : pred.signal === "sell" ? "sell" : "neutral";
+            const signalIconSvg = getIconSvg(signalIconName, 14);
             const signalText = pred.signal === "buy" ? t("analysis.bullish") : pred.signal === "sell" ? t("analysis.bearish") : t("analysis.neutral");
 
             result += `<div style="margin-top: 8px;padding-top: 8px;border-top: 2px solid #eee;">
-              <div style="margin: 4px 0;"><strong>${signalEmoji} ${t("analysis.signal")}: ${signalText}</strong></div>
-              <div style="margin: 4px 0;">${t("analysis.confidence")}: <strong style="color: ${pred.confidence > 70 ? '#4caf50' : pred.confidence > 50 ? '#ff9800' : '#f44336'}">${pred.confidence.toFixed(1)}%</strong></div>
+              <div style="margin: 4px 0;"><strong>${signalIconSvg} ${t("analysis.signal")}: ${signalText}</strong></div>
+              <div style="margin: 4px 0;">${t("analysis.confidence")}: <strong style="color: ${pred.confidence > 70 ? '#00ff00' : pred.confidence > 50 ? '#ff9800' : '#ff0000'}">${pred.confidence.toFixed(1)}%</strong></div>
               <div style="margin: 4px 0;">${t("analysis.priceRange")}: ¥${pred.lower_bound.toFixed(2)} - ¥${pred.upper_bound.toFixed(2)}</div>
               <div style="margin: 4px 0; font-size: 11px; color: #666;">${t("analysis.method")}: ${pred.method}</div>
             </div>`;
@@ -584,8 +588,8 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
 
   const getSignalColor = (signal: string) => {
     switch (signal) {
-      case "buy": return "#4caf50";
-      case "sell": return "#f44336";
+      case "buy": return "#00ff00";
+      case "sell": return "#ff0000";
       default: return "#858585";
     }
   };
@@ -694,7 +698,7 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
                           className="confidence-fill-mini"
                           style={{
                             width: `${pred.confidence}%`,
-                            backgroundColor: pred.confidence > 70 ? "#4caf50" : pred.confidence > 50 ? "#ff9800" : "#f44336",
+                            backgroundColor: pred.confidence > 70 ? "#00ff00" : pred.confidence > 50 ? "#ff9800" : "#ff0000",
                           }}
                         />
                       </div>
@@ -720,6 +724,7 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
               <div className="no-data">{t("analysis.noData")}</div>
             ) : (
               <ChartErrorBoundary
+                t={t}
                 onError={(error) => {
                   console.error("Prediction chart error:", error);
                   // Force chart reset by incrementing reset key

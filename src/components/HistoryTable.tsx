@@ -28,8 +28,8 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ data }) => {
   const startWidthRef = useRef(0);
 
   const getPriceColor = (close: number, open: number): string => {
-    if (close > open) return "#f44336";
-    if (close < open) return "#4caf50";
+    if (close > open) return "#ff0000";
+    if (close < open) return "#00ff00";
     return "var(--text-primary)";
   };
 

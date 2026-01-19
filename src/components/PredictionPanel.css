@@ -70,23 +70,23 @@
 }
 
 .generate-btn {
-  padding: 4px 12px;
+  padding: 6px 12px;
   font-size: 11px;
-  border: 1px solid var(--accent-color);
-  background-color: var(--accent-color);
+  border: none;
+  background-color: var(--accent-color, #007acc);
   color: white;
   cursor: pointer;
-  border-radius: 2px;
-  transition: all 0.15s;
+  border-radius: 3px;
+  transition: background-color 0.15s;
+  width: 220px;
 }
 
 .generate-btn:hover:not(:disabled) {
-  background-color: var(--accent-color);
-  opacity: 0.9;
+  background-color: #0066aa;
 }
 
 .generate-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 

@@ -188,7 +188,7 @@
 }
 
 .price-alert-status-active {
-  color: #4caf50;
+  color: #00ff00;
 }
 
 .price-alert-status-disabled {
@@ -220,7 +220,7 @@
 }
 
 .price-alert-action-delete:hover {
-  background: rgba(244, 67, 54, 0.2);
+  background: rgba(255, 0, 0, 0.2);
 }
 
 .price-alert-dialog-footer {

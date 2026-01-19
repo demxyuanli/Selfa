@@ -27,8 +27,8 @@ const TimeSeriesTable: React.FC<TimeSeriesTableProps> = ({ data, quote }) => {
 
   const getPriceColor = (currentPrice: number, previousPrice: number | null): string => {
     if (previousPrice === null) return "var(--text-primary)";
-    if (currentPrice > previousPrice) return "#f44336";
-    if (currentPrice < previousPrice) return "#4caf50";
+    if (currentPrice > previousPrice) return "#ff0000";
+    if (currentPrice < previousPrice) return "#00ff00";
     return "var(--text-primary)";
   };
 

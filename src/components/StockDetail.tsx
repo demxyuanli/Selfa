@@ -73,7 +73,7 @@ const StockDetail: React.FC<StockDetailProps> = ({ stock }) => {
     <div className="stock-detail">
       <div className="stock-header">
         <div>
-          <h2>{stock.name}</h2>
+          <h2 className={changeClass}>{stock.name}</h2>
           <p className="stock-symbol">{stock.symbol}</p>
         </div>
         <div className="stock-price">

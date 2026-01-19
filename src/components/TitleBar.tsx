@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "react-i18next";
 import LanguageSelector from "./LanguageSelector";
 import MenuDropdown, { MenuItem } from "./MenuDropdown";
+import Icon from "./Icon";
 import "./TitleBar.css";
 
 interface TitleBarProps {
@@ -148,7 +149,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ onMenuAction, onSettingsClick }) =>
       </div>
       <div className="title-bar-right">
         <button className="title-bar-button" onClick={handleSettings} title="Settings">
-          <span className="title-bar-icon">ST</span>
+          <Icon name="settings" size={16} />
         </button>
         <LanguageSelector />
         <button 
@@ -157,7 +158,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ onMenuAction, onSettingsClick }) =>
           onMouseDown={(e) => e.stopPropagation()}
           title="Minimize"
         >
-          <span className="title-bar-icon">−</span>
+          <Icon name="minimize" size={16} />
         </button>
         <button 
           className="title-bar-button" 
@@ -165,7 +166,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ onMenuAction, onSettingsClick }) =>
           onMouseDown={(e) => e.stopPropagation()}
           title={isMaximized ? "Restore" : "Maximize"}
         >
-          <span className="title-bar-icon">{isMaximized ? "□" : "□"}</span>
+          <Icon name={isMaximized ? "restore" : "maximize"} size={16} />
         </button>
         <button 
           className="title-bar-button title-bar-close" 
@@ -173,7 +174,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ onMenuAction, onSettingsClick }) =>
           onMouseDown={(e) => e.stopPropagation()}
           title="Close"
         >
-          <span className="title-bar-icon">×</span>
+          <Icon name="close" size={16} />
         </button>
       </div>
     </div>

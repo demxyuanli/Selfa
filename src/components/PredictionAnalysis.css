@@ -40,18 +40,19 @@
 
 .prediction-analysis .generate-btn {
   padding: 6px 12px;
-  font-size: 10px;
-  background: var(--accent-color, #007acc);
+  font-size: 11px;
+  background-color: var(--accent-color, #007acc);
   color: white;
   border: none;
   border-radius: 3px;
   cursor: pointer;
   transition: background-color 0.15s;
   margin-top: 8px;
+  width: 220px;
 }
 
 .prediction-analysis .generate-btn:hover:not(:disabled) {
-  background: #0066aa;
+  background-color: #0066aa;
 }
 
 .prediction-analysis .generate-btn:disabled {
@@ -157,15 +158,16 @@
 
 .retry-button {
   padding: 8px 16px;
-  background: var(--accent-color, #007acc);
+  background-color: var(--accent-color, #007acc);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
   font-size: 12px;
   transition: background-color 0.15s;
+  width: 220px;
 }
 
 .retry-button:hover {
-  background: #0066aa;
+  background-color: #0066aa;
 }

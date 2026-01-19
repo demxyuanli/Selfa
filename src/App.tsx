@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "react-i18next";
+import { getSettings } from "./utils/settings";
+import SplashScreen from "./components/SplashScreen";
 import TitleBar from "./components/TitleBar";
 import ToolBar from "./components/ToolBar";
 import LeftSidebar from "./components/LeftSidebar";
@@ -31,11 +33,12 @@ interface StockTab {
   symbol: string;
   name: string;
   quote: StockQuote | null;
-  type?: "stock" | "heatmap" | "portfolio";
+  type?: "stock" | "heatmap" | "dashboard" | "portfolio";
 }
 
 function App() {
   const { t } = useTranslation();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [leftSidebarVisible, setLeftSidebarVisible] = useState(true);
   const [rightSidebarVisible, setRightSidebarVisible] = useState(true);
   const [toolbarVisible, setToolbarVisible] = useState(false);
@@ -45,16 +48,143 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [priceAlertOpen, setPriceAlertOpen] = useState(false);
 
+  // Default credentials
+  const DEFAULT_USERNAME = "admin";
+  const DEFAULT_PASSWORD = "admin";
+  const USERS_STORAGE_KEY = "stock_analyzer_users";
+  const AUTH_STORAGE_KEY = "stock_analyzer_auth";
+
+  // Initialize default admin user if not exists and check authentication status
   useEffect(() => {
-    const heatmapTab: StockTab = {
-      id: "tab-heatmap",
-      symbol: "",
-      name: t("favorites.heatmap"),
-      quote: null,
-      type: "heatmap",
+    const users = getStoredUsers();
+    if (!users[DEFAULT_USERNAME]) {
+      users[DEFAULT_USERNAME] = DEFAULT_PASSWORD;
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+    }
+    
+    // Check if user is already authenticated
+    const authStatus = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (authStatus === "true") {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  // Clear authentication on window close (not on refresh)
+  useEffect(() => {
+    const clearAuth = () => {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
     };
-    setTabs([heatmapTab]);
-    setActiveTabId(heatmapTab.id);
+
+    // Handle Tauri window close event (only fires on actual close, not refresh)
+    let tauriUnlisten: (() => void) | null = null;
+    const setupTauriCloseListener = async () => {
+      try {
+        const appWindow = getCurrentWindow();
+        const unlistenPromise = appWindow.onCloseRequested(() => {
+          // Clear auth but don't prevent close
+          clearAuth();
+          // Don't call event.preventDefault() - allow window to close normally
+        });
+        unlistenPromise.then((unlisten) => {
+          tauriUnlisten = unlisten;
+        }).catch((error) => {
+          console.error("Failed to setup Tauri close listener:", error);
+        });
+      } catch (error) {
+        console.error("Failed to setup Tauri close listener:", error);
+      }
+    };
+
+    setupTauriCloseListener();
+
+    return () => {
+      if (tauriUnlisten) {
+        tauriUnlisten();
+      }
+    };
+  }, []);
+
+  // Apply theme and font settings from settings
+  useEffect(() => {
+    const applySettings = () => {
+      const settings = getSettings();
+      const root = document.documentElement;
+      // Apply theme
+      if (settings.theme === "light") {
+        root.setAttribute("data-theme", "light");
+      } else {
+        root.setAttribute("data-theme", "dark");
+      }
+      // Apply font settings
+      root.style.setProperty("--font-family", settings.fontFamily);
+      root.style.setProperty("--font-size", `${settings.fontSize}px`);
+      root.style.setProperty("--number-font-family", settings.numberFontFamily);
+    };
+
+    // Apply settings on mount
+    applySettings();
+
+    // Listen for storage changes (when settings are saved)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "appSettings") {
+        applySettings();
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+
+    // Also listen for custom event (for same-window updates)
+    const handleSettingsChange = () => {
+      applySettings();
+    };
+
+    window.addEventListener("settingsChanged", handleSettingsChange);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("settingsChanged", handleSettingsChange);
+    };
+  }, []);
+
+  const getStoredUsers = (): Record<string, string> => {
+    try {
+      const stored = localStorage.getItem(USERS_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const handleLogin = (username: string, password: string): boolean => {
+    const users = getStoredUsers();
+    if (users[username] === password) {
+      setIsAuthenticated(true);
+      localStorage.setItem(AUTH_STORAGE_KEY, "true");
+      return true;
+    }
+    return false;
+  };
+
+  const handleRegister = (username: string, password: string): boolean => {
+    const users = getStoredUsers();
+    if (users[username]) {
+      return false; // Username already exists
+    }
+    users[username] = password;
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+    return true;
+  };
+
+  useEffect(() => {
+    const dashboardTab: StockTab = {
+      id: "tab-dashboard",
+      symbol: "",
+      name: t("favorites.dashboard") || "自选股监控",
+      quote: null,
+      type: "dashboard",
+    };
+    setTabs([dashboardTab]);
+    setActiveTabId(dashboardTab.id);
   }, [t]);
 
   const handlePortfolioClick = () => {
@@ -247,6 +377,11 @@ function App() {
     return () => clearInterval(interval);
   }, [t]);
 
+  // Show splash screen if not authenticated
+  if (!isAuthenticated) {
+    return <SplashScreen onLogin={handleLogin} onRegister={handleRegister} />;
+  }
+
   return (
     <div className="app">
       <TitleBar
@@ -266,6 +401,7 @@ function App() {
           activeTabId={activeTabId}
           onTabChange={setActiveTabId}
           onCloseTab={handleCloseTab}
+          onStockSelect={handleStockSelect}
           loading={loading}
         />
         <RightSidebar

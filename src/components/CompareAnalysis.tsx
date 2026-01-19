@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
 import ChartDialog from "./ChartDialog";
+import Icon from "./Icon";
 import "./StockAnalysis.css";
 import "./CompareAnalysis.css";
 
@@ -149,13 +150,59 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
     }
 
     const series: any[] = [];
-    const dates = compareStocks[0].data.map(d => {
+    
+    // Find the shortest data length (the stock with shortest history)
+    const minLength = Math.min(...compareStocks.map(stock => stock.data.length));
+    if (minLength === 0) {
+      return {};
+    }
+    
+    // Find the stock with shortest history to determine the starting date
+    const shortestStock = compareStocks.find(stock => stock.data.length === minLength) || compareStocks[0];
+    const shortestStartDate = shortestStock.data[0].date.includes(" ") 
+      ? shortestStock.data[0].date.split(" ")[0] 
+      : shortestStock.data[0].date;
+    
+    // Align all stocks from the shortest stock's starting date
+    const alignedStocks = compareStocks.map(stock => {
+      // Find the index where this stock's date matches or is closest to the shortest start date
+      let startIdx = 0;
+      for (let i = 0; i < stock.data.length; i++) {
+        const stockDate = stock.data[i].date.includes(" ") 
+          ? stock.data[i].date.split(" ")[0] 
+          : stock.data[i].date;
+        if (stockDate >= shortestStartDate) {
+          startIdx = i;
+          break;
+        }
+      }
+      
+      // Take exactly minLength data points from startIdx to ensure all have same length
+      // If not enough data available, take from startIdx to end
+      const endIdx = Math.min(startIdx + minLength, stock.data.length);
+      
+      return {
+        ...stock,
+        alignedData: stock.data.slice(startIdx, endIdx),
+      };
+    });
+    
+    // Ensure all aligned stocks have exactly the same length
+    // Use the minimum available length to ensure all stocks can provide that many data points
+    const alignedMinLength = Math.min(...alignedStocks.map(s => s.alignedData.length));
+    const finalAlignedStocks = alignedStocks.map(stock => ({
+      ...stock,
+      alignedData: stock.alignedData.slice(0, alignedMinLength), // Take the first alignedMinLength points from aligned start
+    }));
+
+    // Extract dates from aligned data (all should have same length now)
+    const dates = finalAlignedStocks[0].alignedData.map(d => {
       const dateStr = d.date;
       return dateStr.includes(" ") ? dateStr.split(" ")[0] : dateStr;
     });
 
-    compareStocks.forEach((stock, idx) => {
-      const closes = stock.data.map(d => d.close);
+    finalAlignedStocks.forEach((stock, idx) => {
+      const closes = stock.alignedData.map(d => d.close);
       const firstClose = closes[0];
       
       let data: number[];
@@ -165,7 +212,7 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
         data = closes;
       }
 
-      const colors = ["#007acc", "#4caf50", "#ff9800", "#9c27b0", "#f44336", "#00bcd4"];
+      const colors = ["#007acc", "#00ff00", "#ff9800", "#9c27b0", "#ff0000", "#00bcd4"];
       series.push({
         name: `${stock.symbol} ${stock.name}`,
         type: "line",
@@ -179,20 +226,20 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
       });
     });
 
-    // Find best and worst performers
-    let bestStock = compareStocks[0];
-    let worstStock = compareStocks[0];
+    // Find best and worst performers using aligned data
+    let bestStock = finalAlignedStocks[0];
+    let worstStock = finalAlignedStocks[0];
     if (normalizeMode === "percent") {
-      compareStocks.forEach((stock) => {
-        const closes = stock.data.map(d => d.close);
+      finalAlignedStocks.forEach((stock) => {
+        const closes = stock.alignedData.map(d => d.close);
         const firstClose = closes[0];
         const lastClose = closes[closes.length - 1];
         const change = ((lastClose - firstClose) / firstClose) * 100;
-        const bestCloses = bestStock.data.map(d => d.close);
+        const bestCloses = bestStock.alignedData.map(d => d.close);
         const bestFirstClose = bestCloses[0];
         const bestLastClose = bestCloses[bestCloses.length - 1];
         const bestChange = ((bestLastClose - bestFirstClose) / bestFirstClose) * 100;
-        const worstCloses = worstStock.data.map(d => d.close);
+        const worstCloses = worstStock.alignedData.map(d => d.close);
         const worstFirstClose = worstCloses[0];
         const worstLastClose = worstCloses[worstCloses.length - 1];
         const worstChange = ((worstLastClose - worstFirstClose) / worstFirstClose) * 100;
@@ -253,7 +300,7 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
         },
       },
       series: series.map((s, idx) => {
-        const stock = compareStocks[idx];
+        const stock = finalAlignedStocks[idx];
         const isBest = stock.symbol === bestStock.symbol && normalizeMode === "percent";
         const isWorst = stock.symbol === worstStock.symbol && normalizeMode === "percent";
         return {
@@ -266,13 +313,13 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
                 symbol: "pin",
                 symbolSize: 30,
                 itemStyle: {
-                  color: isBest ? "#4caf50" : "#f44336",
+                  color: isBest ? "#00ff00" : "#ff0000",
                 },
                 label: {
                   show: true,
                   formatter: isBest ? t("analysis.best") : t("analysis.worst"),
                   fontSize: 9,
-                  color: isBest ? "#4caf50" : "#f44336",
+                  color: isBest ? "#00ff00" : "#ff0000",
                 },
               },
             ],
@@ -323,7 +370,7 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
         },
       },
       legend: {
-        data: compareStocks.map(s => `${s.symbol} ${s.name}`),
+        data: finalAlignedStocks.map(s => `${s.symbol} ${s.name}`),
         textStyle: {
           color: "#858585",
           fontSize: 8,
@@ -333,7 +380,7 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
         top: 0,
       },
     };
-  }, [compareStocks, normalizeMode]);
+  }, [compareStocks, normalizeMode, t]);
 
   const calculateStats = (data: StockData[]) => {
     if (data.length === 0) return null;
@@ -425,7 +472,7 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
                         className="remove-btn"
                         onClick={() => handleRemoveStock(stock.symbol)}
                       >
-                        ×
+                        <Icon name="delete" size={14} />
                       </button>
                     )}
                   </div>

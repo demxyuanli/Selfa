@@ -40,14 +40,40 @@
 }
 
 .result-value.positive {
-  color: #4caf50;
+  color: #00ff00;
 }
 
 .result-value.negative {
-  color: #f44336;
+  color: #ff0000;
+}
+
+.param-btn {
+  padding: 6px 12px;
+  font-size: 11px;
+  background-color: var(--accent-color, #007acc);
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  width: 220px;
+}
+
+.param-btn:hover:not(:disabled) {
+  background-color: #0066aa;
 }
 
 .param-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.param-btn.primary {
+  background-color: var(--accent-color, #007acc);
+  color: white;
+  font-weight: 500;
+}
+
+.param-btn.primary:hover:not(:disabled) {
+  background-color: #0066aa;
 }

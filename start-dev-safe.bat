@@ -1,0 +1,9 @@
+@echo off
+echo Checking for processes on port 1420...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :1420') do (
+    echo Found process %%a using port 1420, killing it...
+    taskkill /PID %%a /F 2>nul
+)
+timeout /t 2 /nobreak >nul
+echo Starting development server...
+npm run dev

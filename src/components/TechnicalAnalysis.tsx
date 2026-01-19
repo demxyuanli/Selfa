@@ -152,7 +152,7 @@ const TechnicalAnalysis: React.FC<TechnicalAnalysisProps> = ({ data }) => {
             data: indicators.macd_histogram,
             borderColor: "rgb(76, 175, 80)",
             type: "bar",
-            backgroundColor: "rgba(76, 175, 80, 0.2)",
+            backgroundColor: "rgba(0, 255, 0, 0.2)",
           }
         );
         break;

@@ -168,9 +168,9 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
       
       // Provide more helpful error messages
       if (errorMsg.includes("Failed to fetch") || errorMsg.includes("ERR_CONNECTION_REFUSED")) {
-        setError("无法连接到后端服务。请确保在 Tauri 应用窗口中运行，而不是在浏览器中。");
+        setError(t("aiAgent.connectionError"));
       } else if (errorMsg.includes("IPC")) {
-        setError("IPC 通信失败。应用将尝试使用备用通信方式。");
+        setError(t("aiAgent.ipcError"));
       } else {
         setError(errorMsg);
       }
@@ -288,16 +288,16 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
                 symbol: "circle",
                 symbolSize: 10,
                 itemStyle: {
-                  color: analysisResult.prediction.trend === "bullish" ? "#4caf50" :
-                         analysisResult.prediction.trend === "bearish" ? "#f44336" : "#ff9800",
+                  color: analysisResult.prediction.trend === "bullish" ? "#00ff00" :
+                         analysisResult.prediction.trend === "bearish" ? "#ff0000" : "#ff9800",
                 },
                 label: {
                   show: true,
                   position: "top",
                   formatter: `${t("aiAgent.predictedPrice")}\n${predictedPrice.toFixed(2)}`,
                   fontSize: 9,
-                  color: analysisResult.prediction.trend === "bullish" ? "#4caf50" :
-                         analysisResult.prediction.trend === "bearish" ? "#f44336" : "#ff9800",
+                  color: analysisResult.prediction.trend === "bullish" ? "#00ff00" :
+                         analysisResult.prediction.trend === "bearish" ? "#ff0000" : "#ff9800",
                 },
               },
             ],
@@ -338,17 +338,17 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
 
   const getTrendColor = (trend: string) => {
     switch (trend) {
-      case "bullish": return "#4caf50";
-      case "bearish": return "#f44336";
+      case "bullish": return "#00ff00";
+      case "bearish": return "#ff0000";
       default: return "#858585";
     }
   };
 
   const getRiskColor = (level: string) => {
     switch (level) {
-      case "low": return "#4caf50";
+      case "low": return "#00ff00";
       case "medium": return "#ff9800";
-      case "high": return "#f44336";
+      case "high": return "#ff0000";
       default: return "#858585";
     }
   };

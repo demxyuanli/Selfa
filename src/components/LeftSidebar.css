@@ -44,9 +44,6 @@
   background-color: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
   border-radius: 4px;
   transition: all 0.15s;
   padding: 0;
@@ -105,7 +102,9 @@
 
 .toggle-btn {
   padding: 2px 6px;
-  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: none;
   color: var(--text-secondary);
@@ -257,6 +256,16 @@
   margin-right: 10px;
 }
 
+.result-name.price-up {
+  color: #ff0000;
+  font-weight: 600;
+}
+
+.result-name.price-down {
+  color: #00ff00;
+  font-weight: 600;
+}
+
 .add-btn {
   width: 24px;
   height: 24px;
@@ -287,7 +296,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 8px 4px;
   cursor: pointer;
   transition: background-color 0.15s;
   border-bottom: 1px solid var(--border-color);
@@ -302,7 +311,7 @@
 }
 
 .stock-item.simple {
-  padding: 6px 12px;
+  padding: 6px 4px;
 }
 
 .stock-info {
@@ -358,12 +367,12 @@
 }
 
 .stock-name.price-up {
-  color: #dc2626;
+  color: #ff0000;
   font-weight: 600;
 }
 
 .stock-name.price-down {
-  color: #059669;
+  color: #00ff00;
   font-weight: 600;
 }
 
@@ -390,6 +399,9 @@
   width: 40px;
   text-align: left;
   flex-shrink: 0;
+  font-family: var(--number-font-family);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 .stock-change {
@@ -398,14 +410,17 @@
   width: 20px;
   flex-shrink: 0;
   text-align: left;
+  font-family: var(--number-font-family);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 .stock-change.price-up {
-  color: #dc2626;
+  color: #ff0000;
 }
 
 .stock-change.price-down {
-  color: #059669;
+  color: #00ff00;
 }
 
 .stock-tags {
@@ -433,10 +448,11 @@
 .stock-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   opacity: 0;
   transition: opacity 0.15s;
   flex-shrink: 0;
+  padding: 10px 4px;
 }
 
 .stock-item:hover .stock-actions {
@@ -444,8 +460,8 @@
 }
 
 .stock-action-btn {
-  width: 18px;
-  height: 18px;
+  width: 12px;
+  height: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -453,7 +469,7 @@
   background-color: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 9px;
   border-radius: 3px;
   transition: all 0.15s;
   padding: 0;
@@ -581,9 +597,10 @@
 
 .group-expand-icon {
   width: 16px;
-  font-size: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-secondary);
-  text-align: center;
   flex-shrink: 0;
 }
 

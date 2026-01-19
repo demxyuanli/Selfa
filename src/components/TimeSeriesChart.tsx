@@ -1,4 +1,5 @@
 import React, { useMemo, useState, memo } from "react";
+import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
 import "./TimeSeriesChart.css";
 
@@ -40,6 +41,7 @@ const generateFullTradingTimes = (): string[] => {
 };
 
 const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false }) => {
+  const { t } = useTranslation();
   const [crosshairData, setCrosshairData] = useState<{ time: string; price: number; volume: number } | null>(null);
   const fullTradingTimes = useMemo(() => generateFullTradingTimes(), []);
 
@@ -105,7 +107,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
       if (prevPrice === null) {
         return "rgba(133, 133, 133, 0.6)";
       }
-      return price >= prevPrice ? "#f44336" : "#4caf50";
+      return price >= prevPrice ? "#ff0000" : "#00ff00";
     });
 
     return {
@@ -313,10 +315,10 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
             fontSize: compact ? 7 : 9,
             formatter: (value: number) => {
               if (compact) {
-                // Round to 100 million (亿), no unit
+                // Round to 100 million, no unit
                 return Math.round(value / 100000000).toString();
               }
-              return (value / 10000).toFixed(1) + "万";
+              return (value / 10000).toFixed(1) + t("common.tenThousand");
             },
           },
           axisLine: {
@@ -374,7 +376,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
             return `
               <div style="padding: 4px 0;">
                 <div><strong>${time}</strong></div>
-                <div>暂无数据</div>
+                <div>${t("chart.noData")}</div>
               </div>
             `;
           }
@@ -382,16 +384,16 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
           return `
             <div style="padding: 4px 0;">
               <div><strong>${time}</strong></div>
-              <div>价格: <span style="color: #cccccc;">${price.toFixed(2)}</span></div>
-              <div>均价: <span style="color: #858585;">${avgPrice.toFixed(2)}</span></div>
-              <div>成交量: <span style="color: #cccccc;">${(volume / 10000).toFixed(2)}万</span></div>
+              <div>${t("chart.price")}: <span style="color: #cccccc;">${price.toFixed(2)}</span></div>
+              <div>${t("chart.avgPrice")}: <span style="color: #858585;">${avgPrice.toFixed(2)}</span></div>
+              <div>${t("chart.volume")}: <span style="color: #cccccc;">${(volume / 10000).toFixed(2)}${t("common.tenThousand")}</span></div>
             </div>
           `;
         },
       },
       series: [
         {
-          name: "价格",
+          name: t("chart.price"),
           type: "line",
           data: prices,
           smooth: false,
@@ -425,7 +427,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
           },
         },
         {
-          name: "均价",
+          name: t("chart.avgPrice"),
           type: "line",
           data: prices.map(() => avgPrice),
           smooth: false,
@@ -440,7 +442,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
           },
         },
         {
-          name: "成交量",
+          name: t("chart.volume"),
           type: "bar",
           xAxisIndex: 1,
           yAxisIndex: 1,
@@ -456,7 +458,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
         },
       ],
     };
-  }, [data, fullTradingTimes]);
+  }, [data, fullTradingTimes, t]);
 
   if (!data || data.length === 0) {
     return (
@@ -470,9 +472,9 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
     <div className="time-series-chart">
       {crosshairData && (
         <div className="crosshair-info">
-          <div>时间: {crosshairData.time}</div>
-          <div>价格: {crosshairData.price.toFixed(2)}</div>
-          <div>成交量: {(crosshairData.volume / 10000).toFixed(2)}万</div>
+          <div>{t("chart.time")}: {crosshairData.time}</div>
+          <div>{t("chart.price")}: {crosshairData.price.toFixed(2)}</div>
+          <div>{t("chart.volume")}: {(crosshairData.volume / 10000).toFixed(2)}{t("common.tenThousand")}</div>
         </div>
       )}
       <ReactECharts

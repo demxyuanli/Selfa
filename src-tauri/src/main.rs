@@ -3,9 +3,11 @@
 
 mod stock_api;
 mod database;
+mod cache;
 
 use stock_api::*;
 use database::Database;
+use cache::StockCache;
 use std::sync::Arc;
 use tauri::Manager;
 
@@ -21,18 +23,22 @@ async fn refresh_stock_cache_internal(db: &Database) -> Result<usize, String> {
 #[tauri::command]
 async fn get_stock_quote(
     symbol: String,
-    db: tauri::State<'_, Arc<Database>>,
+    cache: tauri::State<'_, Arc<StockCache>>,
+    _db: tauri::State<'_, Arc<Database>>,
 ) -> Result<StockQuote, String> {
-    let quote = fetch_stock_quote(&symbol).await?;
+    if let Some(cached_quote) = cache.get_quote(&symbol).await {
+        return Ok(cached_quote);
+    }
     
-    db.save_quote(&quote)
-        .map_err(|e| format!("Failed to save quote: {}", e))?;
+    let quote = fetch_stock_quote(&symbol).await?;
+    cache.set_quote(symbol, quote.clone()).await;
     
     Ok(quote)
 }
 
 #[tauri::command]
 async fn get_all_favorites_quotes(
+    cache: tauri::State<'_, Arc<StockCache>>,
     db: tauri::State<'_, Arc<Database>>,
 ) -> Result<Vec<(StockInfo, Option<StockQuote>)>, String> {
     let stocks = db.get_stocks_by_group(None)
@@ -47,22 +53,32 @@ async fn get_all_favorites_quotes(
         .filter(|stock| !excluded_symbols.contains(&stock.symbol.as_str()))
         .collect();
     
-    // Fetch quotes concurrently using tokio tasks
-    let mut tasks = Vec::new();
+    // First check cache for all stocks
+    let mut quotes_map = std::collections::HashMap::new();
+    let mut symbols_to_fetch = Vec::new();
+    
     for stock in &filtered_stocks {
-        let symbol = stock.symbol.clone();
-        let db_clone = db.inner().clone();
+        if let Some(cached_quote) = cache.get_quote(&stock.symbol).await {
+            quotes_map.insert(stock.symbol.clone(), Some(cached_quote));
+        } else {
+            symbols_to_fetch.push(stock.symbol.clone());
+        }
+    }
+    
+    // Fetch missing quotes concurrently using tokio tasks
+    let mut tasks = Vec::new();
+    for symbol in symbols_to_fetch {
+        let symbol_clone: String = symbol.clone();
+        let cache_clone = cache.inner().clone();
         let task = tokio::spawn(async move {
-            let symbol_clone = symbol.clone();
             match fetch_stock_quote(&symbol_clone).await {
                 Ok(quote) => {
-                    // Save to database for caching (but don't fail if save fails)
-                    let _ = db_clone.save_quote(&quote);
-                    (symbol, Some(quote))
+                    cache_clone.set_quote(symbol_clone.clone(), quote.clone()).await;
+                    (symbol_clone, Some(quote))
                 }
                 Err(err) => {
                     eprintln!("Failed to fetch quote for {}: {}", symbol_clone, err);
-                    (symbol, None)
+                    (symbol_clone, None)
                 }
             }
         });
@@ -70,7 +86,6 @@ async fn get_all_favorites_quotes(
     }
     
     // Collect results from all tasks
-    let mut quotes_map = std::collections::HashMap::new();
     for task in tasks {
         match task.await {
             Ok((symbol, quote)) => {
@@ -96,8 +111,13 @@ async fn get_all_favorites_quotes(
 async fn get_stock_history(
     symbol: String,
     period: String,
+    cache: tauri::State<'_, Arc<StockCache>>,
     db: tauri::State<'_, Arc<Database>>,
 ) -> Result<Vec<StockData>, String> {
+    if let Some(cached_data) = cache.get_history(&symbol, &period).await {
+        return Ok(cached_data);
+    }
+    
     let latest_date = db.get_latest_kline_date(&symbol, &period)
         .map_err(|e| format!("Database error: {}", e))?;
     
@@ -106,59 +126,65 @@ async fn get_stock_history(
     
     let fetched = fetch_stock_history(&symbol, &period).await?;
     
-    if let Some(ref latest) = latest_date {
+    let result = if let Some(ref latest) = latest_date {
         let new_data: Vec<StockData> = fetched
             .into_iter()
             .filter(|d| d.date > *latest)
             .collect();
         
         if !new_data.is_empty() {
-            db.save_kline(&symbol, &period, &new_data)
-                .map_err(|e| format!("Failed to save kline: {}", e))?;
             let mut data = cached;
             data.extend(new_data);
             data.sort_by(|a, b| a.date.cmp(&b.date));
-            Ok(data)
+            let final_data = data.clone();
+            cache.set_history(symbol.clone(), period.clone(), final_data).await;
+            data
         } else {
-            Ok(cached)
+            if !cached.is_empty() {
+                cache.set_history(symbol.clone(), period.clone(), cached.clone()).await;
+            }
+            cached
         }
     } else {
-        db.save_kline(&symbol, &period, &fetched)
-            .map_err(|e| format!("Failed to save kline: {}", e))?;
-        Ok(fetched)
-    }
+        cache.set_history(symbol.clone(), period.clone(), fetched.clone()).await;
+        fetched
+    };
+    
+    Ok(result)
 }
 
 #[tauri::command]
 async fn get_time_series(
     symbol: String,
+    cache: tauri::State<'_, Arc<StockCache>>,
     db: tauri::State<'_, Arc<Database>>,
 ) -> Result<Vec<StockData>, String> {
+    if let Some(cached_data) = cache.get_time_series(&symbol).await {
+        return Ok(cached_data);
+    }
+    
     let fetched = fetch_time_series(&symbol).await;
     
     match fetched {
         Ok(fetched_data) if !fetched_data.is_empty() => {
-            // For time series (real-time data), always use the latest data from API
-            // and replace all existing data to ensure we have the most recent data
-            db.save_time_series(&symbol, &fetched_data)
-                .map_err(|e| format!("Failed to save time series: {}", e))?;
+            cache.set_time_series(symbol, fetched_data.clone()).await;
             Ok(fetched_data)
         }
         Err(e) => {
-            // If API fails, fall back to cached data
             let cached = db.get_time_series(&symbol, None)
                 .map_err(|_| format!("API error: {}; Database error", e))?;
             if !cached.is_empty() {
+                cache.set_time_series(symbol, cached.clone()).await;
                 Ok(cached)
             } else {
                 Err(format!("API error: {}; No cached data available", e))
             }
         }
         _ => {
-            // Empty data from API, fall back to cached
             let cached = db.get_time_series(&symbol, None)
                 .map_err(|e| format!("Database error: {}", e))?;
             if !cached.is_empty() {
+                cache.set_time_series(symbol, cached.clone()).await;
                 Ok(cached)
             } else {
                 Ok(vec![])
@@ -210,11 +236,11 @@ fn add_portfolio_position(
     symbol: String,
     name: String,
     quantity: i64,
-    avgCost: f64,
-    currentPrice: Option<f64>,
+    avg_cost: f64,
+    current_price: Option<f64>,
     db: tauri::State<'_, Arc<Database>>,
 ) -> Result<i64, String> {
-    db.add_portfolio_position(&symbol, &name, quantity, avgCost, currentPrice)
+    db.add_portfolio_position(&symbol, &name, quantity, avg_cost, current_price)
         .map_err(|e| format!("Failed to add position: {}", e))
 }
 
@@ -229,11 +255,22 @@ fn get_portfolio_positions(
 #[tauri::command]
 fn update_portfolio_position_price(
     symbol: String,
-    currentPrice: f64,
+    current_price: f64,
     db: tauri::State<'_, Arc<Database>>,
 ) -> Result<(), String> {
-    db.update_portfolio_position_price(&symbol, currentPrice)
+    db.update_portfolio_position_price(&symbol, current_price)
         .map_err(|e| format!("Failed to update position price: {}", e))
+}
+
+#[tauri::command]
+fn update_portfolio_position(
+    id: i64,
+    quantity: i64,
+    avg_cost: f64,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<(), String> {
+    db.update_portfolio_position(id, quantity, avg_cost)
+        .map_err(|e| format!("Failed to update position: {}", e))
 }
 
 #[tauri::command]
@@ -278,12 +315,30 @@ fn get_portfolio_transactions(
 }
 
 #[tauri::command]
+fn update_portfolio_transaction(
+    id: i64,
+    quantity: i64,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<(), String> {
+    db.update_portfolio_transaction(id, quantity)
+        .map_err(|e| format!("Failed to update transaction: {}", e))
+}
+
+#[tauri::command]
 fn delete_portfolio_transaction(
     id: i64,
     db: tauri::State<'_, Arc<Database>>,
 ) -> Result<(), String> {
     db.delete_portfolio_transaction(id)
         .map_err(|e| format!("Failed to delete transaction: {}", e))
+}
+
+#[tauri::command]
+fn recalculate_all_positions_from_transactions(
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<(), String> {
+    db.recalculate_all_positions_from_transactions()
+        .map_err(|e| format!("Failed to recalculate positions: {}", e))
 }
 
 #[tauri::command]
@@ -424,7 +479,7 @@ fn get_all_tags(
     db: tauri::State<'_, Arc<Database>>,
 ) -> Result<Vec<TagInfo>, String> {
     db.get_all_tags()
-        .map(|tags| {
+        .map(|tags: Vec<(i64, String, String)>| {
             tags.into_iter()
                 .map(|(id, name, color)| TagInfo { id, name, color })
                 .collect()
@@ -478,7 +533,7 @@ fn get_stock_tags(
     db: tauri::State<'_, Arc<Database>>,
 ) -> Result<Vec<TagInfo>, String> {
     db.get_stock_tags(&symbol)
-        .map(|tags| {
+        .map(|tags: Vec<(i64, String, String)>| {
             tags.into_iter()
                 .map(|(id, name, color)| TagInfo { id, name, color })
                 .collect()
@@ -556,7 +611,7 @@ fn get_price_alerts(
     db: tauri::State<'_, Arc<Database>>,
 ) -> Result<Vec<PriceAlertInfo>, String> {
     db.get_price_alerts(symbol.as_deref())
-        .map(|alerts| {
+        .map(|alerts: Vec<(i64, String, f64, String, bool, bool)>| {
             alerts
                 .into_iter()
                 .map(|(id, symbol, threshold_price, direction, enabled, triggered)| {
@@ -602,55 +657,64 @@ fn delete_price_alert(
 
 #[tauri::command]
 async fn check_price_alerts(
+    cache: tauri::State<'_, Arc<StockCache>>,
     db: tauri::State<'_, Arc<Database>>,
 ) -> Result<Vec<PriceAlertInfo>, String> {
-    let active_alerts = db.get_active_price_alerts()
+    let active_alerts: Vec<(i64, String, f64, String)> = db.get_active_price_alerts()
         .map_err(|e| format!("Failed to get active alerts: {}", e))?;
     
     let mut triggered_alerts = Vec::new();
     
     for (alert_id, symbol, threshold_price, direction) in active_alerts {
-        // Add retry logic for network requests
-        let mut retry_count = 0;
-        let max_retries = 2;
+        let quote = if let Some(cached_quote) = cache.get_quote(&symbol).await {
+            cached_quote
+        } else {
+            let mut retry_count = 0;
+            let max_retries = 2;
 
-        let quote_result = loop {
-            match fetch_stock_quote(&symbol).await {
-                Ok(quote) => break Some(quote),
-                Err(e) => {
-                    retry_count += 1;
-                    if retry_count >= max_retries {
-                        eprintln!("Failed to fetch quote for {} after {} retries: {}", symbol, max_retries, e);
-                        break None;
+            let quote_result = loop {
+                match fetch_stock_quote(&symbol).await {
+                    Ok(quote) => {
+                        cache.set_quote(symbol.clone(), quote.clone()).await;
+                        break Some(quote);
                     }
-                    // Wait before retry
-                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                    Err(e) => {
+                        retry_count += 1;
+                        if retry_count >= max_retries {
+                            eprintln!("Failed to fetch quote for {} after {} retries: {}", symbol, max_retries, e);
+                            break None;
+                        }
+                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                    }
                 }
+            };
+            
+            match quote_result {
+                Some(q) => q,
+                None => continue,
             }
         };
 
-        if let Some(quote) = quote_result {
-            let should_trigger = match direction.as_str() {
-                "above" => quote.price >= threshold_price,
-                "below" => quote.price <= threshold_price,
-                _ => false,
-            };
+        let should_trigger = match direction.as_str() {
+            "above" => quote.price >= threshold_price,
+            "below" => quote.price <= threshold_price,
+            _ => false,
+        };
 
-            if should_trigger {
-                if let Err(e) = db.mark_alert_triggered(alert_id) {
-                    eprintln!("Failed to mark alert as triggered: {}", e);
-                    continue;
-                }
-
-                triggered_alerts.push(PriceAlertInfo {
-                    id: alert_id,
-                    symbol,
-                    threshold_price,
-                    direction,
-                    enabled: true,
-                    triggered: true,
-                });
+        if should_trigger {
+            if let Err(e) = db.mark_alert_triggered(alert_id) {
+                eprintln!("Failed to mark alert as triggered: {}", e);
+                continue;
             }
+
+            triggered_alerts.push(PriceAlertInfo {
+                id: alert_id,
+                symbol,
+                threshold_price,
+                direction,
+                enabled: true,
+                triggered: true,
+            });
         }
     }
     
@@ -686,6 +750,58 @@ fn main() {
             }
 
             let db_arc = Arc::new(db);
+            let cache = Arc::new(StockCache::new());
+            
+            // Start background task to batch write cached data to database
+            let cache_for_write = cache.clone();
+            let db_for_write = db_arc.clone();
+            tauri::async_runtime::spawn(async move {
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+                
+                loop {
+                    interval.tick().await;
+                    
+                    let quotes = cache_for_write.get_pending_quotes().await;
+                    if !quotes.is_empty() {
+                        for (_, quote) in quotes {
+                            if let Err(e) = db_for_write.save_quote(&quote) {
+                                eprintln!("Failed to batch save quote for {}: {}", quote.symbol, e);
+                            }
+                        }
+                    }
+                    
+                    let time_series = cache_for_write.get_pending_time_series().await;
+                    if !time_series.is_empty() {
+                        for (symbol, data) in time_series {
+                            if let Err(e) = db_for_write.save_time_series(&symbol, &data) {
+                                eprintln!("Failed to batch save time series for {}: {}", symbol, e);
+                            }
+                        }
+                    }
+                    
+                    let history = cache_for_write.get_pending_history().await;
+                    if !history.is_empty() {
+                        for (key, (period, data)) in history {
+                            if let Some((symbol, _)) = key.split_once(':') {
+                                if let Err(e) = db_for_write.save_kline(symbol, &period, &data) {
+                                    eprintln!("Failed to batch save history for {} {}: {}", symbol, period, e);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Start background task to cleanup expired cache entries
+            let cache_for_cleanup = cache.clone();
+            tauri::async_runtime::spawn(async move {
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
+                
+                loop {
+                    interval.tick().await;
+                    cache_for_cleanup.cleanup_expired().await;
+                }
+            });
             
             // Start background task to initialize and periodically update stock cache
             let db_for_cache = db_arc.clone();
@@ -738,6 +854,7 @@ fn main() {
             });
             
             app.manage(db_arc);
+            app.manage(cache);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -778,10 +895,13 @@ fn main() {
             add_portfolio_position,
             get_portfolio_positions,
             update_portfolio_position_price,
+            update_portfolio_position,
             delete_portfolio_position,
             add_portfolio_transaction,
             get_portfolio_transactions,
-            delete_portfolio_transaction
+            update_portfolio_transaction,
+            delete_portfolio_transaction,
+            recalculate_all_positions_from_transactions
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -49,16 +49,16 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
   };
 
   // Create sequences for LSTM-like training
-  const createSequences = (data: number[], seqLength: number): Array<{ input: number[]; output: number }> => {
-    const sequences: Array<{ input: number[]; output: number }> = [];
-    for (let i = 0; i < data.length - seqLength; i++) {
-      sequences.push({
-        input: data.slice(i, i + seqLength),
-        output: data[i + seqLength],
-      });
-    }
-    return sequences;
-  };
+  // const _createSequences = (data: number[], seqLength: number): Array<{ input: number[]; output: number }> => {
+  //   const sequences: Array<{ input: number[]; output: number }> = [];
+  //   for (let i = 0; i < data.length - seqLength; i++) {
+  //     sequences.push({
+  //       input: data.slice(i, i + seqLength),
+  //       output: data[i + seqLength],
+  //     });
+  //   }
+  //   return sequences;
+  // };
 
   // Simplified LSTM-like prediction using weighted moving average with momentum
   const predictLSTM = async (): Promise<number[]> => {
@@ -190,8 +190,8 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
           name: t("analysis.lstmPrediction"),
           type: "line",
           data: allValues.map((v, i) => [i, v]),
-          lineStyle: { color: "#4caf50", width: 2, type: "dashed" },
-          itemStyle: { color: "#4caf50" },
+          lineStyle: { color: "#00ff00", width: 2, type: "dashed" },
+          itemStyle: { color: "#00ff00" },
           markLine: {
             symbol: ["none", "none"],
             data: [

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
+import Icon from "./Icon";
 import "./PredictionPanel.css";
 
 interface StockData {
@@ -36,6 +38,7 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
   visible,
   onClose,
 }) => {
+  const { t } = useTranslation();
   const [method, setMethod] = useState<PredictionMethod>("linear");
   const [period, setPeriod] = useState(5);
   const [predictions, setPredictions] = useState<PredictionResult[]>([]);
@@ -136,18 +139,18 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
       },
       series: [
         {
-          name: "K线",
+          name: t("portfolio.kline"),
           type: "candlestick",
           data: candlestickData,
           itemStyle: {
-            color: "#f44336",
-            color0: "#4caf50",
-            borderColor: "#f44336",
-            borderColor0: "#4caf50",
+            color: "#ff0000",
+            color0: "#00ff00",
+            borderColor: "#ff0000",
+            borderColor0: "#00ff00",
           },
         },
         {
-          name: "预测价格",
+          name: t("portfolio.predictedPrice"),
           type: "line",
           data: [...new Array(dates.length).fill(null), ...predData],
           smooth: false,
@@ -163,7 +166,7 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
           },
         },
         {
-          name: "上界",
+          name: t("portfolio.upperBound"),
           type: "line",
           data: [...new Array(dates.length).fill(null), ...upperData],
           smooth: false,
@@ -176,7 +179,7 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
           },
         },
         {
-          name: "下界",
+          name: t("portfolio.lowerBound"),
           type: "line",
           data: [...new Array(dates.length).fill(null), ...lowerData],
           smooth: false,
@@ -201,7 +204,7 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
         },
       },
       legend: {
-        data: ["K线", "预测价格", "上界", "下界"],
+        data: [t("portfolio.kline"), t("portfolio.predictedPrice"), t("portfolio.upperBound"), t("portfolio.lowerBound")],
         textStyle: {
           color: "#cccccc",
           fontSize: 6,
@@ -218,9 +221,9 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
   const getSignalColor = (signal: string) => {
     switch (signal) {
       case "buy":
-        return "#4caf50";
+        return "#00ff00";
       case "sell":
-        return "#f44336";
+        return "#ff0000";
       default:
         return "#858585";
     }
@@ -229,50 +232,50 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
   const getSignalText = (signal: string) => {
     switch (signal) {
       case "buy":
-        return "买入";
+        return t("aiAgent.buy");
       case "sell":
-        return "卖出";
+        return t("aiAgent.sell");
       default:
-        return "持有";
+        return t("aiAgent.hold");
     }
   };
 
   return (
     <div className="prediction-panel">
       <div className="prediction-header">
-        <span>价格预测</span>
+        <span>{t("portfolio.pricePrediction")}</span>
         <button className="close-btn" onClick={onClose}>
-          ×
+          <Icon name="close" size={18} />
         </button>
       </div>
       <div className="prediction-controls">
         <div className="control-group">
-          <label>预测方法:</label>
+          <label>{t("portfolio.predictionMethod")}:</label>
           <select
             value={method}
             onChange={(e) => setMethod(e.target.value as PredictionMethod)}
           >
-            <option value="linear">线性回归</option>
-            <option value="ma">移动平均外推</option>
-            <option value="technical">技术指标</option>
-            <option value="polynomial">多项式回归</option>
+            <option value="linear">{t("portfolio.linearRegression")}</option>
+            <option value="ma">{t("portfolio.movingAverage")}</option>
+            <option value="technical">{t("portfolio.technicalIndicator")}</option>
+            <option value="polynomial">{t("portfolio.polynomialRegression")}</option>
           </select>
         </div>
         <div className="control-group">
-          <label>预测天数:</label>
+          <label>{t("portfolio.predictionDays")}:</label>
           <select value={period} onChange={(e) => setPeriod(Number(e.target.value))}>
-            <option value={5}>5天</option>
-            <option value={10}>10天</option>
-            <option value={30}>30天</option>
+            <option value={5}>5{t("portfolio.days")}</option>
+            <option value={10}>10{t("portfolio.days")}</option>
+            <option value={30}>30{t("portfolio.days")}</option>
           </select>
         </div>
         <button className="generate-btn" onClick={generatePrediction} disabled={loading}>
-          {loading ? "计算中..." : "生成预测"}
+          {loading ? t("portfolio.calculating") : t("portfolio.generatePrediction")}
         </button>
       </div>
       <div className="prediction-chart">
         {loading ? (
-          <div className="loading-message">计算预测中...</div>
+          <div className="loading-message">{t("portfolio.calculatingPrediction")}</div>
         ) : predictions.length > 0 ? (
           <ReactECharts
             option={chartOption}
@@ -280,26 +283,26 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
             opts={{ renderer: "canvas" }}
           />
         ) : (
-          <div className="empty-message">暂无预测数据</div>
+          <div className="empty-message">{t("portfolio.noPredictionData")}</div>
         )}
       </div>
       <div className="prediction-results">
-        <div className="results-header">预测结果</div>
+        <div className="results-header">{t("portfolio.predictionResults")}</div>
         <table>
           <thead>
             <tr>
-              <th>日期</th>
-              <th>预测价格</th>
-              <th>置信度</th>
-              <th>信号</th>
-              <th>价格区间</th>
+              <th>{t("portfolio.date")}</th>
+              <th>{t("portfolio.predictedPrice")}</th>
+              <th>{t("portfolio.confidence")}</th>
+              <th>{t("portfolio.signal")}</th>
+              <th>{t("portfolio.priceRange")}</th>
             </tr>
           </thead>
           <tbody>
             {predictions.map((pred, idx) => (
               <tr key={idx}>
                 <td>{pred.date}</td>
-                <td style={{ color: pred.predicted_price >= klineData[klineData.length - 1]?.close ? "#f44336" : "#4caf50" }}>
+                <td style={{ color: pred.predicted_price >= klineData[klineData.length - 1]?.close ? "#ff0000" : "#00ff00" }}>
                   {pred.predicted_price.toFixed(2)}
                 </td>
                 <td>
@@ -308,7 +311,7 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
                       className="confidence-fill"
                       style={{
                         width: `${pred.confidence}%`,
-                        backgroundColor: pred.confidence > 70 ? "#4caf50" : pred.confidence > 50 ? "#ff9800" : "#f44336",
+                        backgroundColor: pred.confidence > 70 ? "#00ff00" : pred.confidence > 50 ? "#ff9800" : "#ff0000",
                       }}
                     />
                     <span>{pred.confidence.toFixed(0)}%</span>
@@ -326,7 +329,7 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
         </table>
       </div>
       <div className="prediction-warning">
-        ! 风险提示：预测结果仅供参考，不构成投资建议。投资有风险，入市需谨慎。
+        ! {t("portfolio.riskWarning")}
       </div>
     </div>
   );

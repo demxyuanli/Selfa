@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
+import Icon from "./Icon";
 import "./ChartDialog.css";
 
 interface ChartDialogProps {
@@ -38,7 +39,7 @@ const ChartDialog: React.FC<ChartDialogProps> = ({ isOpen, onClose, title, chart
         <div className="chart-dialog-header">
           <h2>{title}</h2>
           <button className="chart-dialog-close" onClick={onClose} title={t("chart.close")}>
-            ×
+            <Icon name="close" size={18} />
           </button>
         </div>
         <div className="chart-dialog-content">

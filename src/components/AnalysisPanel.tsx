@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
+import { getAnalysisParams, getTechnicalIndicatorParams } from "../utils/settings";
+import Icon from "./Icon";
 import "./AnalysisPanel.css";
 
 interface StockData {
@@ -215,22 +217,25 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   const { t } = useTranslation();
   const [analysisType, setAnalysisType] = useState<AnalysisType>("timeseries");
   
+  const analysisDefaults = getAnalysisParams();
+  const indicatorDefaults = getTechnicalIndicatorParams();
+  
   const [tsParams, setTsParams] = useState<TimeSeriesParams>({
-    priceChangeThreshold: 2.0,
-    volumeMultiplier: 2.0,
-    maPeriod: 5,
+    priceChangeThreshold: analysisDefaults.priceChangeThreshold,
+    volumeMultiplier: analysisDefaults.volumeMultiplier,
+    maPeriod: analysisDefaults.maPeriod,
   });
 
   const [klParams, setKlParams] = useState<KLineParams>({
-    maPeriods: [5, 10, 20, 60],
-    macdFast: 12,
-    macdSlow: 26,
-    macdSignal: 9,
-    rsiPeriod: 14,
-    kdjPeriod: 9,
-    bbPeriod: 20,
-    atrPeriod: 14,
-    trendDays: 20,
+    maPeriods: indicatorDefaults.maPeriods,
+    macdFast: indicatorDefaults.macdFast,
+    macdSlow: indicatorDefaults.macdSlow,
+    macdSignal: indicatorDefaults.macdSignal,
+    rsiPeriod: indicatorDefaults.rsiPeriod,
+    kdjPeriod: indicatorDefaults.kdjPeriod,
+    bbPeriod: indicatorDefaults.bbPeriod,
+    atrPeriod: indicatorDefaults.atrPeriod,
+    trendDays: analysisDefaults.trendDays,
   });
 
   // ============= Time Series Analysis =============
@@ -622,7 +627,9 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           <div className="analysis-title">
             <span>{t("analysis.title")} - {stockSymbol} {stockName}</span>
           </div>
-          <button className="close-btn" onClick={onClose}>×</button>
+          <button className="close-btn" onClick={onClose}>
+            <Icon name="close" size={18} />
+          </button>
         </div>
 
         <div className="analysis-tabs">

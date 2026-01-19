@@ -30,7 +30,9 @@
 }
 
 .language-arrow {
-  font-size: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-secondary);
   margin-left: 2px;
 }

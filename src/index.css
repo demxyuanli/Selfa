@@ -14,22 +14,40 @@
   --text-disabled: #656565;
   --accent-color: #007acc;
   --accent-hover: #0098ff;
-  --success-color: #4ec9b0;
-  --error-color: #f48771;
+  --success-color: #00ff00;
+  --error-color: #ff0000;
   --warning-color: #dcdcaa;
   --sidebar-width: 240px;
   --header-height: 30px;
   --toolbar-height: 36px;
   --statusbar-height: 22px;
+  --font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-size: 13px;
+  --number-font-family: 'Consolas', 'Monaco', 'Courier New', 'Roboto Mono', 'Source Code Pro', monospace;
+}
+
+:root[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f3f3f3;
+  --bg-tertiary: #e8e8e8;
+  --border-color: #d0d0d0;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --text-disabled: #999999;
+  --accent-color: #007acc;
+  --accent-hover: #0098ff;
+  --success-color: #00aa00;
+  --error-color: #cc0000;
+  --warning-color: #b8860b;
 }
 
 body {
-  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--font-size);
   overflow: hidden;
 }
 
@@ -77,7 +95,7 @@ input:focus, select:focus {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: calc(var(--font-size) - 1px);
 }
 
 th, td {
@@ -112,6 +130,57 @@ tr:hover {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border-color);
+}
+
+[data-theme="light"] .settings-dialog-overlay {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="light"] .settings-dialog {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Stock number font class - apply to all numeric displays */
+.stock-number,
+.stock-price,
+.stock-change,
+.stock-change-percent,
+.stock-volume,
+.price-value,
+.price-change,
+.stat-value,
+.price-cell,
+.vol-cell,
+.close-cell,
+.quantity-display,
+.target-price,
+.pred-price,
+.prediction-price,
+.stats-value,
+.stat-change,
+.editable-quantity,
+.alert-current-price,
+.alert-distance,
+td.stock-price,
+td.stock-change,
+td.stock-change-percent,
+td.stock-volume,
+td.price-cell,
+td.vol-cell,
+td.close-cell {
+  font-family: var(--number-font-family);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Apply number font to table cells that contain numeric content */
+.stocks-table td.stock-price,
+.stocks-table td.stock-change,
+.stocks-table td.stock-change-percent,
+.stocks-table td.stock-volume {
+  font-family: var(--number-font-family);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 @media (max-width: 768px) {

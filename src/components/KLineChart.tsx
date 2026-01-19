@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
 import "./KLineChart.css";
 
@@ -31,6 +32,7 @@ const calculateMA = (data: StockData[], period: number): number[] => {
 };
 
 const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
+  const { t } = useTranslation();
   const option = useMemo(() => {
     if (!data || data.length === 0) {
       return {};
@@ -187,14 +189,14 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
       ],
       series: [
         {
-          name: "K线",
+          name: t("chart.kline"),
           type: "candlestick",
           data: candlestickData,
           itemStyle: {
-            color: "#f44336",
-            color0: "#4caf50",
-            borderColor: "#f44336",
-            borderColor0: "#4caf50",
+            color: "#ff0000",
+            color0: "#00ff00",
+            borderColor: "#ff0000",
+            borderColor0: "#00ff00",
           },
           emphasis: {
             itemStyle: {
@@ -262,7 +264,7 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
           },
         },
         {
-          name: "成交量",
+          name: t("chart.volume"),
           type: "bar",
           xAxisIndex: 1,
           yAxisIndex: 1,
@@ -278,13 +280,13 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
                 return "rgba(133, 133, 133, 0.6)";
               }
               const prevData = data[index - 1];
-              return stockData.close >= prevData.close ? "#f44336" : "#4caf50";
+              return stockData.close >= prevData.close ? "#ff0000" : "#00ff00";
             },
           },
         },
       ],
       legend: {
-        data: ["K线", "MA5", "MA10", "MA20", "MA60"],
+        data: [t("chart.kline"), "MA5", "MA10", "MA20", "MA60"],
           textStyle: {
             color: "#cccccc",
             fontSize: compact ? 5 : 6,
@@ -315,11 +317,11 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
           let html = `
             <div style="padding: 4px 0;">
               <div><strong>${stockData.date}</strong></div>
-              <div>开盘: <span style="color: #cccccc;">${stockData.open.toFixed(2)}</span></div>
-              <div>收盘: <span style="color: ${stockData.close >= stockData.open ? "#f44336" : "#4caf50"};">${stockData.close.toFixed(2)}</span></div>
-              <div>最高: <span style="color: #cccccc;">${stockData.high.toFixed(2)}</span></div>
-              <div>最低: <span style="color: #cccccc;">${stockData.low.toFixed(2)}</span></div>
-              <div>成交量: <span style="color: #cccccc;">${compact ? Math.round(stockData.volume / 100000000) : (stockData.volume / 10000).toFixed(2) + "万"}</span></div>
+              <div>${t("chart.open")}: <span style="color: #cccccc;">${stockData.open.toFixed(2)}</span></div>
+              <div>${t("chart.close")}: <span style="color: ${stockData.close >= stockData.open ? "#ff0000" : "#00ff00"};">${stockData.close.toFixed(2)}</span></div>
+              <div>${t("chart.high")}: <span style="color: #cccccc;">${stockData.high.toFixed(2)}</span></div>
+              <div>${t("chart.low")}: <span style="color: #cccccc;">${stockData.low.toFixed(2)}</span></div>
+              <div>${t("chart.volume")}: <span style="color: #cccccc;">${compact ? Math.round(stockData.volume / 100000000) : (stockData.volume / 10000).toFixed(2) + t("common.tenThousand")}</span></div>
           `;
 
           params.forEach((p: any) => {
@@ -339,7 +341,7 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
         },
       },
     };
-  }, [data]);
+  }, [data, t]);
 
   if (!data || data.length === 0) {
     return (

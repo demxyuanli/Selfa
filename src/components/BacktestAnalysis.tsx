@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
 import ChartDialog from "./ChartDialog";
+import { getDefaultCommissionRate, getBacktestParams } from "../utils/settings";
 import "./StockAnalysis.css";
 import "./BacktestAnalysis.css";
 
@@ -47,21 +48,36 @@ type StrategyType = "ma_cross" | "rsi" | "macd_rsi" | "custom";
 
 const BacktestAnalysis: React.FC<BacktestAnalysisProps> = ({ klineData }) => {
   const { t } = useTranslation();
+  const backtestDefaults = getBacktestParams();
   const [strategyType, setStrategyType] = useState<StrategyType>("ma_cross");
-  const [initialCapital, setInitialCapital] = useState(100000);
-  const [commissionRate, setCommissionRate] = useState(0.001);
-  const [maFast, setMaFast] = useState(5);
-  const [maSlow, setMaSlow] = useState(20);
+  const [initialCapital, setInitialCapital] = useState(backtestDefaults.initialCapital);
+  const [commissionRate, setCommissionRate] = useState(getDefaultCommissionRate());
+
+  useEffect(() => {
+    setCommissionRate(getDefaultCommissionRate());
+    const defaults = getBacktestParams();
+    setInitialCapital(defaults.initialCapital);
+    setMaFast(defaults.maFast);
+    setMaSlow(defaults.maSlow);
+    setRsiOverbought(defaults.rsiOverbought);
+    setRsiOversold(defaults.rsiOversold);
+    setStopLossPercent(defaults.stopLossPercent);
+    setTakeProfitPercent(defaults.takeProfitPercent);
+    setPositionSizePercent(defaults.positionSizePercent);
+    setVolumeMultiplier(defaults.volumeMultiplier);
+  }, []);
+  const [maFast, setMaFast] = useState(backtestDefaults.maFast);
+  const [maSlow, setMaSlow] = useState(backtestDefaults.maSlow);
   const [rsiPeriod, setRsiPeriod] = useState(14);
-  const [rsiOverbought, setRsiOverbought] = useState(70);
-  const [rsiOversold, setRsiOversold] = useState(30);
-  const [stopLossPercent, setStopLossPercent] = useState(5);
-  const [takeProfitPercent, setTakeProfitPercent] = useState(10);
-  const [positionSizePercent, setPositionSizePercent] = useState(100);
+  const [rsiOverbought, setRsiOverbought] = useState(backtestDefaults.rsiOverbought);
+  const [rsiOversold, setRsiOversold] = useState(backtestDefaults.rsiOversold);
+  const [stopLossPercent, setStopLossPercent] = useState(backtestDefaults.stopLossPercent);
+  const [takeProfitPercent, setTakeProfitPercent] = useState(backtestDefaults.takeProfitPercent);
+  const [positionSizePercent, setPositionSizePercent] = useState(backtestDefaults.positionSizePercent);
   const [useVolumeConfirmation, setUseVolumeConfirmation] = useState(true);
-  const [volumeMultiplier, setVolumeMultiplier] = useState(1.2);
-  const [customBuyCondition, setCustomBuyCondition] = useState("");
-  const [customSellCondition, setCustomSellCondition] = useState("");
+  const [volumeMultiplier, setVolumeMultiplier] = useState(backtestDefaults.volumeMultiplier);
+  const [_customBuyCondition, _setCustomBuyCondition] = useState("");
+  const [_customSellCondition, _setCustomSellCondition] = useState("");
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isChartDialogOpen, setIsChartDialogOpen] = useState(false);
@@ -215,17 +231,13 @@ const BacktestAnalysis: React.FC<BacktestAnalysisProps> = ({ klineData }) => {
           
           let buySignal = false;
           let sellSignal = false;
-          let stopLossTriggered = false;
-          let takeProfitTriggered = false;
 
           // Check stop loss and take profit
           if (positions > 0 && entryPrice > 0) {
             const priceChange = ((currentPrice - entryPrice) / entryPrice) * 100;
             if (priceChange <= -stopLossPercent) {
-              stopLossTriggered = true;
               sellSignal = true;
             } else if (priceChange >= takeProfitPercent) {
-              takeProfitTriggered = true;
               sellSignal = true;
             }
           }
@@ -260,7 +272,6 @@ const BacktestAnalysis: React.FC<BacktestAnalysisProps> = ({ klineData }) => {
                 macd.macdLine[i] !== null && macd.signalLine[i] !== null &&
                 macd.macdLine[i - 1] !== null && macd.signalLine[i - 1] !== null) {
               const rsiValue = rsi[i]!;
-              const prevRsiValue = rsi[i - 1]!;
               const macdValue = macd.macdLine[i]!;
               const signalValue = macd.signalLine[i]!;
               const prevMacd = macd.macdLine[i - 1]!;
@@ -475,22 +486,22 @@ const BacktestAnalysis: React.FC<BacktestAnalysisProps> = ({ klineData }) => {
           type: "line",
           yAxisIndex: 1,
           data: equityValues,
-          lineStyle: { color: "#4caf50", width: 2 },
-          itemStyle: { color: "#4caf50" },
+          lineStyle: { color: "#00ff00", width: 2 },
+          itemStyle: { color: "#00ff00" },
         },
         {
           name: t("analysis.buySignals"),
           type: "scatter",
           data: buyPoints,
           symbolSize: 10,
-          itemStyle: { color: "#4caf50" },
+          itemStyle: { color: "#00ff00" },
         },
         {
           name: t("analysis.sellSignals"),
           type: "scatter",
           data: sellPoints,
           symbolSize: 10,
-          itemStyle: { color: "#f44336" },
+          itemStyle: { color: "#ff0000" },
         },
       ],
     };

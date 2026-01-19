@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import Icon from "./Icon";
 import "./LanguageSelector.css";
 
 const LanguageSelector: React.FC = () => {
@@ -40,7 +41,9 @@ const LanguageSelector: React.FC = () => {
     <div className="language-selector" ref={dropdownRef}>
       <button className="language-button" onClick={() => setIsOpen(!isOpen)} title={t("language.select")}>
         <span className="language-flag">{currentLanguage.flag}</span>
-        <span className="language-arrow">{isOpen ? "▲" : "▼"}</span>
+        <span className="language-arrow">
+          {isOpen ? <Icon name="chevronUp" size={10} /> : <Icon name="chevronDown" size={10} />}
+        </span>
       </button>
       {isOpen && (
         <div className="language-dropdown">

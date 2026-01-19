@@ -56,7 +56,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
   const lows = klineData.map(d => d.low);
   const volumes = klineData.map((d) => ({
     value: d.volume,
-    itemStyle: { color: d.close >= d.open ? "#f44336" : "#4caf50" }
+    itemStyle: { color: d.close >= d.open ? "#ff0000" : "#00ff00" }
   }));
 
   const series: any[] = [];
@@ -90,10 +90,10 @@ export function generateChartConfig(options: ChartConfigOptions): any {
     type: "candlestick",
     data: klineData.map(d => [d.open, d.close, d.low, d.high]),
     itemStyle: {
-      color: "#f44336",
-      color0: "#4caf50",
-      borderColor: "#f44336",
-      borderColor0: "#4caf50",
+      color: "#ff0000",
+      color0: "#00ff00",
+      borderColor: "#ff0000",
+      borderColor0: "#00ff00",
     },
     markLine: {
       silent: true,
@@ -112,7 +112,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
             position: "insideEndRight",
             formatter: `${t("analysis.supportLevel")}: ${supportLevel.toFixed(2)}`,
             fontSize: 9,
-            color: "#4caf50",
+            color: "#00ff00",
           },
         },
         {
@@ -123,7 +123,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
             position: "insideEndRight",
             formatter: `${t("analysis.resistanceLevel")}: ${resistanceLevel.toFixed(2)}`,
             fontSize: 9,
-            color: "#f44336",
+            color: "#ff0000",
           },
         },
       ],
@@ -395,7 +395,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
         yAxisIndex: 2,
         data: macd.histogram.map((v) => ({
           value: v,
-          itemStyle: { color: v !== null && v > 0 ? "#4caf50" : "#f44336" },
+          itemStyle: { color: v !== null && v > 0 ? "#00ff00" : "#ff0000" },
         })),
       }
     );
@@ -474,7 +474,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       yAxisIndex: 2,
       data: new Array(dates.length).fill(100),
       symbol: "none",
-      lineStyle: { color: "#f44336", width: 1, type: "dashed" },
+      lineStyle: { color: "#ff0000", width: 1, type: "dashed" },
     });
     series.push({
       name: "Oversold (-100)",
@@ -483,7 +483,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       yAxisIndex: 2,
       data: new Array(dates.length).fill(-100),
       symbol: "none",
-      lineStyle: { color: "#4caf50", width: 1, type: "dashed" },
+      lineStyle: { color: "#00ff00", width: 1, type: "dashed" },
     });
     series.push({
       name: "Zero Line",
@@ -520,7 +520,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       yAxisIndex: 2,
       data: adxData.plusDI,
       symbol: "none",
-      lineStyle: { color: "#4caf50", width: 1 },
+      lineStyle: { color: "#00ff00", width: 1 },
     });
     series.push({
       name: "-DI",
@@ -529,7 +529,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       yAxisIndex: 2,
       data: adxData.minusDI,
       symbol: "none",
-      lineStyle: { color: "#f44336", width: 1 },
+      lineStyle: { color: "#ff0000", width: 1 },
     });
     series.push({
       name: "Trend Strength (25)",
@@ -557,7 +557,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       yAxisIndex: 2,
       data: dmiData.plusDI,
       symbol: "none",
-      lineStyle: { color: "#4caf50", width: 1.5 },
+      lineStyle: { color: "#00ff00", width: 1.5 },
     });
     series.push({
       name: "-DI (Directional Indicator)",
@@ -566,7 +566,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       yAxisIndex: 2,
       data: dmiData.minusDI,
       symbol: "none",
-      lineStyle: { color: "#f44336", width: 1.5 },
+      lineStyle: { color: "#ff0000", width: 1.5 },
     });
     series.push({
       name: "ADX (Trend Strength)",
@@ -621,7 +621,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       yAxisIndex: 2,
       data: new Array(dates.length).fill(80),
       symbol: "none",
-      lineStyle: { color: "#f44336", width: 1, type: "dashed" },
+      lineStyle: { color: "#ff0000", width: 1, type: "dashed" },
     });
     series.push({
       name: "Oversold (20)",
@@ -630,7 +630,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       yAxisIndex: 2,
       data: new Array(dates.length).fill(20),
       symbol: "none",
-      lineStyle: { color: "#4caf50", width: 1, type: "dashed" },
+      lineStyle: { color: "#00ff00", width: 1, type: "dashed" },
     });
   } else if (oscillatorType === "bbpercent") {
     const bb = calculateBollingerBands(closes, indicatorParams.bbPercentPeriod, 2);
@@ -670,7 +670,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       yAxisIndex: 2,
       data: new Array(dates.length).fill(80),
       symbol: "none",
-      lineStyle: { color: "#f44336", width: 1, type: "dashed" },
+      lineStyle: { color: "#ff0000", width: 1, type: "dashed" },
     });
     series.push({
       name: "Oversold (20%)",
@@ -679,7 +679,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       yAxisIndex: 2,
       data: new Array(dates.length).fill(20),
       symbol: "none",
-      lineStyle: { color: "#4caf50", width: 1, type: "dashed" },
+      lineStyle: { color: "#00ff00", width: 1, type: "dashed" },
     });
     series.push({
       name: "Middle (50%)",

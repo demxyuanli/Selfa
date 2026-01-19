@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
+import Icon from "./Icon";
 import "./PriceAlertDialog.css";
 
 interface PriceAlertInfo {
@@ -275,7 +276,7 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
         <div className="price-alert-dialog-header">
           <h2>{t("priceAlert.title")}</h2>
           <button className="price-alert-dialog-close" onClick={onClose}>
-            ×
+            <Icon name="close" size={18} />
           </button>
         </div>
         <div className="price-alert-dialog-content">
@@ -458,7 +459,7 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
                                 : t("priceAlert.enable")
                             }
                           >
-                            {alert.enabled ? "⏸" : "▶"}
+                            {alert.enabled ? <Icon name="pause" size={14} /> : <Icon name="play" size={14} />}
                           </button>
                           {!editingAlert && (
                             <button
@@ -466,7 +467,7 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
                               onClick={() => handleEdit(alert)}
                               title={t("priceAlert.edit")}
                             >
-                              ✏️
+                              <Icon name="edit" size={14} />
                             </button>
                           )}
                           {alert.triggered && (
@@ -475,7 +476,7 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
                               onClick={() => handleResetTriggered(alert.id)}
                               title={t("priceAlert.reset")}
                             >
-                              🔄
+                              <Icon name="refresh" size={14} />
                             </button>
                           )}
                           <button
@@ -483,7 +484,7 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
                             onClick={() => handleDeleteAlert(alert.id)}
                             title={t("priceAlert.delete")}
                           >
-                            🗑️
+                            <Icon name="delete" size={14} />
                           </button>
                         </div>
                       </td>

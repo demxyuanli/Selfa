@@ -69,11 +69,11 @@
 }
 
 .summary-value.up {
-  color: #dc2626;
+  color: #ff0000;
 }
 
 .summary-value.down {
-  color: #059669;
+  color: #00ff00;
 }
 
 .summary-bar-item {
@@ -103,13 +103,13 @@
 
 .summary-bar-up {
   height: 100%;
-  background-color: #dc2626;
+  background-color: #ff0000;
   transition: width 0.3s ease;
 }
 
 .summary-bar-down {
   height: 100%;
-  background-color: #059669;
+  background-color: #00ff00;
   transition: width 0.3s ease;
 }
 
@@ -131,11 +131,11 @@
 }
 
 .up-label {
-  color: #dc2626;
+  color: #ff0000;
 }
 
 .down-label {
-  color: #059669;
+  color: #00ff00;
 }
 
 .flat-label {

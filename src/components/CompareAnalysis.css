@@ -216,11 +216,11 @@
 }
 
 .stats-value.positive {
-  color: #4caf50;
+  color: #00ff00;
 }
 
 .stats-value.negative {
-  color: #f44336;
+  color: #ff0000;
 }
 
 /* Scrollbar */

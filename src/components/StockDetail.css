@@ -20,6 +20,14 @@
   margin-bottom: 0.5rem;
 }
 
+.stock-header h2.positive {
+  color: #00ff00;
+}
+
+.stock-header h2.negative {
+  color: #ff0000;
+}
+
 .stock-symbol {
   color: #666;
   font-size: 1rem;
@@ -33,27 +41,33 @@
   font-size: 2.5rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
+  font-family: var(--number-font-family);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 .price-value.positive {
-  color: #4caf50;
+  color: #00ff00;
 }
 
 .price-value.negative {
-  color: #f44336;
+  color: #ff0000;
 }
 
 .price-change {
   font-size: 1.2rem;
   font-weight: 500;
+  font-family: var(--number-font-family);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 .price-change.positive {
-  color: #4caf50;
+  color: #00ff00;
 }
 
 .price-change.negative {
-  color: #f44336;
+  color: #ff0000;
 }
 
 .stock-stats {
@@ -81,6 +95,9 @@
   font-size: 1.2rem;
   font-weight: 600;
   color: #2c3e50;
+  font-family: var(--number-font-family);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 .period-selector {

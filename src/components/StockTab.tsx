@@ -14,6 +14,8 @@ import AIAgentAnalysis from "./AIAgentAnalysis";
 import CustomIndicatorAnalysis from "./CustomIndicatorAnalysis";
 import BacktestAnalysis from "./BacktestAnalysis";
 import LSTMPredictionAnalysis from "./LSTMPredictionAnalysis";
+import StockComments from "./StockComments";
+import Icon from "./Icon";
 import "./StockTab.css";
 
 interface StockTab {
@@ -28,7 +30,7 @@ interface StockTabProps {
 }
 
 type KLinePeriod = "1d" | "1w" | "1mo" | "1y";
-type AnalysisTab = "timeseries" | "kline" | "klinechip" | "prediction" | "compare" | "aiagent" | "customIndicator" | "backtest" | "lstm";
+type AnalysisTab = "timeseries" | "kline" | "klinechip" | "prediction" | "compare" | "aiagent" | "customIndicator" | "backtest" | "lstm" | "comments";
 
 interface StockData {
   date: string;
@@ -302,6 +304,10 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
         return (
           <LSTMPredictionAnalysis klineData={klineData} />
         );
+      case "comments":
+        return (
+          <StockComments symbol={tab.symbol} quote={tab.quote} />
+        );
       default:
         return null;
     }
@@ -396,64 +402,71 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
             className={`analysis-tab ${activeAnalysisTab === "timeseries" ? "active" : ""}`}
             onClick={() => handleAnalysisTabChange("timeseries")}
           >
-            <span className="tab-icon">TS</span>
+            <Icon name="timeSeries" size={14} />
             <span className="tab-label">{t("analysis.timeSeries")}</span>
           </button>
           <button
             className={`analysis-tab ${activeAnalysisTab === "kline" ? "active" : ""}`}
             onClick={() => handleAnalysisTabChange("kline")}
           >
-            <span className="tab-icon">KL</span>
+            <Icon name="kline" size={14} />
             <span className="tab-label">{t("analysis.klineAnalysis")}</span>
           </button>
           <button
             className={`analysis-tab ${activeAnalysisTab === "klinechip" ? "active" : ""}`}
             onClick={() => handleAnalysisTabChange("klinechip")}
           >
-            <span className="tab-icon">CH</span>
+            <Icon name="chartBar" size={14} />
             <span className="tab-label">{t("analysis.klineChipAnalysis")}</span>
           </button>
           <button
             className={`analysis-tab ${activeAnalysisTab === "prediction" ? "active" : ""}`}
             onClick={() => handleAnalysisTabChange("prediction")}
           >
-            <span className="tab-icon">PR</span>
+            <Icon name="prediction" size={14} />
             <span className="tab-label">{t("analysis.prediction")}</span>
           </button>
           <button
             className={`analysis-tab ${activeAnalysisTab === "compare" ? "active" : ""}`}
             onClick={() => handleAnalysisTabChange("compare")}
           >
-            <span className="tab-icon">CP</span>
+            <Icon name="chart" size={14} />
             <span className="tab-label">{t("analysis.compare")}</span>
           </button>
           <button
             className={`analysis-tab ${activeAnalysisTab === "aiagent" ? "active" : ""}`}
             onClick={() => handleAnalysisTabChange("aiagent")}
           >
-            <span className="tab-icon">AI</span>
+            <Icon name="sparkles" size={14} />
             <span className="tab-label">{t("analysis.aiAgent")}</span>
           </button>
           <button
             className={`analysis-tab ${activeAnalysisTab === "customIndicator" ? "active" : ""}`}
             onClick={() => handleAnalysisTabChange("customIndicator")}
           >
-            <span className="tab-icon">CI</span>
+            <Icon name="chart" size={14} />
             <span className="tab-label">{t("analysis.customIndicator")}</span>
           </button>
           <button
             className={`analysis-tab ${activeAnalysisTab === "backtest" ? "active" : ""}`}
             onClick={() => handleAnalysisTabChange("backtest")}
           >
-            <span className="tab-icon">BT</span>
+            <Icon name="play" size={14} />
             <span className="tab-label">{t("analysis.backtest")}</span>
           </button>
           <button
             className={`analysis-tab ${activeAnalysisTab === "lstm" ? "active" : ""}`}
             onClick={() => handleAnalysisTabChange("lstm")}
           >
-            <span className="tab-icon">LSTM</span>
+            <Icon name="prediction" size={14} />
             <span className="tab-label">{t("analysis.lstm")}</span>
+          </button>
+          <button
+            className={`analysis-tab ${activeAnalysisTab === "comments" ? "active" : ""}`}
+            onClick={() => handleAnalysisTabChange("comments")}
+          >
+            <Icon name="comment" size={14} />
+            <span className="tab-label">{t("analysis.comments")}</span>
           </button>
         </div>
       </div>

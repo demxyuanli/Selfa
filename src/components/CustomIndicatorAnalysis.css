@@ -17,7 +17,9 @@
   width: 100%;
   padding: 6px;
   font-size: 11px;
-  font-family: monospace;
+  font-family: var(--number-font-family);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
   background: var(--input-bg, #2d2d30);
   border: 1px solid var(--border-color, #3c3c3c);
   border-radius: 3px;
@@ -94,7 +96,9 @@
 .indicator-formula {
   font-size: 9px;
   color: var(--text-secondary, #858585);
-  font-family: monospace;
+  font-family: var(--number-font-family);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

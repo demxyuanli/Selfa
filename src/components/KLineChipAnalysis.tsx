@@ -73,7 +73,7 @@ const KLineChipAnalysis: React.FC<KLineChipAnalysisProps> = ({ klineData, symbol
   // Calculate chip distribution using the best available data
   const chipData = useMemo(() => {
     if (chipCalculationData.length < 20) return null;
-    return calculateChipDistribution(chipCalculationData, 60, 0.95);
+    return calculateChipDistribution(chipCalculationData);
   }, [chipCalculationData]);
 
   // Generate chart configuration

@@ -2,7 +2,9 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import StockTabComponent from "./StockTab";
 import FavoritesHeatmap from "./FavoritesHeatmap";
+import FavoritesDashboard from "./FavoritesDashboard";
 import PortfolioManagement from "./PortfolioManagement";
+import Icon from "./Icon";
 import "./Workspace.css";
 
 interface StockTab {
@@ -10,7 +12,7 @@ interface StockTab {
   symbol: string;
   name: string;
   quote: any;
-  type?: "stock" | "heatmap" | "portfolio";
+  type?: "stock" | "heatmap" | "dashboard" | "portfolio";
 }
 
 interface WorkspaceProps {
@@ -18,6 +20,7 @@ interface WorkspaceProps {
   activeTabId: string | null;
   onTabChange: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;
+  onStockSelect?: (symbol: string, name: string) => void;
   loading?: boolean;
 }
 
@@ -26,6 +29,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
   activeTabId,
   onTabChange,
   onCloseTab,
+  onStockSelect,
 }) => {
   const { t } = useTranslation();
   const activeTab = tabs.find(tab => tab.id === activeTabId);
@@ -41,7 +45,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
               onClick={() => onTabChange(tab.id)}
             >
               <span className="tab-label">{tab.name}</span>
-              {tab.type !== "heatmap" && tab.type !== "portfolio" && (
+              {tab.type !== "heatmap" && tab.type !== "dashboard" && tab.type !== "portfolio" && (
                 <button
                   className="tab-close"
                   onClick={(e) => {
@@ -49,7 +53,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
                     onCloseTab(tab.id);
                   }}
                 >
-                  ×
+                  <Icon name="close" size={12} />
                 </button>
               )}
             </div>
@@ -58,7 +62,9 @@ const Workspace: React.FC<WorkspaceProps> = ({
       )}
       <div className="workspace-content">
         {activeTab ? (
-          activeTab.type === "heatmap" ? (
+          activeTab.type === "dashboard" ? (
+            <FavoritesDashboard onStockSelect={onStockSelect} />
+          ) : activeTab.type === "heatmap" ? (
             <FavoritesHeatmap />
           ) : activeTab.type === "portfolio" ? (
             <PortfolioManagement />
