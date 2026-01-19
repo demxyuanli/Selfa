@@ -131,24 +131,20 @@ const GroupsPanel: React.FC<GroupsPanelProps> = ({
                     <div className="empty-group">{t("sidebar.noStocksInGroup")}</div>
                   ) : (
                     group.stocks.map((stock) => (
-                      <div
+                      <StockItem
                         key={stock.symbol}
-                        className={`stock-item ${draggedStock?.stock.symbol === stock.symbol ? "dragging" : ""}`}
-                        draggable
-                        onDragStart={() => onStockDragStart(stock, group.name)}
-                        onDragEnd={onStockDragEnd}
-                        onClick={() => onStockClick(stock)}
-                      >
-                        <StockItem
-                          stock={stock}
-                          onStockClick={onStockClick}
-                          onRemoveStock={onRemoveStock}
-                          showMoveSelect={true}
-                          groups={groups.map(g => ({ name: g.name }))}
-                          currentGroup={group.name}
-                          onMoveToGroup={onMoveToGroup}
-                        />
-                      </div>
+                        stock={stock}
+                        onStockClick={onStockClick}
+                        onRemoveStock={onRemoveStock}
+                        showMoveSelect={true}
+                        groups={groups.map(g => ({ name: g.name }))}
+                        currentGroup={group.name}
+                        onMoveToGroup={onMoveToGroup}
+                        draggable={true}
+                        onItemDragStart={() => onStockDragStart(stock, group.name)}
+                        onItemDragEnd={onStockDragEnd}
+                        isDragging={draggedStock?.stock.symbol === stock.symbol}
+                      />
                     ))
                   )}
                 </div>

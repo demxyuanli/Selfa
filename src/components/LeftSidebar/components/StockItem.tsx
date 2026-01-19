@@ -22,6 +22,9 @@ interface StockItemProps {
   currentGroup?: string;
   onMoveToGroup?: (symbol: string, groupName: string) => void;
   simple?: boolean;
+  draggable?: boolean;
+  onItemDragStart?: () => void;
+  onItemDragEnd?: () => void;
 }
 
 const StockItem: React.FC<StockItemProps> = ({
@@ -43,6 +46,9 @@ const StockItem: React.FC<StockItemProps> = ({
   currentGroup,
   onMoveToGroup,
   simple = false,
+  draggable = false,
+  onItemDragStart,
+  onItemDragEnd,
 }) => {
   const { t } = useTranslation();
   const stockTags = 'tags' in stock ? stock.tags : [];
@@ -53,6 +59,9 @@ const StockItem: React.FC<StockItemProps> = ({
         isDragging ? "dragging" : ""
       } ${dragOver ? "drag-over" : ""}`}
       onClick={() => onStockClick(stock)}
+      draggable={draggable}
+      onDragStart={onItemDragStart}
+      onDragEnd={onItemDragEnd}
     >
       {showDragHandle && index !== undefined && onDragStart && (
         <div
