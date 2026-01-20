@@ -11,6 +11,8 @@ interface SearchPanelProps {
   searchError: string | null;
   onStockClick: (stock: StockInfo) => void;
   onAddToFavorites: (stock: StockInfo) => void;
+  onRemoveFromFavorites?: (stock: StockInfo) => void;
+  favoriteStocks: StockInfo[];
   onToggle: () => void;
 }
 
@@ -22,9 +24,18 @@ const SearchPanel: React.FC<SearchPanelProps> = ({
   searchError,
   onStockClick,
   onAddToFavorites,
+  onRemoveFromFavorites,
+  favoriteStocks,
   onToggle,
 }) => {
   const { t } = useTranslation();
+  
+  const isStockAdded = (stock: StockInfo): boolean => {
+    if (!favoriteStocks || !Array.isArray(favoriteStocks)) {
+      return false;
+    }
+    return favoriteStocks.some(s => s.symbol === stock.symbol);
+  };
 
   return (
     <>
@@ -78,10 +89,17 @@ const SearchPanel: React.FC<SearchPanelProps> = ({
               </div>
               <button
                 className="add-btn"
-                onClick={() => onAddToFavorites(stock)}
-                title={t("sidebar.addToFavorites")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isStockAdded(stock) && onRemoveFromFavorites) {
+                    onRemoveFromFavorites(stock);
+                  } else {
+                    onAddToFavorites(stock);
+                  }
+                }}
+                title={isStockAdded(stock) ? t("sidebar.removeFromFavorites") || "Remove from favorites" : t("sidebar.addToFavorites")}
               >
-                +
+                {isStockAdded(stock) ? "−" : "+"}
               </button>
             </div>
           ))}

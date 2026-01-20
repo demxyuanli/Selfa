@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useAlert } from "../contexts/AlertContext";
 import ReactECharts from "echarts-for-react";
 import ChartDialog from "./ChartDialog";
 import { getDefaultCommissionRate, getBacktestParams } from "../utils/settings";
@@ -48,6 +49,7 @@ type StrategyType = "ma_cross" | "rsi" | "macd_rsi" | "custom";
 
 const BacktestAnalysis: React.FC<BacktestAnalysisProps> = ({ klineData }) => {
   const { t } = useTranslation();
+  const { showAlert } = useAlert();
   const backtestDefaults = getBacktestParams();
   const [strategyType, setStrategyType] = useState<StrategyType>("ma_cross");
   const [initialCapital, setInitialCapital] = useState(backtestDefaults.initialCapital);
@@ -186,7 +188,7 @@ const BacktestAnalysis: React.FC<BacktestAnalysisProps> = ({ klineData }) => {
   // Run backtest
   const runBacktest = () => {
     if (klineData.length < 50) {
-      alert(t("analysis.insufficientData"));
+      showAlert(t("analysis.insufficientData"));
       return;
     }
 
@@ -385,7 +387,7 @@ const BacktestAnalysis: React.FC<BacktestAnalysisProps> = ({ klineData }) => {
         });
       } catch (error) {
         console.error("Backtest error:", error);
-        alert(t("analysis.backtestError"));
+        showAlert(t("analysis.backtestError"));
       } finally {
         setIsRunning(false);
       }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+import { useAlert } from "../../../contexts/AlertContext";
 import { StockInfo, PortfolioPosition } from "../types";
 import { useStockSearch } from "../hooks/useStockSearch";
 import StockSearchPanel from "./StockSearchPanel";
@@ -16,6 +17,7 @@ interface AddPositionDialogProps {
 
 const AddPositionDialog: React.FC<AddPositionDialogProps> = ({ isOpen, onClose, onAdd }) => {
   const { t } = useTranslation();
+  const { showAlert } = useAlert();
   const [selectedSymbol, setSelectedSymbol] = useState("");
   const [selectedName, setSelectedName] = useState("");
   const [quantity, setQuantity] = useState("");
@@ -47,7 +49,7 @@ const AddPositionDialog: React.FC<AddPositionDialogProps> = ({ isOpen, onClose, 
     const prc = parsePrice(price);
 
     if (!selectedSymbol || !selectedName || qty <= 0 || prc <= 0) {
-      alert(t("portfolio.invalidInput"));
+      showAlert(t("portfolio.invalidInput"));
       return;
     }
 
@@ -81,7 +83,7 @@ const AddPositionDialog: React.FC<AddPositionDialogProps> = ({ isOpen, onClose, 
       handleClose();
     } catch (err) {
       console.error("Error adding position:", err);
-      alert(t("portfolio.addError"));
+      showAlert(t("portfolio.addError"));
     }
   };
 

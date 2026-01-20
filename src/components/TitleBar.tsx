@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "react-i18next";
+import { useAlert } from "../contexts/AlertContext";
 import LanguageSelector from "./LanguageSelector";
 import MenuDropdown, { MenuItem } from "./MenuDropdown";
 import Icon from "./Icon";
@@ -12,6 +13,7 @@ interface TitleBarProps {
 }
 
 const TitleBar: React.FC<TitleBarProps> = ({ onMenuAction, onSettingsClick }) => {
+  const { showAlert } = useAlert();
   const { t } = useTranslation();
   const [isMaximized, setIsMaximized] = useState(false);
 
@@ -66,7 +68,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ onMenuAction, onSettingsClick }) =>
       }
     } catch (error) {
       console.error("Failed to toggle maximize window:", error);
-      alert(`Failed to maximize: ${error}`);
+      showAlert(`Failed to maximize: ${error}`);
     }
   };
 
@@ -78,7 +80,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ onMenuAction, onSettingsClick }) =>
       console.log("Window closing");
     } catch (error) {
       console.error("Failed to close window:", error);
-      alert(`Failed to close: ${error}`);
+      showAlert(`Failed to close: ${error}`);
     }
   };
 

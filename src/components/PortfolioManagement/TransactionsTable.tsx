@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+import { useAlert } from "../../contexts/AlertContext";
 import Icon from "../Icon";
 import { PortfolioTransaction, PortfolioPosition, GroupedTransaction } from "./types";
 
@@ -24,6 +25,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
   onReload,
 }) => {
   const { t } = useTranslation();
+  const { showAlert } = useAlert();
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [editingQuantity, setEditingQuantity] = useState<string>("");
 
@@ -41,7 +43,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
         await onReload();
       } catch (err) {
         console.error("Error updating transaction:", err);
-        alert(t("portfolio.updateError") + ": " + (err instanceof Error ? err.message : String(err)));
+        showAlert(t("portfolio.updateError") + ": " + (err instanceof Error ? err.message : String(err)));
       }
     }
     setEditingTransactionId(null);
@@ -167,7 +169,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                                 .then(() => onReload())
                                 .catch((err) => {
                                   console.error("Error deleting transaction:", err);
-                                  alert(t("portfolio.deleteError"));
+                                  showAlert(t("portfolio.deleteError"));
                                 });
                             }
                           }}

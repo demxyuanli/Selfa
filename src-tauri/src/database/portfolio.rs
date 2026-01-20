@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result, params};
 use chrono::Utc;
 use std::sync::Mutex;
-use super::utils::ensure_stock_exists_internal;
+use super::utils::ensure_stock_exists_with_name;
 
 pub fn add_portfolio_position(
     conn: &Mutex<Connection>,
@@ -14,7 +14,7 @@ pub fn add_portfolio_position(
     let conn = conn.lock().unwrap();
     let now = Utc::now().to_rfc3339();
 
-    ensure_stock_exists_internal(&conn, symbol)?;
+    ensure_stock_exists_with_name(&conn, symbol, Some(name))?;
 
     let mut stmt = conn.prepare("SELECT id, quantity, avg_cost FROM portfolio_positions WHERE symbol = ?1")?;
     let mut existing = stmt.query_map(params![symbol], |row| {
@@ -109,11 +109,23 @@ pub fn add_portfolio_transaction(
     commission: f64,
     transaction_date: &str,
     notes: Option<&str>,
+    stock_name: Option<&str>,
 ) -> Result<i64> {
     let conn = conn.lock().unwrap();
     let now = Utc::now().to_rfc3339();
 
-    ensure_stock_exists_internal(&conn, symbol)?;
+    use super::utils::ensure_stock_exists_with_name;
+    ensure_stock_exists_with_name(&conn, symbol, stock_name)?;
+    
+    let mut stmt = conn.prepare("SELECT visible FROM stocks WHERE symbol = ?1")?;
+    let is_visible: Option<i64> = stmt.query_row(params![symbol], |row| row.get(0)).ok();
+    
+    if is_visible.is_none() || is_visible == Some(0) {
+        conn.execute(
+            "UPDATE stocks SET visible = 1, updated_at = ?1 WHERE symbol = ?2",
+            params![now, symbol],
+        )?;
+    }
 
     let amount = quantity as f64 * price + commission;
 

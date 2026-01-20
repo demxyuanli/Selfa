@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+import { useAlert } from "../../../contexts/AlertContext";
 import { PortfolioPosition } from "../types";
 import { parseQuantity, parsePrice } from "../utils/formValidation";
 
@@ -13,6 +14,7 @@ interface EditPositionDialogProps {
 
 const EditPositionDialog: React.FC<EditPositionDialogProps> = ({ isOpen, position, onClose, onUpdate }) => {
   const { t } = useTranslation();
+  const { showAlert } = useAlert();
   const [quantity, setQuantity] = useState(position ? position.quantity.toString() : "");
   const [price, setPrice] = useState(position ? position.avgCost.toFixed(2) : "");
 
@@ -30,7 +32,7 @@ const EditPositionDialog: React.FC<EditPositionDialogProps> = ({ isOpen, positio
     const prc = parsePrice(price);
 
     if (qty <= 0 || prc <= 0) {
-      alert(t("portfolio.invalidInput"));
+      showAlert(t("portfolio.invalidInput"));
       return;
     }
 
@@ -47,7 +49,7 @@ const EditPositionDialog: React.FC<EditPositionDialogProps> = ({ isOpen, positio
       setPrice("");
     } catch (err) {
       console.error("Error updating position:", err);
-      alert(t("portfolio.addError"));
+      showAlert(t("portfolio.addError"));
     }
   };
 

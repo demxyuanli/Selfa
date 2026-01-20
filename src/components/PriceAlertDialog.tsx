@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
+import { useAlert } from "../contexts/AlertContext";
 import Icon from "./Icon";
 import "./PriceAlertDialog.css";
 
@@ -33,6 +34,7 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
   currentPrice,
 }) => {
   const { t } = useTranslation();
+  const { showAlert } = useAlert();
   const [alerts, setAlerts] = useState<PriceAlertInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingAlert, setEditingAlert] = useState<PriceAlertInfo | null>(null);
@@ -55,11 +57,21 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
       loadFavoriteStocks();
       if (symbol) {
         setFormData({
-          ...formData,
           symbol: symbol,
           threshold_price: currentPrice || 0,
+          direction: "above",
+          enabled: true,
+        });
+      } else {
+        setFormData({
+          symbol: "",
+          threshold_price: 0,
+          direction: "above",
+          enabled: true,
         });
       }
+      setEditingAlert(null);
+      setShowDropdown(false);
     }
   }, [isOpen, symbol, currentPrice]);
 
@@ -154,14 +166,15 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
         direction: formData.direction,
       });
       setFormData({
-        symbol: symbol || "",
-        threshold_price: currentPrice || 0,
-        direction: "above",
+        symbol: symbol || formData.symbol,
+        threshold_price: currentPrice || formData.threshold_price,
+        direction: formData.direction === "above" ? "below" : "above",
         enabled: true,
       });
       await loadAlerts();
     } catch (err) {
       console.error("Error creating alert:", err);
+      showAlert(t("priceAlert.createError") + ": " + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -388,13 +401,29 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
                   </button>
                 </>
               ) : (
-                <button
-                  className="price-alert-button price-alert-button-primary"
-                  onClick={handleCreateAlert}
-                  disabled={!formData.symbol || formData.threshold_price <= 0}
-                >
-                  {t("priceAlert.create")}
-                </button>
+                <>
+                  <button
+                    className="price-alert-button price-alert-button-primary"
+                    onClick={handleCreateAlert}
+                    disabled={!formData.symbol || formData.threshold_price <= 0}
+                  >
+                    {t("priceAlert.create")}
+                  </button>
+                  {symbol && (
+                    <button
+                      className="price-alert-button"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          direction: formData.direction === "above" ? "below" : "above",
+                        });
+                      }}
+                      title={t("priceAlert.switchDirection")}
+                    >
+                      {formData.direction === "above" ? t("priceAlert.below") : t("priceAlert.above")}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>

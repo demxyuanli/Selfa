@@ -233,7 +233,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onLogin, onRegister }) => {
         </form>
 
         <div className="splash-footer">
-          <p className="splash-version">v1.0.0</p>
+          <p className="splash-version">v0.4.0</p>
         </div>
       </div>
     </div>

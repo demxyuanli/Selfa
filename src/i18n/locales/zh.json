@@ -4,7 +4,8 @@
     "search": "搜索股票...",
     "loading": "加载中...",
     "error": "错误",
-    "noData": "无可用数据"
+    "noData": "无可用数据",
+    "message": "消息"
   },
   "splash": {
     "welcome": "欢迎使用股票分析器",
@@ -262,7 +263,8 @@
   "chart": {
     "zoom": "放大",
     "close": "关闭",
-    "title": "图表"
+    "title": "图表",
+    "timeSeries": "分时图"
   },
   "analysis": {
     "prediction": "预测",
@@ -642,6 +644,8 @@
     "all": "全部",
     "noData": "暂无数据",
     "invalidInput": "输入无效",
+    "invalidQuantity": "数量格式无效，请输入正整数",
+    "invalidPrice": "价格格式无效，请输入有效数字",
     "addError": "添加失败",
     "updateError": "更新失败",
     "deleteError": "删除失败",
@@ -653,6 +657,7 @@
     "quantityPlaceholder": "输入数量",
     "pricePlaceholder": "输入价格",
     "transactionDate": "交易日期",
+    "showTransactions": "显示交易明细",
     "timeseriesChart": "实时交易",
     "withData": "有数据",
     "noTimeseriesData": "暂无分时数据",
@@ -672,7 +677,13 @@
     "chartTooltipCost": "成本",
     "chartTooltipProfit": "盈亏",
     "chartTooltipPosition": "持仓",
-    "chartTooltipShares": "股"
+    "chartTooltipShares": "股",
+    "shanghaiIndex": "上证指数",
+    "shenzhenIndex": "深证指数",
+    "starIndex": "科创指数",
+    "previousCloseReference": "前收参考",
+    "realtimeTrading": "实时交易",
+    "stockComparisonChart": "持仓股票比较图"
   },
   "aiAgent": {
     "aiAnalysis": "AI智能分析",
@@ -775,7 +786,10 @@
     "enable": "启用",
     "disable": "禁用",
     "existingAlerts": "现有提醒",
-    "noAlerts": "暂无价格告警"
+    "noAlerts": "暂无价格告警",
+    "switchDirection": "切换方向",
+    "createError": "创建失败",
+    "confirmDelete": "确定要删除此提醒吗？"
   },
   "comments": {
     "title": "评论日志",

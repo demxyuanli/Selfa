@@ -71,12 +71,12 @@
 }
 
 .card-header {
-  padding: 16px;
+  padding: 6px;
 }
 
 .card-header h3 {
-  margin: 0 0 12px 0;
-  font-size: 16px;
+  margin: 0 0 4px 0;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -84,22 +84,22 @@
 .card-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 6px;
 }
 
 .stat-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: 9px;
   color: var(--text-secondary);
 }
 
 .stat-value {
-  font-size: 18px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--number-font-family);
@@ -485,6 +485,18 @@
   top: 0;
   background: var(--bg-tertiary);
   z-index: 1;
+}
+
+.stocks-table th.sortable {
+  user-select: none;
+}
+
+.stocks-table th.sortable:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.stocks-table th.sortable.sorted {
+  color: var(--accent-color);
 }
 
 .stocks-table th {
@@ -1097,6 +1109,82 @@
   color: var(--success-color);
 }
 
+.portfolio-actions {
+  text-align: center;
+}
+
+.portfolio-split-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 300px);
+  min-height: 400px;
+  gap: 8px;
+}
+
+.portfolio-positions-section {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.portfolio-positions-section .portfolio-table-container {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.portfolio-transaction-details {
+  flex: 1;
+  min-height: 0;
+  padding: 12px;
+  background: var(--bg-secondary, #1e1e1e);
+  border: 1px solid var(--border-color, #3c3c3c);
+  border-radius: 3px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.portfolio-transactions-section .portfolio-table-container {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.portfolio-transaction-details .transaction-detail-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #cccccc);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color, #3c3c3c);
+}
+
+.portfolio-transaction-details .transaction-detail-table {
+  font-size: 11px;
+}
+
+.portfolio-transaction-details .transaction-detail-table th {
+  background: var(--bg-tertiary, #252526);
+  color: var(--text-primary, #cccccc);
+  padding: 6px 8px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color, #3c3c3c);
+}
+
+.portfolio-transaction-details .transaction-detail-table td {
+  padding: 6px 8px;
+  color: var(--text-secondary, #858585);
+  border-bottom: 1px solid var(--border-color, #3c3c3c);
+}
+
+.portfolio-transaction-details .transaction-detail-table tr:hover {
+  background: var(--bg-tertiary, #252526);
+}
+
 .editable-quantity {
   cursor: pointer;
   position: relative;
@@ -1130,6 +1218,39 @@
   outline: none;
   border-color: var(--accent-color);
   box-shadow: 0 0 0 2px rgba(var(--accent-color-rgb, 0, 120, 215), 0.2);
+}
+
+.alert-indicator {
+  display: inline-block;
+  margin-left: 4px;
+  color: #ff6b6b;
+  font-weight: bold;
+  animation: alert-blink 1s infinite;
+}
+
+@keyframes alert-blink {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(1.2);
+  }
+}
+
+.stock-row.alert-triggered,
+.portfolio-row.alert-triggered {
+  animation: alert-row-pulse 2s infinite;
+}
+
+@keyframes alert-row-pulse {
+  0%, 100% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: rgba(255, 107, 107, 0.1);
+  }
 }
 
 @media (max-width: 1200px) {

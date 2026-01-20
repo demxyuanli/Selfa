@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "react-i18next";
 import { getSettings } from "./utils/settings";
+import { AlertProvider, useAlert } from "./contexts/AlertContext";
 import SplashScreen from "./components/SplashScreen";
 import TitleBar from "./components/TitleBar";
 import ToolBar from "./components/ToolBar";
@@ -36,8 +37,9 @@ interface StockTab {
   type?: "stock" | "heatmap" | "dashboard" | "portfolio";
 }
 
-function App() {
+function AppContent() {
   const { t } = useTranslation();
+  const { showAlert } = useAlert();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [leftSidebarVisible, setLeftSidebarVisible] = useState(true);
   const [rightSidebarVisible, setRightSidebarVisible] = useState(true);
@@ -301,7 +303,7 @@ function App() {
         handlePortfolioClick();
         break;
       case "help:about":
-        alert("Stock Analyzer v1.0.0\nA multi-language stock data viewer and analyzer");
+        showAlert("Stock Analyzer v0.4.0\nA multi-language stock data viewer and analyzer");
         break;
       default:
         console.log("Unknown action:", action);
@@ -363,7 +365,7 @@ function App() {
           triggeredAlerts.forEach(alert => {
             const direction = alert.direction === "above" ? t("priceAlert.above") : t("priceAlert.below");
             const message = `${alert.symbol} ${t("priceAlert.triggered")}: ${direction} ${alert.threshold_price.toFixed(2)}`;
-            window.alert(message);
+            showAlert(message);
           });
         }
       } catch (err) {
@@ -424,6 +426,14 @@ function App() {
         }
       />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AlertProvider>
+      <AppContent />
+    </AlertProvider>
   );
 }
 

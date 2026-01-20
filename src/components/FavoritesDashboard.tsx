@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import PortfolioTimeseriesCard from "./PortfolioTimeseriesCard";
+import { useAlert } from "../contexts/AlertContext";
 import Icon from "./Icon";
-import AddPositionDialog from "./PortfolioManagement/dialogs/AddPositionDialog";
-import EditPositionDialog from "./PortfolioManagement/dialogs/EditPositionDialog";
 import AddTransactionDialog from "./PortfolioManagement/dialogs/AddTransactionDialog";
-import { groupTransactionsBySymbol, getTransactionSymbols } from "./PortfolioManagement/utils/portfolioCalculations";
+import PriceAlertDialog from "./PriceAlertDialog";
 import TimeSeriesThumbnail from "./TimeSeriesThumbnail";
+import StockComparisonChart from "./StockComparisonChart";
 import "./FavoritesDashboard.css";
 
 interface StockInfo {
@@ -57,6 +56,7 @@ interface FavoritesDashboardProps {
 
 const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }) => {
   const { t } = useTranslation();
+  const { showAlert } = useAlert();
   const [stocks, setStocks] = useState<Array<{ stock: StockInfo; quote: StockQuote | null }>>([]);
   const [alerts, setAlerts] = useState<PriceAlertInfo[]>([]);
   const [positions, setPositions] = useState<PortfolioPosition[]>([]);
@@ -70,10 +70,7 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
   const [searchResults, setSearchResults] = useState<StockInfo[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [showAddPositionDialog, setShowAddPositionDialog] = useState(false);
-  const [showEditPositionDialog, setShowEditPositionDialog] = useState(false);
   const [showAddTransactionDialog, setShowAddTransactionDialog] = useState(false);
-  const [editingPosition, setEditingPosition] = useState<PortfolioPosition | null>(null);
   const [transactions, setTransactions] = useState<Array<{
     id: number;
     symbol: string;
@@ -86,9 +83,11 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
     transactionDate: string;
     notes?: string;
   }>>([]);
-  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
-  const [editingQuantity, setEditingQuantity] = useState<string>("");
-  const [selectedTransactionSymbol, setSelectedTransactionSymbol] = useState<string | null>(null);
+  const [expandedPositionSymbol, setExpandedPositionSymbol] = useState<string | null>(null);
+  const [showPriceAlertDialog, setShowPriceAlertDialog] = useState(false);
+  const [priceAlertSymbol, setPriceAlertSymbol] = useState<string>("");
+  const [priceAlertCurrentPrice, setPriceAlertCurrentPrice] = useState<number>(0);
+  const [triggeredAlertSymbols, setTriggeredAlertSymbols] = useState<Set<string>>(new Set());
   const [timeSeriesDataMap, setTimeSeriesDataMap] = useState<Map<string, Array<{
     date: string;
     open: number;
@@ -101,6 +100,8 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
   const [resizingColumn, setResizingColumn] = useState<number | null>(null);
   const resizeStartX = useRef<number>(0);
   const resizeStartWidth = useRef<number>(0);
+  const [sortField, setSortField] = useState<"changePercent" | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   // Load initial data (only once on mount)
   const loadInitialData = useCallback(async () => {
@@ -145,6 +146,9 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
 
       const activeAlerts = alertsData.filter((alert) => alert.enabled);
       setAlerts(activeAlerts);
+      
+      const triggered = alertsData.filter((alert) => alert.triggered).map((alert) => alert.symbol);
+      setTriggeredAlertSymbols(new Set(triggered));
 
       const positionsWithPrices = await Promise.all(
         positionsData.map(async ([id, symbol, name, quantity, avgCost, currentPrice]) => {
@@ -245,10 +249,40 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
       const alertsData = await invoke<PriceAlertInfo[]>("get_price_alerts", { symbol: null });
       const activeAlerts = alertsData.filter((alert) => alert.enabled);
       setAlerts(activeAlerts);
+      
+      const triggered = alertsData.filter((alert) => alert.triggered).map((alert) => alert.symbol);
+      setTriggeredAlertSymbols(new Set(triggered));
     } catch (err) {
       console.debug("Failed to refresh alerts:", err);
     }
   }, []);
+
+  const checkPriceAlerts = useCallback(async () => {
+    try {
+      const triggeredAlerts = await invoke<Array<{
+        id: number;
+        symbol: string;
+        threshold_price: number;
+        direction: string;
+        enabled: boolean;
+        triggered: boolean;
+      }>>("check_price_alerts");
+      
+      if (triggeredAlerts && triggeredAlerts.length > 0) {
+        const newTriggeredSymbols = new Set<string>();
+        triggeredAlerts.forEach(alert => {
+          newTriggeredSymbols.add(alert.symbol);
+          const direction = alert.direction === "above" ? t("priceAlert.above") : t("priceAlert.below");
+          const message = `${alert.symbol} ${t("priceAlert.triggered")}: ${direction} ${alert.threshold_price.toFixed(2)}`;
+          showAlert(message);
+        });
+        setTriggeredAlertSymbols(newTriggeredSymbols);
+        await refreshAlerts();
+      }
+    } catch (err) {
+      console.error("Error checking price alerts:", err);
+    }
+  }, [t, refreshAlerts]);
 
   const refreshPositions = useCallback(async () => {
     try {
@@ -395,12 +429,17 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
     // Refresh positions every 30 seconds
     const positionsInterval = setInterval(refreshPositions, 30000);
     
+    // Check price alerts every 60 seconds
+    const alertsCheckInterval = setInterval(checkPriceAlerts, 60000);
+    checkPriceAlerts();
+    
     return () => {
       clearInterval(stocksInterval);
       clearInterval(alertsInterval);
       clearInterval(positionsInterval);
+      clearInterval(alertsCheckInterval);
     };
-  }, [refreshStocks, refreshAlerts, refreshPositions]);
+  }, [refreshStocks, refreshAlerts, refreshPositions, checkPriceAlerts]);
 
   // Load custom names from localStorage
   useEffect(() => {
@@ -491,7 +530,7 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
       setSearchError(null);
     } catch (err) {
       console.error("Error adding stock:", err);
-      alert(err instanceof Error ? err.message : String(err));
+      showAlert(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -502,74 +541,12 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
         await refreshStocks();
       } catch (err) {
         console.error("Error removing stock:", err);
-        alert(err instanceof Error ? err.message : String(err));
+        showAlert(err instanceof Error ? err.message : String(err));
       }
     }
   };
 
-  const handleAddPosition = (newPosition: PortfolioPosition) => {
-    setPositions((prev) => [...prev, newPosition]);
-    refreshPositions();
-  };
 
-  const handleEditPosition = (position: PortfolioPosition) => {
-    setEditingPosition(position);
-    setShowEditPositionDialog(true);
-  };
-
-  const handleDeletePosition = async (id: number) => {
-    const confirmMsg = t("portfolio.confirmDelete") || "Are you sure you want to delete this position?";
-    if (confirm(confirmMsg)) {
-      try {
-        await invoke("delete_portfolio_position", { id });
-        await refreshPositions();
-      } catch (err) {
-        console.error("Error deleting position:", err);
-        alert(t("portfolio.deleteError") || "Failed to delete position");
-      }
-    }
-  };
-
-  const handleUpdatePosition = async () => {
-    await refreshPositions();
-  };
-
-  const handleQuantityUpdate = async (transactionId: number, newQuantity: number, oldQuantity: number) => {
-    if (newQuantity > 0 && newQuantity !== oldQuantity) {
-      try {
-        await invoke("update_portfolio_transaction", {
-          id: transactionId,
-          quantity: newQuantity,
-        });
-        await refreshPositions();
-      } catch (err) {
-        console.error("Error updating transaction:", err);
-        alert(t("portfolio.updateError") + ": " + (err instanceof Error ? err.message : String(err)));
-      }
-    }
-    setEditingTransactionId(null);
-    setEditingQuantity("");
-  };
-
-  const handleDeleteTransaction = async (id: number) => {
-    const confirmMsg = t("portfolio.confirmDelete") || "Are you sure you want to delete this transaction?";
-    if (confirm(confirmMsg)) {
-      try {
-        await invoke("delete_portfolio_transaction", { id });
-        await refreshPositions();
-      } catch (err) {
-        console.error("Error deleting transaction:", err);
-        alert(t("portfolio.deleteError") || "Failed to delete transaction");
-      }
-    }
-  };
-
-  const transactionSymbols = getTransactionSymbols(transactions);
-  const groupedTransactions = groupTransactionsBySymbol(
-    selectedTransactionSymbol
-      ? transactions.filter((t) => t.symbol === selectedTransactionSymbol)
-      : transactions
-  );
 
   const getAlertStatus = (alert: PriceAlertInfo, currentPrice?: number) => {
     if (!currentPrice) return null;
@@ -596,6 +573,30 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
   const totalCost = positions.reduce((sum, p) => sum + p.quantity * p.avgCost, 0);
   const totalProfit = positions.reduce((sum, p) => sum + p.profit, 0);
   const totalProfitPercent = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
+
+  const handleSortChangePercent = useCallback(() => {
+    if (sortField === "changePercent") {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField("changePercent");
+      setSortDirection("desc");
+    }
+  }, [sortField, sortDirection]);
+
+  const sortedStocks = useMemo(() => {
+    if (!sortField) {
+      return stocks;
+    }
+    const sorted = [...stocks].sort((a, b) => {
+      if (sortField === "changePercent") {
+        const aValue = a.quote?.change_percent ?? -Infinity;
+        const bValue = b.quote?.change_percent ?? -Infinity;
+        return sortDirection === "asc" ? aValue - bValue : bValue - aValue;
+      }
+      return 0;
+    });
+    return sorted;
+  }, [stocks, sortField, sortDirection]);
 
   if (loading) {
     return (
@@ -679,24 +680,9 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
                 </div>
               </div>
             </div>
-            <div className={`dashboard-card ${expandedCard === "transactions" ? "active" : ""}`} onClick={() => toggleCard("transactions")}>
+            <div className={`dashboard-card ${expandedCard === "realtime" ? "active" : ""}`} onClick={() => toggleCard("realtime")}>
               <div className="card-header">
-                <h3>{t("portfolio.transactions")}</h3>
-                <div className="card-stats">
-                  <div className="stat-item">
-                    <span className="stat-label">{t("portfolio.total")}</span>
-                    <span className="stat-value">{transactions.length}</span>
-                  </div>
-                  <div className="stat-item">
-                    <span className="stat-label">{t("portfolio.symbols")}</span>
-                    <span className="stat-value">{transactionSymbols.length}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className={`dashboard-card ${expandedCard === "timeseries" ? "active" : ""}`} onClick={() => toggleCard("timeseries")}>
-              <div className="card-header">
-                <h3>{t("portfolio.timeseriesChart")}</h3>
+                <h3>{t("portfolio.realtimeTrading") || "Real-time Trading"}</h3>
                 <div className="card-stats">
                   <div className="stat-item">
                     <span className="stat-label">{t("portfolio.positions")}</span>
@@ -825,8 +811,23 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
                         {t("common.change")}
                         <div className="resize-handle" onMouseDown={(e) => handleResizeStart(e, 3)} />
                       </th>
-                      <th style={{ width: columnWidths.get(4), minWidth: 60, position: "relative" }}>
-                        {t("common.changePercent")}
+                      <th 
+                        style={{ width: columnWidths.get(4), minWidth: 60, position: "relative", cursor: "pointer" }}
+                        onClick={handleSortChangePercent}
+                        className={sortField === "changePercent" ? "sortable sorted" : "sortable"}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          {t("common.changePercent")}
+                          {sortField === "changePercent" ? (
+                            <Icon 
+                              name={sortDirection === "asc" ? "arrowUp" : "arrowDown"} 
+                              size={12} 
+                              primaryFill="var(--accent-color)"
+                            />
+                          ) : (
+                            <Icon name="chevronUp" size={12} primaryFill="var(--text-secondary)" />
+                          )}
+                        </div>
                         <div className="resize-handle" onMouseDown={(e) => handleResizeStart(e, 4)} />
                       </th>
                       <th style={{ width: columnWidths.get(5), minWidth: 60, position: "relative" }}>
@@ -843,12 +844,17 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
                     </tr>
                   </thead>
                   <tbody>
-                    {stocks.map(({ stock, quote }) => (
-                      <tr
-                        key={stock.symbol}
-                        className={`stock-row ${quote ? (quote.change_percent > 0 ? "up" : quote.change_percent < 0 ? "down" : "") : ""}`}
-                      >
-                        <td className="stock-symbol" style={{ width: columnWidths.get(0), minWidth: 60 }} onClick={() => handleStockClick(stock)}>{stock.symbol}</td>
+                    {sortedStocks.map(({ stock, quote }) => {
+                      const hasTriggeredAlert = triggeredAlertSymbols.has(stock.symbol);
+                      return (
+                        <tr
+                          key={stock.symbol}
+                          className={`stock-row ${quote ? (quote.change_percent > 0 ? "up" : quote.change_percent < 0 ? "down" : "") : ""} ${hasTriggeredAlert ? "alert-triggered" : ""}`}
+                        >
+                          <td className="stock-symbol" style={{ width: columnWidths.get(0), minWidth: 60 }} onClick={() => handleStockClick(stock)}>
+                            {stock.symbol}
+                            {hasTriggeredAlert && <span className="alert-indicator" title={t("priceAlert.triggered")}>⚠</span>}
+                          </td>
                         <td 
                           className={`stock-name ${
                             quote ? (quote.change_percent > 0 ? "up" : quote.change_percent < 0 ? "down" : "") : ""
@@ -968,7 +974,8 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
                           </>
                         )}
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -982,18 +989,9 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
               <h3>{t("portfolio.title")}</h3>
               <div className="header-actions">
                 <button
-                  onClick={() => setShowAddPositionDialog(true)}
-                  className="add-stock-button"
-                  title={t("portfolio.addPosition") || "Add Position"}
-                >
-                  <Icon name="add" size={16} />
-                  <span>{t("portfolio.addPosition") || "Add Position"}</span>
-                </button>
-                <button
                   onClick={() => setShowAddTransactionDialog(true)}
                   className="add-stock-button"
                   title={t("portfolio.addTransaction") || "Add Transaction"}
-                  style={{ marginLeft: "8px" }}
                 >
                   <Icon name="add" size={16} />
                   <span>{t("portfolio.addTransaction") || "Add Transaction"}</span>
@@ -1003,218 +1001,122 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
             {positions.length === 0 ? (
               <div className="stocks-empty">{t("portfolio.noPositions") || "No positions"}</div>
             ) : (
-              <div className="portfolio-table-container">
-                <table className="portfolio-table">
-                  <thead>
-                    <tr>
-                      <th>{t("common.symbol")}</th>
-                      <th>{t("common.name")}</th>
-                      <th>{t("portfolio.quantity")}</th>
-                      <th>{t("portfolio.avgCost")}</th>
-                      <th>{t("common.price")}</th>
-                      <th>{t("portfolio.marketValue")}</th>
-                      <th>{t("portfolio.profit")}</th>
-                      <th>{t("portfolio.profitPercent")}</th>
-                      <th>{t("portfolio.actions")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {positions.map((position) => (
-                      <tr
-                        key={position.id}
-                        className={`portfolio-row ${position.profit >= 0 ? "up" : "down"}`}
-                      >
-                        <td className="portfolio-symbol" onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>{position.symbol}</td>
-                        <td className="portfolio-name" onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>{position.name}</td>
-                        <td className="portfolio-quantity" onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>{position.quantity}</td>
-                        <td className="portfolio-avg-cost" onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>{position.avgCost.toFixed(2)}</td>
-                        <td className="portfolio-price" onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>{position.currentPrice.toFixed(2)}</td>
-                        <td className="portfolio-market-value" onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>{position.marketValue.toFixed(2)}</td>
-                        <td className={`portfolio-profit ${position.profit >= 0 ? "up" : "down"}`} onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>
-                          {position.profit >= 0 ? "+" : ""}{position.profit.toFixed(2)}
-                        </td>
-                        <td className={`portfolio-profit-percent ${position.profitPercent >= 0 ? "up" : "down"}`} onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>
-                          {position.profitPercent >= 0 ? "+" : ""}{position.profitPercent.toFixed(2)}%
-                        </td>
-                        <td className="stock-actions" onClick={(e) => e.stopPropagation()}>
-                          <div className="action-buttons">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditPosition(position);
-                              }}
-                              className="action-btn edit-btn"
-                              title={t("portfolio.edit") || "Edit"}
-                            >
-                              <Icon name="edit" size={14} />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeletePosition(position.id);
-                              }}
-                              className="action-btn delete-btn"
-                              title={t("common.delete") || "Delete"}
-                            >
-                              <Icon name="delete" size={14} />
-                            </button>
-                          </div>
-                        </td>
+              <div className="portfolio-split-container">
+                <div className="portfolio-table-container portfolio-positions-section">
+                  <table className="portfolio-table">
+                    <thead>
+                      <tr>
+                        <th>{t("common.symbol")}</th>
+                        <th>{t("common.name")}</th>
+                        <th>{t("portfolio.quantity")}</th>
+                        <th>{t("portfolio.avgCost")}</th>
+                        <th>{t("common.price")}</th>
+                        <th>{t("portfolio.marketValue")}</th>
+                        <th>{t("portfolio.profit")}</th>
+                        <th>{t("portfolio.profitPercent")}</th>
+                        <th>{t("portfolio.actions")}</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {positions.map((position) => {
+                        const isExpanded = expandedPositionSymbol === position.symbol;
+                        const hasTriggeredAlert = triggeredAlertSymbols.has(position.symbol);
+                        return (
+                          <tr
+                            key={position.id}
+                            className={`portfolio-row ${position.profit >= 0 ? "up" : "down"} ${hasTriggeredAlert ? "alert-triggered" : ""}`}
+                          >
+                            <td className="portfolio-symbol" onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>
+                              {position.symbol}
+                              {hasTriggeredAlert && <span className="alert-indicator" title={t("priceAlert.triggered")}>⚠</span>}
+                            </td>
+                            <td className="portfolio-name" onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>{position.name}</td>
+                            <td className="portfolio-quantity" onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>{position.quantity}</td>
+                            <td className="portfolio-avg-cost" onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>{position.avgCost.toFixed(2)}</td>
+                            <td className="portfolio-price" onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>{position.currentPrice.toFixed(2)}</td>
+                            <td className="portfolio-market-value" onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>{position.marketValue.toFixed(2)}</td>
+                            <td className={`portfolio-profit ${position.profit >= 0 ? "up" : "down"}`} onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>
+                              {position.profit >= 0 ? "+" : ""}{position.profit.toFixed(2)}
+                            </td>
+                            <td className={`portfolio-profit-percent ${position.profitPercent >= 0 ? "up" : "down"}`} onClick={() => handleStockClick({ symbol: position.symbol, name: position.name, exchange: "" })}>
+                              {position.profitPercent >= 0 ? "+" : ""}{position.profitPercent.toFixed(2)}%
+                            </td>
+                            <td className="portfolio-actions" onClick={(e) => e.stopPropagation()}>
+                              <div className="action-buttons">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setExpandedPositionSymbol(isExpanded ? null : position.symbol);
+                                  }}
+                                  className="action-btn"
+                                  title={t("portfolio.showTransactions")}
+                                >
+                                  <Icon name={isExpanded ? "chevronUp" : "chevronDown"} size={14} />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPriceAlertSymbol(position.symbol);
+                                    setPriceAlertCurrentPrice(position.currentPrice);
+                                    setShowPriceAlertDialog(true);
+                                  }}
+                                  className="action-btn"
+                                  title={t("priceAlert.title")}
+                                >
+                                  <Icon name="bell" size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {expandedPositionSymbol && (
+                  <div className="portfolio-transaction-details portfolio-transactions-section">
+                    <div className="transaction-detail-header">
+                      <span>{t("portfolio.transactions")} ({expandedPositionSymbol})</span>
+                    </div>
+                    <div className="portfolio-table-container">
+                      <table className="portfolio-table transaction-detail-table">
+                        <thead>
+                          <tr>
+                            <th>{t("portfolio.transactionType")}</th>
+                            <th>{t("portfolio.quantity")}</th>
+                            <th>{t("portfolio.price")}</th>
+                            <th>{t("portfolio.amount")}</th>
+                            <th>{t("portfolio.commission")}</th>
+                            <th>{t("portfolio.transactionDate")}</th>
+                            <th>{t("portfolio.notes")}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {transactions
+                            .filter((t) => t.symbol === expandedPositionSymbol)
+                            .map((transaction) => (
+                              <tr key={transaction.id}>
+                                <td className={transaction.transactionType === "buy" ? "positive" : "negative"}>
+                                  {transaction.transactionType === "buy" ? t("portfolio.buy") : t("portfolio.sell")}
+                                </td>
+                                <td>{transaction.quantity}</td>
+                                <td>¥{transaction.price.toFixed(2)}</td>
+                                <td>¥{transaction.amount.toFixed(2)}</td>
+                                <td>¥{transaction.commission.toFixed(2)}</td>
+                                <td>{transaction.transactionDate}</td>
+                                <td>{transaction.notes || "-"}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
 
-        {expandedCard === "transactions" && (
-          <div className="data-table-section">
-            <div className="section-header">
-              <h3>{t("portfolio.transactions")}</h3>
-              <button
-                onClick={() => setShowAddTransactionDialog(true)}
-                className="add-stock-button"
-                title={t("portfolio.addTransaction") || "Add Transaction"}
-              >
-                <Icon name="add" size={16} />
-                <span>{t("portfolio.addTransaction") || "Add Transaction"}</span>
-              </button>
-            </div>
-            {transactionSymbols.length > 0 && (
-              <div className="transaction-filter-cards" style={{ marginBottom: "12px" }}>
-                <button
-                  className={`filter-card ${selectedTransactionSymbol === null ? "active" : ""}`}
-                  onClick={() => setSelectedTransactionSymbol(null)}
-                  title={t("portfolio.showAll") || "Show All"}
-                >
-                  {t("portfolio.all") || "All"}
-                </button>
-                {transactionSymbols.map((symbol) => {
-                  const group = groupedTransactions.find((g) => g.symbol === symbol);
-                  const position = positions.find((p) => p.symbol === symbol);
-                  const stockName = position?.name || group?.name || symbol;
-                  return (
-                    <button
-                      key={symbol}
-                      className={`filter-card ${selectedTransactionSymbol === symbol ? "active" : ""}`}
-                      onClick={() => setSelectedTransactionSymbol(symbol)}
-                      title={`${stockName} (${symbol})`}
-                    >
-                      <span className="filter-card-name">{stockName}</span>
-                      {group && <span className="filter-card-count">{group.transactions.length}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {transactions.length === 0 ? (
-              <div className="stocks-empty">{t("portfolio.noTransactions") || "No transactions"}</div>
-            ) : (
-              <div className="portfolio-table-container">
-                <table className="portfolio-table transactions-table">
-                  <thead>
-                    <tr>
-                      <th>{t("portfolio.symbol")}</th>
-                      <th>{t("portfolio.name")}</th>
-                      <th>{t("portfolio.transactionType")}</th>
-                      <th>{t("portfolio.quantity")}</th>
-                      <th>{t("portfolio.price")}</th>
-                      <th>{t("portfolio.amount")}</th>
-                      <th>{t("portfolio.commission")}</th>
-                      <th>{t("portfolio.transactionDate")}</th>
-                      <th>{t("portfolio.notes")}</th>
-                      <th>{t("portfolio.actions")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {groupedTransactions.map((group) => (
-                      <React.Fragment key={group.symbol}>
-                        {group.transactions.map((transaction) => (
-                          <tr key={transaction.id}>
-                            <td>{transaction.symbol}</td>
-                            <td className="transaction-name">{transaction.name || "-"}</td>
-                            <td className={transaction.transactionType === "buy" ? "positive" : "negative"}>
-                              {transaction.transactionType === "buy" ? t("portfolio.buy") : t("portfolio.sell")}
-                            </td>
-                            <td
-                              className="editable-quantity"
-                              onClick={(e) => {
-                                if (editingTransactionId !== transaction.id) {
-                                  e.stopPropagation();
-                                  setEditingTransactionId(transaction.id);
-                                  setEditingQuantity(transaction.quantity.toString());
-                                }
-                              }}
-                            >
-                              {editingTransactionId === transaction.id ? (
-                                <input
-                                  type="number"
-                                  value={editingQuantity}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    if (val === "" || /^\d+$/.test(val)) {
-                                      setEditingQuantity(val);
-                                    }
-                                  }}
-                                  onBlur={async () => {
-                                    const newQuantity = parseInt(editingQuantity) || 0;
-                                    await handleQuantityUpdate(transaction.id, newQuantity, transaction.quantity);
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      e.currentTarget.blur();
-                                    } else if (e.key === "Escape") {
-                                      setEditingTransactionId(null);
-                                      setEditingQuantity("");
-                                    }
-                                  }}
-                                  autoFocus
-                                  onClick={(e) => e.stopPropagation()}
-                                  style={{
-                                    width: "100%",
-                                    padding: "2px 4px",
-                                    fontSize: "13px",
-                                    border: "1px solid var(--accent-color)",
-                                    borderRadius: "3px",
-                                    background: "var(--bg-primary)",
-                                    color: "var(--text-primary)",
-                                  }}
-                                />
-                              ) : (
-                                <span className="quantity-display">{transaction.quantity}</span>
-                              )}
-                            </td>
-                            <td>¥{transaction.price.toFixed(2)}</td>
-                            <td>¥{transaction.amount.toFixed(2)}</td>
-                            <td>¥{transaction.commission.toFixed(2)}</td>
-                            <td>{transaction.transactionDate}</td>
-                            <td>{transaction.notes || "-"}</td>
-                            <td className="stock-actions" onClick={(e) => e.stopPropagation()}>
-                              <div className="action-buttons">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteTransaction(transaction.id);
-                                  }}
-                                  className="action-btn delete-btn"
-                                  title={t("common.delete") || "Delete"}
-                                >
-                                  <Icon name="delete" size={14} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </React.Fragment>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
 
         {expandedCard === "alerts" && (
           <div className="data-table-section">
@@ -1306,9 +1208,9 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
           </div>
         )}
 
-        {expandedCard === "timeseries" && positions.length > 0 && (
+        {expandedCard === "realtime" && positions.length > 0 && (
           <div className="data-table-section">
-            <PortfolioTimeseriesCard onStockSelect={onStockSelect} />
+            <StockComparisonChart onStockSelect={onStockSelect} />
           </div>
         )}
 
@@ -1319,26 +1221,21 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
         )}
       </div>
 
-      <AddPositionDialog
-        isOpen={showAddPositionDialog}
-        onClose={() => setShowAddPositionDialog(false)}
-        onAdd={handleAddPosition}
-      />
-
-      <EditPositionDialog
-        isOpen={showEditPositionDialog}
-        position={editingPosition}
-        onClose={() => {
-          setShowEditPositionDialog(false);
-          setEditingPosition(null);
-        }}
-        onUpdate={handleUpdatePosition}
-      />
-
       <AddTransactionDialog
         isOpen={showAddTransactionDialog}
         onClose={() => setShowAddTransactionDialog(false)}
-        onAdd={handleUpdatePosition}
+        onAdd={refreshPositions}
+      />
+
+      <PriceAlertDialog
+        isOpen={showPriceAlertDialog}
+        onClose={() => {
+          setShowPriceAlertDialog(false);
+          setPriceAlertSymbol("");
+          setPriceAlertCurrentPrice(0);
+        }}
+        symbol={priceAlertSymbol}
+        currentPrice={priceAlertCurrentPrice}
       />
     </div>
   );

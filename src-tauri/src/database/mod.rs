@@ -240,6 +240,7 @@ impl Database {
     }
 
     pub fn get_portfolio_positions(&self) -> Result<Vec<(i64, String, String, i64, f64, Option<f64>)>> {
+        portfolio::recalculate_all_positions_from_transactions(&self.conn)?;
         portfolio::get_portfolio_positions(&self.conn)
     }
 
@@ -256,8 +257,9 @@ impl Database {
         commission: f64,
         transaction_date: &str,
         notes: Option<&str>,
+        stock_name: Option<&str>,
     ) -> Result<i64> {
-        portfolio::add_portfolio_transaction(&self.conn, symbol, transaction_type, quantity, price, commission, transaction_date, notes)
+        portfolio::add_portfolio_transaction(&self.conn, symbol, transaction_type, quantity, price, commission, transaction_date, notes, stock_name)
     }
 
     pub fn get_portfolio_transactions(&self, symbol: Option<&str>) -> Result<Vec<(i64, String, String, i64, f64, f64, f64, String, Option<String>)>> {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+import { useAlert } from "../../../contexts/AlertContext";
 import { StockInfo } from "../types";
 import { getDefaultCommission } from "../../../utils/settings";
 import { useStockSearch } from "../hooks/useStockSearch";
@@ -17,7 +18,9 @@ interface AddTransactionDialogProps {
 
 const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({ isOpen, onClose, onAdd }) => {
   const { t } = useTranslation();
+  const { showAlert } = useAlert();
   const [selectedSymbol, setSelectedSymbol] = useState("");
+  const [selectedName, setSelectedName] = useState("");
   const [quantity, setQuantity] = useState("");
   const [price, setPrice] = useState("");
   const [commission, setCommission] = useState(getDefaultCommission());
@@ -35,10 +38,12 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({ isOpen, onC
 
   const handleStockSelect = (stock: StockInfo) => {
     setSelectedSymbol(stock.symbol);
+    setSelectedName(stock.name);
   };
 
   const handleClose = () => {
     setSelectedSymbol("");
+    setSelectedName("");
     setQuantity("");
     setPrice("");
     setCommission(getDefaultCommission());
@@ -51,7 +56,7 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({ isOpen, onC
     const prc = parsePrice(price);
 
     if (!selectedSymbol || qty <= 0 || prc <= 0) {
-      alert(t("portfolio.invalidInput"));
+      showAlert(t("portfolio.invalidInput"));
       return;
     }
 
@@ -66,13 +71,14 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({ isOpen, onC
         commission,
         transactionDate,
         notes: transactionNotes || null,
+        stockName: selectedName || null,
       });
 
       onAdd();
       handleClose();
     } catch (err) {
       console.error("Error adding transaction:", err);
-      alert(t("portfolio.addError") + ": " + (err instanceof Error ? err.message : String(err)));
+      showAlert(t("portfolio.addError") + ": " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setAddingTransaction(false);
     }
@@ -97,6 +103,18 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({ isOpen, onC
                 className="form-input"
               />
             </div>
+            {selectedName && (
+              <div className="form-group">
+                <label>{t("portfolio.name")}</label>
+                <input
+                  type="text"
+                  value={selectedName}
+                  readOnly
+                  className="form-input"
+                  style={{ backgroundColor: "var(--bg-tertiary, #252526)", cursor: "not-allowed" }}
+                />
+              </div>
+            )}
             <QuantityInput value={quantity} onChange={setQuantity} />
             <PriceInput value={price} onChange={setPrice} />
             <div className="form-group">

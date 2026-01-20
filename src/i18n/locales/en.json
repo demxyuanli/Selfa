@@ -4,7 +4,8 @@
     "search": "Search stocks...",
     "loading": "Loading...",
     "error": "Error",
-    "noData": "No data available"
+    "noData": "No data available",
+    "message": "Message"
   },
   "splash": {
     "welcome": "Welcome to Stock Analyzer",
@@ -375,6 +376,7 @@
     "zoom": "Zoom",
     "close": "Close",
     "title": "Chart",
+    "timeSeries": "Time Series",
     "loadFailed": "Chart loading failed, please refresh the page",
     "refreshPage": "Refresh Page",
     "noData": "No data",
@@ -766,7 +768,10 @@
     "enable": "Enable",
     "disable": "Disable",
     "existingAlerts": "Existing Alerts",
-    "noAlerts": "No price alerts"
+    "noAlerts": "No price alerts",
+    "switchDirection": "Switch Direction",
+    "createError": "Create failed",
+    "confirmDelete": "Are you sure you want to delete this alert?"
   },
   "customIndicator": {
     "formulaPlaceholder": "Example: MA(CLOSE, 20) or EMA(CLOSE, 12)"
@@ -813,6 +818,8 @@
     "all": "All",
     "noData": "No data",
     "invalidInput": "Invalid input",
+    "invalidQuantity": "Invalid quantity format, please enter a positive integer",
+    "invalidPrice": "Invalid price format, please enter a valid number",
     "addError": "Add failed",
     "updateError": "Update failed",
     "deleteError": "Delete failed",
@@ -824,6 +831,7 @@
     "quantityPlaceholder": "Enter quantity",
     "pricePlaceholder": "Enter price",
     "transactionDate": "Transaction Date",
+    "showTransactions": "Show Transactions",
     "timeseriesChart": "Real-time Trading",
     "previousClose": "Previous Close",
     "cost": "Cost",
@@ -874,7 +882,12 @@
     "chartTooltipCost": "Cost",
     "chartTooltipProfit": "Profit",
     "chartTooltipPosition": "Position",
-    "chartTooltipShares": "shares"
+    "chartTooltipShares": "shares",
+    "shanghaiIndex": "Shanghai Index",
+    "shenzhenIndex": "Shenzhen Index",
+    "starIndex": "STAR Index",
+    "realtimeTrading": "Real-time Trading",
+    "stockComparisonChart": "Stock Comparison Chart"
   },
   "comments": {
     "title": "Comments & Notes",

@@ -198,16 +198,20 @@ async fn search_stocks(
     query: String,
     db: tauri::State<'_, Arc<Database>>,
 ) -> Result<Vec<StockInfo>, String> {
-    // First try to search from cache
-    let cache_results = db.search_stocks_from_cache(&query, 50)
-        .map_err(|e| format!("Cache search error: {}", e))?;
-    
-    if !cache_results.is_empty() {
-        return Ok(cache_results);
+    // Always use API search to get the most complete and up-to-date results
+    // Cache search is only used as fallback if API fails
+    match search_stocks_by_query(&query).await {
+        Ok(api_results) => {
+            // API search succeeded, return API results
+            Ok(api_results)
+        }
+        Err(_) => {
+            // API search failed, fallback to cache search
+            let cache_results = db.search_stocks_from_cache(&query, 50)
+                .map_err(|e| format!("Cache search error: {}", e))?;
+            Ok(cache_results)
+        }
     }
-    
-    // Fallback to API search if cache is empty
-    search_stocks_by_query(&query).await
 }
 
 #[tauri::command]
@@ -291,6 +295,7 @@ fn add_portfolio_transaction(
     commission: f64,
     transaction_date: String,
     notes: Option<String>,
+    stock_name: Option<String>,
     db: tauri::State<'_, Arc<Database>>,
 ) -> Result<i64, String> {
     db.add_portfolio_transaction(
@@ -301,6 +306,7 @@ fn add_portfolio_transaction(
         commission,
         &transaction_date,
         notes.as_deref(),
+        stock_name.as_deref(),
     )
     .map_err(|e| format!("Failed to add transaction: {}", e))
 }
@@ -737,17 +743,18 @@ fn main() {
                 .map_err(|e| format!("Failed to initialize database: {}", e))?;
 
             // Add some test stocks for heatmap demo
-            let test_stocks = vec![
-                StockInfo { symbol: "000002".to_string(), name: "万科A".to_string(), exchange: "SZ".to_string() },
-                StockInfo { symbol: "600036".to_string(), name: "招商银行".to_string(), exchange: "SH".to_string() },
-                StockInfo { symbol: "000001".to_string(), name: "平安银行".to_string(), exchange: "SZ".to_string() },
-                StockInfo { symbol: "600519".to_string(), name: "贵州茅台".to_string(), exchange: "SH".to_string() },
-                StockInfo { symbol: "000858".to_string(), name: "五粮液".to_string(), exchange: "SZ".to_string() },
-            ];
+            // Commented out for release build without test data
+            // let test_stocks = vec![
+            //     StockInfo { symbol: "000002".to_string(), name: "万科A".to_string(), exchange: "SZ".to_string() },
+            //     StockInfo { symbol: "600036".to_string(), name: "招商银行".to_string(), exchange: "SH".to_string() },
+            //     StockInfo { symbol: "000001".to_string(), name: "平安银行".to_string(), exchange: "SZ".to_string() },
+            //     StockInfo { symbol: "600519".to_string(), name: "贵州茅台".to_string(), exchange: "SH".to_string() },
+            //     StockInfo { symbol: "000858".to_string(), name: "五粮液".to_string(), exchange: "SZ".to_string() },
+            // ];
 
-            for stock in test_stocks {
-                let _ = db.add_stock(&stock, None); // Ignore errors if stock already exists
-            }
+            // for stock in test_stocks {
+            //     let _ = db.add_stock(&stock, None); // Ignore errors if stock already exists
+            // }
 
             let db_arc = Arc::new(db);
             let cache = Arc::new(StockCache::new());

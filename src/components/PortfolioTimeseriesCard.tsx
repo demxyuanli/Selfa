@@ -68,10 +68,17 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
   const [timeseriesData, setTimeseriesData] = useState<Map<string, StockData[]>>(new Map());
   const [currentPrices, setCurrentPrices] = useState<Map<string, number>>(new Map());
   const [previousCloses, setPreviousCloses] = useState<Map<string, number>>(new Map());
-  const [amplificationFactor, setAmplificationFactor] = useState(2.0); // Amplification factor for price movements
+  const [indexData, setIndexData] = useState<Map<string, StockData[]>>(new Map());
+  const [amplificationFactor, setAmplificationFactor] = useState(3.5); // Amplification factor for price movements
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const fullTradingTimes = useMemo(() => generateFullTradingTimes(), []);
+
+  // Define benchmark indices
+  const BENCHMARK_INDICES = [
+    { symbol: "000001", name: t("portfolio.shanghaiIndex") || "Shanghai Index" },
+    { symbol: "000688", name: t("portfolio.starIndex") || "STAR Index" }
+  ];
 
   const loadPortfolioAndTimeseries = useCallback(async () => {
     setLoading(true);
@@ -125,7 +132,7 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
       const limitedPositions = positionsWithPrices.slice(0, 3);
       setPositions(limitedPositions);
 
-      // Store current prices and previous closes
+      // Store current prices and previous closes for positions and indices
       const pricesMap = new Map<string, number>();
       const previousClosesMap = new Map<string, number>();
       limitedPositions.forEach((position) => {
@@ -134,6 +141,21 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
           previousClosesMap.set(position.symbol, position.previousClose);
         }
       });
+
+      // Get previous closes for benchmark indices
+      await Promise.all(
+        BENCHMARK_INDICES.map(async (index) => {
+          try {
+            const quote = await invoke<any>("get_stock_quote", { symbol: index.symbol });
+            if (quote && quote.previous_close) {
+              previousClosesMap.set(index.symbol, quote.previous_close);
+            }
+          } catch (err) {
+            console.debug("Failed to fetch quote for index", index.symbol, err);
+          }
+        })
+      );
+
       setCurrentPrices(pricesMap);
       setPreviousCloses(previousClosesMap);
 
@@ -154,6 +176,24 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
         })
       );
       setTimeseriesData(timeseriesMap);
+
+      // Fetch benchmark index data
+      const indexDataMap = new Map<string, StockData[]>();
+      await Promise.all(
+        BENCHMARK_INDICES.map(async (index) => {
+          try {
+            const indexData = await invoke<StockData[]>("get_time_series", {
+              symbol: index.symbol,
+            });
+            if (indexData && indexData.length > 0) {
+              indexDataMap.set(index.symbol, indexData);
+            }
+          } catch (err) {
+            console.debug("Failed to fetch timeseries for index", index.symbol, err);
+          }
+        })
+      );
+      setIndexData(indexDataMap);
     } catch (err) {
       console.error("Error loading portfolio timeseries:", err);
       setError(err instanceof Error ? err.message : "Failed to load data");
@@ -172,11 +212,15 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
       return {};
     }
 
-    const series: any[] = [];
+    const stockSeries: any[] = [];
+    const indexSeries: any[] = [];
+    const volumeSeries: any[] = [];
     const legendData: string[] = [];
-    let allPrices: number[] = [];
+    let allStockPrices: number[] = [];
+    let allIndexPrices: number[] = [];
     // Store original prices by series index and data index for tooltip
     const originalPriceMap = new Map<string, Map<number, number>>();
+    const volumeDataMap = new Map<string, (number | null)[]>();
 
     positions.forEach((position, index) => {
       const data = timeseriesData.get(position.symbol);
@@ -220,7 +264,7 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
           return null;
         });
 
-        allPrices.push(amplifiedCurrent);
+        allStockPrices.push(amplifiedCurrent);
 
         const color = PORTFOLIO_LINE_COLORS[index % PORTFOLIO_LINE_COLORS.length];
         const label = `${position.symbol} ${position.name}`;
@@ -235,8 +279,8 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
         });
         originalPriceMap.set(label, noDataOriginalPricesMap);
 
-        // Main price line
-        series.push({
+        // Main price line (for lower stock area)
+        stockSeries.push({
           name: label,
           type: "line",
           data: prices,
@@ -247,12 +291,14 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
           },
           smooth: false,
           connectNulls: true,
+          xAxisIndex: 1,
+          yAxisIndex: 1,
         });
 
         // Previous close reference line (horizontal at 0%)
         if (previousClose) {
           const previousCloseLine: (number | null)[] = fullTradingTimes.map(() => 0);
-          series.push({
+          stockSeries.push({
             name: `${label} (${t("portfolio.previousClose")})`,
             type: "line",
             data: previousCloseLine,
@@ -266,6 +312,8 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
             smooth: false,
             connectNulls: true,
             silent: true,
+            xAxisIndex: 1,
+            yAxisIndex: 1,
           });
         }
 
@@ -273,8 +321,8 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
         if (position.avgCost && position.avgCost > 0) {
           const avgCostAmplified = calculateAmplifiedChange(position.avgCost);
           const avgCostLine: (number | null)[] = fullTradingTimes.map(() => avgCostAmplified);
-          allPrices.push(avgCostAmplified);
-          series.push({
+          allStockPrices.push(avgCostAmplified);
+          stockSeries.push({
             name: `${label} (${t("portfolio.cost")})`,
             type: "line",
             data: avgCostLine,
@@ -288,6 +336,8 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
             smooth: false,
             connectNulls: true,
             silent: true,
+            xAxisIndex: 1,
+            yAxisIndex: 1,
           });
         }
         return;
@@ -368,7 +418,7 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
         });
       }
 
-      allPrices.push(...validPrices);
+      allStockPrices.push(...validPrices);
 
       const color = PORTFOLIO_LINE_COLORS[index % PORTFOLIO_LINE_COLORS.length];
       const label = `${position.symbol} ${position.name}`;
@@ -377,8 +427,8 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
       // Store original prices map for this series
       originalPriceMap.set(label, originalPricesMap);
 
-      // Main price line
-      series.push({
+      // Main price line (for lower stock area)
+      stockSeries.push({
         name: label,
         type: "line",
         data: amplifiedPrices,
@@ -389,12 +439,14 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
         },
         smooth: false,
         connectNulls: true,
+        xAxisIndex: 1,
+        yAxisIndex: 1,
       });
 
       // Previous close reference line (horizontal dashed line at 0% change)
       if (previousClose) {
         const previousCloseLine: (number | null)[] = fullTradingTimes.map(() => 0);
-        series.push({
+        stockSeries.push({
           name: `${label} ${t("portfolio.previousCloseLabel")}`,
           type: "line",
           data: previousCloseLine,
@@ -408,6 +460,8 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
           smooth: false,
           connectNulls: true,
           silent: true, // Don't trigger tooltip
+          xAxisIndex: 1,
+          yAxisIndex: 1,
         });
       }
 
@@ -415,8 +469,8 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
       if (position.avgCost && position.avgCost > 0) {
         const avgCostAmplified = calculateAmplifiedChange(position.avgCost);
         const avgCostLine: (number | null)[] = fullTradingTimes.map(() => avgCostAmplified);
-        allPrices.push(avgCostAmplified);
-        series.push({
+        allStockPrices.push(avgCostAmplified);
+        stockSeries.push({
           name: `${label} ${t("portfolio.costLabel")}`,
           type: "line",
           data: avgCostLine,
@@ -430,29 +484,176 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
           smooth: false,
           connectNulls: true,
           silent: true, // Don't trigger tooltip
+          xAxisIndex: 1,
+          yAxisIndex: 1,
         });
       }
     });
 
-    if (series.length === 0) {
+    // Add benchmark index lines
+    const INDEX_COLORS = ["#ff0000", "#ff9900"]; // Red for Shanghai Index, Orange for STAR Index
+    BENCHMARK_INDICES.forEach((index, indexIdx) => {
+      const data = indexData.get(index.symbol);
+      if (!data || data.length === 0) return;
+
+      // Use previous close as reference price for the index
+      let referencePrice = previousCloses.get(index.symbol);
+      if (!referencePrice && data && data.length > 0) {
+        // Use the first historical price as reference
+        referencePrice = data[0].close;
+      }
+      if (!referencePrice) return;
+
+      const dataMap = new Map<string, { price: number; volume: number }>();
+      data.forEach((d) => {
+        const dateStr = d.date;
+        let timeStr = dateStr.includes(" ") ? dateStr.split(" ")[1] : dateStr;
+        if (timeStr.includes(":")) {
+          const parts = timeStr.split(":");
+          if (parts.length >= 2) {
+            timeStr = `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+          }
+        }
+        dataMap.set(timeStr, { price: d.close, volume: d.volume });
+      });
+
+      // Calculate amplified percentage changes
+      const calculateAmplifiedChange = (price: number): number => {
+        if (!referencePrice || referencePrice === 0) return 0;
+        const changePercent = ((price / referencePrice) - 1) * amplificationFactor * 100;
+        return changePercent;
+      };
+
+      // Store original prices for tooltip display
+      const originalPricesMap = new Map<number, number>();
+      let lastPrice: number | null = null;
+      let lastValidIndex = -1;
+      const amplifiedPrices: (number | null)[] = fullTradingTimes.map((time, idx) => {
+        const dataPoint = dataMap.get(time);
+        if (dataPoint) {
+          lastPrice = dataPoint.price;
+          lastValidIndex = idx;
+          originalPricesMap.set(idx, dataPoint.price);
+          return calculateAmplifiedChange(dataPoint.price);
+        }
+
+        // Use last valid price for continuity if we have one
+        if (lastPrice !== null && lastValidIndex >= 0) {
+          if (time === "13:00" && idx > 0) {
+            originalPricesMap.set(idx, lastPrice);
+            return calculateAmplifiedChange(lastPrice);
+          }
+        }
+
+        return null;
+      });
+
+      const validPrices = amplifiedPrices.filter((p): p is number => p !== null);
+      if (validPrices.length === 0) return;
+
+      allIndexPrices.push(...validPrices);
+      legendData.push(index.name);
+
+      // Store original prices map for this series
+      originalPriceMap.set(index.name, originalPricesMap);
+
+      // Prepare volume data for this index
+      const volumeData: (number | null)[] = fullTradingTimes.map((time) => {
+        const dataPoint = dataMap.get(time);
+        return dataPoint ? dataPoint.volume : null;
+      });
+      volumeDataMap.set(index.name, volumeData);
+
+      // Add index line with shadow area (for upper index area)
+      indexSeries.push({
+        name: index.name,
+        type: "line",
+        data: amplifiedPrices,
+        symbol: "none",
+        lineStyle: {
+          color: INDEX_COLORS[indexIdx % INDEX_COLORS.length],
+          width: 2,
+          opacity: 0.8,
+        },
+        areaStyle: {
+          color: INDEX_COLORS[indexIdx % INDEX_COLORS.length],
+          opacity: 0.1,
+        },
+        smooth: false,
+        connectNulls: true,
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        z: 10,
+      });
+    });
+
+    // Add volume bar charts for indices (upper area)
+    BENCHMARK_INDICES.forEach((index, indexIdx) => {
+      const volumeData = volumeDataMap.get(index.name);
+      if (!volumeData || volumeData.every(v => v === null)) return;
+
+      const maxVolume = Math.max(...volumeData.filter((v): v is number => v !== null));
+      if (maxVolume === 0) return;
+
+      // Normalize volume data (scale to percentage range for better visualization)
+      const normalizedVolume = volumeData.map(v => {
+        if (v === null) return null;
+        return (v / maxVolume) * 100; // Scale to 0-100 range
+      });
+
+      volumeSeries.push({
+        name: `${index.name} Volume`,
+        type: "bar",
+        data: normalizedVolume,
+        itemStyle: {
+          color: INDEX_COLORS[indexIdx % INDEX_COLORS.length],
+          opacity: 0.3,
+        },
+        xAxisIndex: 0,
+        yAxisIndex: 2, // Use separate y-axis for volume
+        silent: true, // Don't trigger tooltip for volume bars
+        z: 1, // Behind index lines
+      });
+    });
+
+    if (indexSeries.length === 0 && stockSeries.length === 0) {
       return {};
     }
 
-    // Y-axis range for amplified percentage changes
-    const minPrice = allPrices.length > 0 ? Math.min(...allPrices) : -5;
-    const maxPrice = allPrices.length > 0 ? Math.max(...allPrices) : 5;
-    const priceRange = maxPrice - minPrice;
-    const yAxisMin = minPrice - Math.max(priceRange * 0.1, 1);
-    const yAxisMax = maxPrice + Math.max(priceRange * 0.1, 1);
+    // Y-axis range for index percentage changes
+    const indexMinPrice = allIndexPrices.length > 0 ? Math.min(...allIndexPrices) : -5;
+    const indexMaxPrice = allIndexPrices.length > 0 ? Math.max(...allIndexPrices) : 5;
+    const indexPriceRange = indexMaxPrice - indexMinPrice;
+    const indexYAxisMin = indexMinPrice - Math.max(indexPriceRange * 0.1, 1);
+    const indexYAxisMax = indexMaxPrice + Math.max(indexPriceRange * 0.1, 1);
+
+    // Y-axis range for stock percentage changes
+    const stockMinPrice = allStockPrices.length > 0 ? Math.min(...allStockPrices) : -5;
+    const stockMaxPrice = allStockPrices.length > 0 ? Math.max(...allStockPrices) : 5;
+    const stockPriceRange = stockMaxPrice - stockMinPrice;
+    const stockYAxisMin = stockMinPrice - Math.max(stockPriceRange * 0.1, 1);
+    const stockYAxisMax = stockMaxPrice + Math.max(stockPriceRange * 0.1, 1);
 
     return {
       backgroundColor: "#1e1e1e",
-      grid: {
-        left: "8%",
-        right: "3%",
-        top: "15%",
-        bottom: "8%",
-      },
+      grid: [
+        // Upper grid for indices and volume
+        {
+          left: "8%",
+          right: "3%",
+          top: "15%",
+          height: "25%",
+          containLabel: false,
+        },
+        // Lower grid for stocks
+        {
+          left: "8%",
+          right: "3%",
+          top: "40%",
+          bottom: "8%",
+          containLabel: false,
+        },
+      ],
       tooltip: {
         trigger: "axis",
         backgroundColor: "rgba(37, 37, 38, 0.95)",
@@ -499,44 +700,103 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
         orient: "horizontal",
         left: "center",
       },
-      xAxis: {
-        type: "category",
-        data: fullTradingTimes,
-        boundaryGap: false,
-        axisLabel: {
-          fontSize: 9,
-          color: "#858585",
-          interval: (index: number) => {
-            const time = fullTradingTimes[index];
-            return time.endsWith(":00") || time === "09:30" || time === "11:30" || time === "13:00" || time === "15:00";
+      xAxis: [
+        // Upper x-axis for indices
+        {
+          type: "category",
+          data: fullTradingTimes,
+          boundaryGap: false,
+          gridIndex: 0,
+          axisLabel: {
+            show: false, // Hide labels in upper area
+            fontSize: 9,
+            color: "#858585",
+          },
+          axisLine: {
+            lineStyle: { color: "#555" },
           },
         },
-        axisLine: {
-          lineStyle: { color: "#555" },
+        // Lower x-axis for stocks
+        {
+          type: "category",
+          data: fullTradingTimes,
+          boundaryGap: false,
+          gridIndex: 1,
+          axisLabel: {
+            fontSize: 9,
+            color: "#858585",
+            interval: (index: number) => {
+              const time = fullTradingTimes[index];
+              return time.endsWith(":00") || time === "09:30" || time === "11:30" || time === "13:00" || time === "15:00";
+            },
+          },
+          axisLine: {
+            lineStyle: { color: "#555" },
+          },
         },
-      },
-      yAxis: {
-        type: "value",
-        scale: false,
-        min: yAxisMin,
-        max: yAxisMax,
-        axisLabel: {
-          fontSize: 9,
-          color: "#858585",
-          formatter: (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`,
+      ],
+      yAxis: [
+        // Upper y-axis for index price changes
+        {
+          type: "value",
+          scale: false,
+          min: indexYAxisMin,
+          max: indexYAxisMax,
+          gridIndex: 0,
+          axisLabel: {
+            fontSize: 9,
+            color: "#858585",
+            formatter: (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`,
+          },
+          axisLine: {
+            lineStyle: { color: "#555" },
+          },
+          splitLine: {
+            lineStyle: { color: "#333", type: "dashed" },
+          },
         },
-        axisLine: {
-          lineStyle: { color: "#555" },
+        // Lower y-axis for stock price changes
+        {
+          type: "value",
+          scale: false,
+          min: stockYAxisMin,
+          max: stockYAxisMax,
+          gridIndex: 1,
+          axisLabel: {
+            fontSize: 9,
+            color: "#858585",
+            formatter: (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`,
+          },
+          axisLine: {
+            lineStyle: { color: "#555" },
+          },
+          splitLine: {
+            lineStyle: { color: "#333", type: "dashed" },
+          },
         },
-        splitLine: {
-          lineStyle: { color: "#333", type: "dashed" },
+        // Volume y-axis for upper area (right side)
+        {
+          type: "value",
+          gridIndex: 0,
+          position: "right",
+          axisLabel: {
+            show: false, // Hide volume axis labels
+            fontSize: 9,
+            color: "#858585",
+          },
+          axisLine: {
+            show: false,
+          },
+          splitLine: {
+            show: false,
+          },
         },
-      },
-      series: series,
+      ],
+      series: [...indexSeries, ...volumeSeries, ...stockSeries],
     };
     // Note: originalPriceMap is created inside useMemo, so it's included in the dependency
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [positions, timeseriesData, currentPrices, previousCloses, amplificationFactor, fullTradingTimes]);
+    }, [positions, timeseriesData, currentPrices, previousCloses, indexData, amplificationFactor, fullTradingTimes, BENCHMARK_INDICES, t]);
 
   if (loading) {
     return (
@@ -584,10 +844,10 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
             <input
               type="number"
               min="0.5"
-              max="5"
+              max="10"
               step="0.5"
               value={amplificationFactor}
-              onChange={(e) => setAmplificationFactor(parseFloat(e.target.value) || 2.0)}
+              onChange={(e) => setAmplificationFactor(parseFloat(e.target.value) || 3.5)}
               style={{
                 width: "60px",
                 padding: "2px 4px",

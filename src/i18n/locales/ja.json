@@ -4,7 +4,8 @@
     "search": "株式を検索...",
     "loading": "読み込み中...",
     "error": "エラー",
-    "noData": "データがありません"
+    "noData": "データがありません",
+    "message": "メッセージ"
   },
   "splash": {
     "welcome": "株式分析ツールへようこそ",
@@ -258,7 +259,8 @@
   "chart": {
     "zoom": "拡大",
     "close": "閉じる",
-    "title": "チャート"
+    "title": "チャート",
+    "timeSeries": "分時チャート"
   },
   "analysis": {
     "prediction": "予測",
@@ -631,7 +633,10 @@
     "enable": "有効化",
     "disable": "無効化",
     "existingAlerts": "既存のアラート",
-    "noAlerts": "価格アラートがありません"
+    "noAlerts": "価格アラートがありません",
+    "switchDirection": "方向を切り替え",
+    "createError": "作成に失敗しました",
+    "confirmDelete": "このアラートを削除してもよろしいですか？"
   },
   "portfolio": {
     "title": "ポートフォリオ",
@@ -682,6 +687,7 @@
     "quantityPlaceholder": "数量を入力",
     "pricePlaceholder": "価格を入力",
     "transactionDate": "取引日",
+    "showTransactions": "取引明細を表示",
     "timeseriesChart": "リアルタイム取引",
     "withData": "データあり",
     "noTimeseriesData": "分時データなし",

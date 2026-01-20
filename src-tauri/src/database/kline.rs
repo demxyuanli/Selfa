@@ -2,11 +2,11 @@ use rusqlite::{Connection, Result, params};
 use chrono::Utc;
 use std::sync::Mutex;
 use crate::stock_api::StockData;
-use super::utils::ensure_stock_exists_internal;
+use super::utils::ensure_stock_exists_with_name_from_quote;
 
 pub fn save_kline(conn: &Mutex<Connection>, symbol: &str, period: &str, data: &[StockData]) -> Result<usize> {
     let conn = conn.lock().unwrap();
-    ensure_stock_exists_internal(&conn, symbol)?;
+    ensure_stock_exists_with_name_from_quote(&conn, symbol)?;
     
     let now = Utc::now().to_rfc3339();
     let mut count = 0;

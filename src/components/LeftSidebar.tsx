@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
+import { useAlert } from "../contexts/AlertContext";
 import Icon from "./Icon";
 import "./LeftSidebar.css";
 import { PanelType, StockInfo, StockWithTags, TagInfo, DEFAULT_TAG_COLORS, LeftSidebarProps } from "./LeftSidebar/types";
@@ -18,6 +19,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
   onStockRemove,
 }) => {
   const { t } = useTranslation();
+  const { showAlert } = useAlert();
   const UNGROUPED_GROUP = t("sidebar.ungroupedGroup");
 
   const [activePanel, setActivePanel] = useState<PanelType>("favorites");
@@ -104,6 +106,18 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
     }
   };
 
+  const handleRemoveFromFavorites = async (stock: StockInfo) => {
+    try {
+      await invoke("remove_stock", { symbol: stock.symbol });
+      refreshAll();
+      if (onStockRemove) {
+        onStockRemove(stock.symbol);
+      }
+    } catch (err) {
+      console.error("Error removing stock:", err);
+    }
+  };
+
   const handleRemoveStock = async (symbol: string) => {
     if (confirm(t("sidebar.confirmDeleteStock", { symbol }))) {
       try {
@@ -125,14 +139,14 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
         await invoke("create_stock_group", { name: name.trim() });
         loadGroups();
       } catch (err) {
-        alert(err instanceof Error ? err.message : String(err));
+        showAlert(err instanceof Error ? err.message : String(err));
       }
     }
   };
 
   const handleDeleteGroup = async (groupName: string) => {
     if (groupName === UNGROUPED_GROUP) {
-      alert(t("sidebar.cannotDeleteUngrouped"));
+      showAlert(t("sidebar.cannotDeleteUngrouped"));
       return;
     }
     if (confirm(t("sidebar.confirmDeleteGroup", { name: groupName }))) {
@@ -140,7 +154,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
         await invoke("delete_stock_group", { name: groupName });
         loadGroups();
       } catch (err) {
-        alert(err instanceof Error ? err.message : String(err));
+        showAlert(err instanceof Error ? err.message : String(err));
       }
     }
   };
@@ -214,7 +228,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
           setSelectedTag(null);
         }
       } catch (err) {
-        alert(err instanceof Error ? err.message : String(err));
+        showAlert(err instanceof Error ? err.message : String(err));
       }
     }
   };
@@ -318,6 +332,8 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
               searchError={searchError}
               onStockClick={handleStockClick}
               onAddToFavorites={handleAddToFavorites}
+              onRemoveFromFavorites={handleRemoveFromFavorites}
+              favoriteStocks={allStocks ? allStocks.map(s => ({ symbol: s.symbol, name: s.name, exchange: s.exchange })) : []}
               onToggle={onToggle}
             />
           )}

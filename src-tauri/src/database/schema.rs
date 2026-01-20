@@ -1,6 +1,150 @@
 use rusqlite::Connection;
 
+fn migrate_remove_foreign_keys(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute("PRAGMA foreign_keys = OFF", [])?;
+    
+    let tables_to_migrate = vec![
+        ("stocks", "CREATE TABLE stocks_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            exchange TEXT NOT NULL,
+            group_id INTEGER,
+            sort_order INTEGER DEFAULT 0,
+            visible INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )"),
+        ("stock_time_series", "CREATE TABLE stock_time_series_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            date TEXT NOT NULL,
+            open REAL NOT NULL,
+            high REAL NOT NULL,
+            low REAL NOT NULL,
+            close REAL NOT NULL,
+            volume INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(symbol, date)
+        )"),
+        ("stock_kline", "CREATE TABLE stock_kline_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            period TEXT NOT NULL,
+            date TEXT NOT NULL,
+            open REAL NOT NULL,
+            high REAL NOT NULL,
+            low REAL NOT NULL,
+            close REAL NOT NULL,
+            volume INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(symbol, period, date)
+        )"),
+        ("stock_quotes", "CREATE TABLE stock_quotes_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            name TEXT NOT NULL,
+            price REAL NOT NULL,
+            change REAL NOT NULL,
+            change_percent REAL NOT NULL,
+            volume INTEGER NOT NULL,
+            market_cap INTEGER,
+            pe_ratio REAL,
+            turnover INTEGER,
+            high REAL NOT NULL,
+            low REAL NOT NULL,
+            open REAL NOT NULL,
+            previous_close REAL NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(symbol)
+        )"),
+        ("stock_tag_relations", "CREATE TABLE stock_tag_relations_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            tag_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(symbol, tag_id)
+        )"),
+        ("price_alerts", "CREATE TABLE price_alerts_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            threshold_price REAL NOT NULL,
+            direction TEXT NOT NULL CHECK(direction IN ('above', 'below')),
+            enabled INTEGER NOT NULL DEFAULT 1,
+            triggered INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )"),
+        ("portfolio_positions", "CREATE TABLE portfolio_positions_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            name TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            avg_cost REAL NOT NULL,
+            current_price REAL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )"),
+        ("portfolio_transactions", "CREATE TABLE portfolio_transactions_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            transaction_type TEXT NOT NULL CHECK(transaction_type IN ('buy', 'sell')),
+            quantity INTEGER NOT NULL,
+            price REAL NOT NULL,
+            amount REAL NOT NULL,
+            commission REAL DEFAULT 0,
+            transaction_date TEXT NOT NULL,
+            notes TEXT,
+            created_at TEXT NOT NULL
+        )"),
+    ];
+
+    let result = (|| -> rusqlite::Result<()> {
+        let tx = conn.unchecked_transaction()?;
+        
+        for (table_name, create_sql) in tables_to_migrate {
+            let table_exists: bool = conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+                [table_name],
+                |row| Ok(row.get::<_, i32>(0)? > 0),
+            )?;
+
+            if table_exists {
+                let temp_table_name = format!("{}_new", table_name);
+                let temp_exists: bool = conn.query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+                    [&temp_table_name],
+                    |row| Ok(row.get::<_, i32>(0)? > 0),
+                ).unwrap_or(false);
+                
+                if !temp_exists {
+                    conn.execute(create_sql, [])?;
+                    
+                    let copy_sql = format!("INSERT INTO {}_new SELECT * FROM {}", table_name, table_name);
+                    if let Err(e) = conn.execute(&copy_sql, []) {
+                        eprintln!("Warning: Failed to copy data from {}: {}", table_name, e);
+                    }
+                    
+                    let drop_sql = format!("DROP TABLE {}", table_name);
+                    conn.execute(&drop_sql, [])?;
+                    
+                    let rename_sql = format!("ALTER TABLE {}_new RENAME TO {}", table_name, table_name);
+                    conn.execute(&rename_sql, [])?;
+                }
+            }
+        }
+        
+        tx.commit()?;
+        Ok(())
+    })();
+    
+    conn.execute("PRAGMA foreign_keys = ON", [])?;
+    result
+}
+
 pub fn init_tables(conn: &Connection) -> rusqlite::Result<()> {
+    migrate_remove_foreign_keys(conn)?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS stock_groups (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,8 +165,7 @@ pub fn init_tables(conn: &Connection) -> rusqlite::Result<()> {
             sort_order INTEGER DEFAULT 0,
             visible INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            FOREIGN KEY (group_id) REFERENCES stock_groups(id)
+            updated_at TEXT NOT NULL
         )",
         [],
     )?;
@@ -38,8 +181,7 @@ pub fn init_tables(conn: &Connection) -> rusqlite::Result<()> {
             close REAL NOT NULL,
             volume INTEGER NOT NULL,
             created_at TEXT NOT NULL,
-            UNIQUE(symbol, date),
-            FOREIGN KEY (symbol) REFERENCES stocks(symbol)
+            UNIQUE(symbol, date)
         )",
         [],
     )?;
@@ -62,8 +204,7 @@ pub fn init_tables(conn: &Connection) -> rusqlite::Result<()> {
             volume INTEGER NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
-            UNIQUE(symbol, period, date),
-            FOREIGN KEY (symbol) REFERENCES stocks(symbol)
+            UNIQUE(symbol, period, date)
         )",
         [],
     )?;
@@ -90,8 +231,7 @@ pub fn init_tables(conn: &Connection) -> rusqlite::Result<()> {
             open REAL NOT NULL,
             previous_close REAL NOT NULL,
             updated_at TEXT NOT NULL,
-            UNIQUE(symbol),
-            FOREIGN KEY (symbol) REFERENCES stocks(symbol)
+            UNIQUE(symbol)
         )",
         [],
     )?;
@@ -142,9 +282,7 @@ pub fn init_tables(conn: &Connection) -> rusqlite::Result<()> {
             symbol TEXT NOT NULL,
             tag_id INTEGER NOT NULL,
             created_at TEXT NOT NULL,
-            UNIQUE(symbol, tag_id),
-            FOREIGN KEY (symbol) REFERENCES stocks(symbol) ON DELETE CASCADE,
-            FOREIGN KEY (tag_id) REFERENCES stock_tags(id) ON DELETE CASCADE
+            UNIQUE(symbol, tag_id)
         )",
         [],
     )?;
@@ -168,8 +306,7 @@ pub fn init_tables(conn: &Connection) -> rusqlite::Result<()> {
             enabled INTEGER NOT NULL DEFAULT 1,
             triggered INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            FOREIGN KEY (symbol) REFERENCES stocks(symbol) ON DELETE CASCADE
+            updated_at TEXT NOT NULL
         )",
         [],
     )?;
@@ -188,8 +325,7 @@ pub fn init_tables(conn: &Connection) -> rusqlite::Result<()> {
             avg_cost REAL NOT NULL,
             current_price REAL,
             created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            FOREIGN KEY (symbol) REFERENCES stocks(symbol) ON DELETE CASCADE
+            updated_at TEXT NOT NULL
         )",
         [],
     )?;
@@ -210,8 +346,7 @@ pub fn init_tables(conn: &Connection) -> rusqlite::Result<()> {
             commission REAL DEFAULT 0,
             transaction_date TEXT NOT NULL,
             notes TEXT,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY (symbol) REFERENCES stocks(symbol) ON DELETE CASCADE
+            created_at TEXT NOT NULL
         )",
         [],
     )?;

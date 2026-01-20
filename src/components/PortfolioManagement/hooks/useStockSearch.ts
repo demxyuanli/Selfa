@@ -26,8 +26,8 @@ export function useStockSearch() {
       const queryLower = query.trim().toLowerCase();
 
       if (!queryLower) {
-        setSearchResults(favoriteStocks);
-        setShowDropdown(favoriteStocks.length > 0);
+        setSearchResults([]);
+        setShowDropdown(false);
         return;
       }
 

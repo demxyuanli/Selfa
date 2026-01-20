@@ -1,0 +1,121 @@
+.alert-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  animation: alert-fade-in 0.2s ease-out;
+}
+
+@keyframes alert-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.alert-dialog {
+  background: var(--background-color, #1e1e1e);
+  border: 2px solid var(--accent-color, #007acc);
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 122, 204, 0.3);
+  animation: alert-slide-in 0.3s ease-out;
+}
+
+@keyframes alert-slide-in {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.alert-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #3e3e3e);
+}
+
+.alert-dialog-header h3 {
+  margin: 0;
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-color, #ffffff);
+}
+
+.alert-dialog-close {
+  background: none;
+  border: none;
+  color: var(--text-color, #ffffff);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.alert-dialog-close:hover {
+  background: var(--hover-background, #3e3e3e);
+}
+
+.alert-dialog-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.alert-dialog-content p {
+  margin: 0;
+  color: var(--text-color, #ffffff);
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.alert-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-color, #3e3e3e);
+}
+
+.alert-dialog-button {
+  padding: 8px 24px;
+  background: var(--accent-color, #007acc);
+  border: none;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.alert-dialog-button:hover {
+  background: var(--accent-color-hover, #005a9e);
+}
+
+.alert-dialog-button:active {
+  transform: scale(0.98);
+}
