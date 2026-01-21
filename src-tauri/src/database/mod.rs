@@ -9,6 +9,8 @@ mod quotes;
 mod alerts;
 mod cache;
 mod portfolio;
+mod transfers;
+mod settings;
 
 use rusqlite::Connection;
 use rusqlite::Result;
@@ -138,6 +140,10 @@ impl Database {
         time_series::get_time_series(&self.conn, symbol, limit)
     }
 
+    pub fn get_batch_time_series(&self, symbols: &[String], limit: Option<i32>) -> Result<std::collections::HashMap<String, Vec<StockData>>> {
+        time_series::get_batch_time_series(&self.conn, symbols, limit)
+    }
+
     #[allow(dead_code)]
     pub fn get_latest_time_series_date(&self, symbol: &str) -> Result<Option<String>> {
         time_series::get_latest_time_series_date(&self.conn, symbol)
@@ -206,6 +212,10 @@ impl Database {
         alerts::reset_alert_triggered(&self.conn, alert_id)
     }
 
+    pub fn reset_all_triggered_alerts(&self) -> Result<usize> {
+        alerts::reset_all_triggered_alerts(&self.conn)
+    }
+
     // Cache
     pub fn update_stock_cache(&self, stocks: &[StockInfo]) -> Result<()> {
         cache::update_stock_cache(&self.conn, stocks)
@@ -240,7 +250,8 @@ impl Database {
     }
 
     pub fn get_portfolio_positions(&self) -> Result<Vec<(i64, String, String, i64, f64, Option<f64>)>> {
-        portfolio::recalculate_all_positions_from_transactions(&self.conn)?;
+        // Removed automatic recalculation - positions are already updated when transactions are added/updated/deleted
+        // Only call recalculate_all_positions_from_transactions manually when needed (e.g., data migration or repair)
         portfolio::get_portfolio_positions(&self.conn)
     }
 
@@ -280,5 +291,48 @@ impl Database {
 
     pub fn recalculate_all_positions_from_transactions(&self) -> Result<()> {
         portfolio::recalculate_all_positions_from_transactions(&self.conn)
+    }
+
+    // Capital Transfers
+    pub fn add_capital_transfer(
+        &self,
+        transfer_type: &str,
+        amount: f64,
+        transfer_date: &str,
+        notes: Option<&str>,
+    ) -> Result<i64> {
+        transfers::add_capital_transfer(&self.conn, transfer_type, amount, transfer_date, notes)
+    }
+
+    pub fn get_capital_transfers(&self) -> Result<Vec<(i64, String, f64, String, Option<String>)>> {
+        transfers::get_capital_transfers(&self.conn)
+    }
+
+    pub fn update_capital_transfer(
+        &self,
+        id: i64,
+        transfer_type: Option<&str>,
+        amount: Option<f64>,
+        transfer_date: Option<&str>,
+        notes: Option<&str>,
+    ) -> Result<()> {
+        transfers::update_capital_transfer(&self.conn, id, transfer_type, amount, transfer_date, notes)
+    }
+
+    pub fn delete_capital_transfer(&self, id: i64) -> Result<()> {
+        transfers::delete_capital_transfer(&self.conn, id)
+    }
+
+    pub fn get_total_capital(&self) -> Result<f64> {
+        transfers::get_total_capital(&self.conn)
+    }
+
+    // Portfolio Settings
+    pub fn get_initial_balance(&self) -> Result<Option<f64>> {
+        settings::get_initial_balance(&self.conn)
+    }
+
+    pub fn set_initial_balance(&self, balance: f64) -> Result<()> {
+        settings::set_initial_balance(&self.conn, balance)
     }
 }

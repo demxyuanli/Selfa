@@ -165,3 +165,14 @@ pub fn reset_alert_triggered(conn: &Mutex<Connection>, alert_id: i64) -> Result<
     
     Ok(())
 }
+
+pub fn reset_all_triggered_alerts(conn: &Mutex<Connection>) -> Result<usize> {
+    let conn = conn.lock().unwrap();
+    
+    let updated = conn.execute(
+        "UPDATE price_alerts SET triggered = 0 WHERE triggered = 1",
+        [],
+    )?;
+    
+    Ok(updated)
+}

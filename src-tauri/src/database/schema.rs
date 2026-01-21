@@ -381,5 +381,31 @@ pub fn init_tables(conn: &Connection) -> rusqlite::Result<()> {
         [],
     )?;
 
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS capital_transfers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            transfer_type TEXT NOT NULL CHECK(transfer_type IN ('deposit', 'withdraw')),
+            amount REAL NOT NULL,
+            transfer_date TEXT NOT NULL,
+            notes TEXT,
+            created_at TEXT NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_capital_transfers_date ON capital_transfers(transfer_date)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS portfolio_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )",
+        [],
+    )?;
+
     Ok(())
 }

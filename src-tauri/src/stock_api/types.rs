@@ -100,3 +100,11 @@ pub struct AIPriceTarget {
     pub target: f64,
     pub probability: f64,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StockDataBundle {
+    pub symbol: String,
+    pub quote: Option<StockQuote>,
+    pub time_series: Vec<StockData>,      // Daily data (klt=1)
+    pub intraday: Vec<StockData>,         // 5-minute intraday data (klt=5)
+}

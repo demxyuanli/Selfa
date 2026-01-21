@@ -36,6 +36,11 @@ export interface PortfolioStats {
   totalProfit: number;
   totalProfitPercent: number;
   positionCount: number;
+  initialCapital: number;
+  availableBalance: number;
+  positionValue: number;
+  floatingProfit: number;
+  floatingProfitPercent: number;
 }
 
 export interface GroupedTransaction {

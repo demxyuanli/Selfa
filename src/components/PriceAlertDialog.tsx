@@ -25,6 +25,7 @@ interface PriceAlertDialogProps {
   onClose: () => void;
   symbol?: string;
   currentPrice?: number;
+  onAlertChanged?: () => void;
 }
 
 const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
@@ -32,6 +33,7 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
   onClose,
   symbol,
   currentPrice,
+  onAlertChanged,
 }) => {
   const { t } = useTranslation();
   const { showAlert } = useAlert();
@@ -172,6 +174,12 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
         enabled: true,
       });
       await loadAlerts();
+      // Notify parent component to refresh alert states
+      if (onAlertChanged) {
+        onAlertChanged();
+      }
+      // Also dispatch a custom event for other components to listen
+      window.dispatchEvent(new CustomEvent("priceAlertChanged"));
     } catch (err) {
       console.error("Error creating alert:", err);
       showAlert(t("priceAlert.createError") + ": " + (err instanceof Error ? err.message : String(err)));
@@ -196,8 +204,15 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
         enabled: true,
       });
       await loadAlerts();
+      // Notify parent component to refresh alert states
+      if (onAlertChanged) {
+        onAlertChanged();
+      }
+      // Also dispatch a custom event for other components to listen
+      window.dispatchEvent(new CustomEvent("priceAlertChanged"));
     } catch (err) {
       console.error("Error updating alert:", err);
+      showAlert(t("priceAlert.updateError") + ": " + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -209,8 +224,15 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
     try {
       await invoke("delete_price_alert", { alertId });
       await loadAlerts();
+      // Notify parent component to refresh alert states
+      if (onAlertChanged) {
+        onAlertChanged();
+      }
+      // Also dispatch a custom event for other components to listen
+      window.dispatchEvent(new CustomEvent("priceAlertChanged"));
     } catch (err) {
       console.error("Error deleting alert:", err);
+      showAlert(t("priceAlert.deleteError") + ": " + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -223,8 +245,15 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
         enabled: !alert.enabled,
       });
       await loadAlerts();
+      // Notify parent component to refresh alert states
+      if (onAlertChanged) {
+        onAlertChanged();
+      }
+      // Also dispatch a custom event for other components to listen
+      window.dispatchEvent(new CustomEvent("priceAlertChanged"));
     } catch (err) {
       console.error("Error toggling alert:", err);
+      showAlert(t("priceAlert.updateError") + ": " + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -232,8 +261,15 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
     try {
       await invoke("reset_price_alert", { alertId });
       await loadAlerts();
+      // Notify parent component to refresh alert states
+      if (onAlertChanged) {
+        onAlertChanged();
+      }
+      // Also dispatch a custom event for other components to listen
+      window.dispatchEvent(new CustomEvent("priceAlertChanged"));
     } catch (err) {
       console.error("Error resetting alert:", err);
+      showAlert(t("priceAlert.resetError") + ": " + (err instanceof Error ? err.message : String(err)));
     }
   };
 

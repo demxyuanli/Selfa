@@ -1,7 +1,42 @@
+use chrono::{Local, Timelike, Weekday, Datelike};
+
+pub fn is_trading_hours() -> bool {
+    let now = Local::now();
+    let weekday = now.weekday();
+    
+    if weekday == Weekday::Sat || weekday == Weekday::Sun {
+        return false;
+    }
+    
+    let hour = now.hour();
+    let minute = now.minute();
+    let total_minutes = hour * 60 + minute;
+    
+    (total_minutes >= 540 && total_minutes <= 690) || (total_minutes >= 780 && total_minutes <= 930)
+}
+
+pub fn should_reset_triggered_alerts() -> bool {
+    let now = Local::now();
+    let weekday = now.weekday();
+    
+    if weekday == Weekday::Sat || weekday == Weekday::Sun {
+        return false;
+    }
+    
+    let hour = now.hour();
+    hour >= 15
+}
+
 pub fn parse_symbol(symbol: &str) -> (String, String) {
     let code = symbol.trim();
     
+    // Special handling for index symbols
     if code == "000001" {
+        return (format!("1.{}", code), "SH".to_string());
+    }
+    
+    // 000688 is STAR Index (科创50指数), which is a Shanghai market index, not Shenzhen
+    if code == "000688" {
         return (format!("1.{}", code), "SH".to_string());
     }
     

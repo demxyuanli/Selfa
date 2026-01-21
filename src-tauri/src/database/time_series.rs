@@ -65,6 +65,69 @@ pub fn get_time_series(conn: &Mutex<Connection>, symbol: &str, limit: Option<i32
     Ok(data)
 }
 
+pub fn get_batch_time_series(conn: &Mutex<Connection>, symbols: &[String], limit: Option<i32>) -> Result<std::collections::HashMap<String, Vec<StockData>>> {
+    let conn = conn.lock().unwrap();
+    let limit = limit.unwrap_or(240);
+    
+    if symbols.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+    
+    // Build IN clause with placeholders
+    let placeholders: Vec<String> = (1..=symbols.len()).map(|i| format!("?{}", i)).collect();
+    let query = format!(
+        "SELECT symbol, date, open, high, low, close, volume 
+         FROM stock_time_series 
+         WHERE symbol IN ({}) 
+         ORDER BY symbol, date DESC",
+        placeholders.join(", ")
+    );
+    
+    let mut stmt = conn.prepare(&query)?;
+    
+    // Build params array from symbols
+    let params: Vec<&dyn rusqlite::ToSql> = symbols.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+    
+    let rows = stmt.query_map(&params[..], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            StockData {
+                date: row.get(1)?,
+                open: row.get(2)?,
+                high: row.get(3)?,
+                low: row.get(4)?,
+                close: row.get(5)?,
+                volume: row.get(6)?,
+            }
+        ))
+    })?;
+    
+    let mut result: std::collections::HashMap<String, Vec<StockData>> = std::collections::HashMap::new();
+    
+    // Initialize empty vectors for all symbols
+    for symbol in symbols {
+        result.insert(symbol.clone(), Vec::new());
+    }
+    
+    // Group data by symbol
+    for row in rows {
+        let (symbol, data) = row?;
+        if let Some(vec) = result.get_mut(&symbol) {
+            vec.push(data);
+        }
+    }
+    
+    // Reverse each vector and limit
+    for vec in result.values_mut() {
+        vec.reverse();
+        if vec.len() > limit as usize {
+            vec.truncate(limit as usize);
+        }
+    }
+    
+    Ok(result)
+}
+
 #[allow(dead_code)]
 pub fn get_latest_time_series_date(conn: &Mutex<Connection>, symbol: &str) -> Result<Option<String>> {
     let conn = conn.lock().unwrap();

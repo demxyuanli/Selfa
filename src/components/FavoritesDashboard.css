@@ -384,8 +384,10 @@
   border: 1px solid var(--border-color);
   border-radius: 4px;
   background: var(--bg-primary);
-  cursor: pointer;
   transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .alert-item:hover {
@@ -432,6 +434,48 @@
   justify-content: space-between;
   align-items: center;
   font-size: 13px;
+}
+
+.alert-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.alert-action-btn {
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.alert-action-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.alert-action-btn:active {
+  transform: scale(0.95);
+}
+
+.alert-action-btn svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
 }
 
 .alert-direction {

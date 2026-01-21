@@ -3,6 +3,7 @@ use rusqlite::Result;
 use rusqlite::params;
 use chrono::Utc;
 
+#[allow(dead_code)]
 pub fn ensure_stock_exists_internal(conn: &Connection, symbol: &str) -> Result<()> {
     ensure_stock_exists_with_name(conn, symbol, None)
 }

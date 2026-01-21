@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { useAlert } from "../contexts/AlertContext";
+import { stockDataManager } from "../services/StockDataManager";
 import Icon from "./Icon";
 import AddTransactionDialog from "./PortfolioManagement/dialogs/AddTransactionDialog";
 import PriceAlertDialog from "./PriceAlertDialog";
@@ -103,6 +104,36 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
   const [sortField, setSortField] = useState<"changePercent" | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
+  // Load intraday time series data for stocks using stockDataManager
+  const loadTimeSeriesData = useCallback(async (symbols: string[]) => {
+    if (symbols.length === 0) {
+      return;
+    }
+    try {
+      // Use stockDataManager to get intraday data
+      const bundles = await stockDataManager.getBatchStockData(symbols);
+      setTimeSeriesDataMap(prev => {
+        const newMap = new Map(prev);
+        for (const [symbol, bundle] of bundles.entries()) {
+          if (bundle?.intraday && bundle.intraday.length > 0) {
+            newMap.set(symbol, bundle.intraday);
+            // Debug: log first data point to check format
+            if (bundle.intraday.length > 0) {
+              console.debug(`Loaded intraday data for ${symbol}:`, {
+                count: bundle.intraday.length,
+                first: bundle.intraday[0],
+                last: bundle.intraday[bundle.intraday.length - 1]
+              });
+            }
+          }
+        }
+        return newMap;
+      });
+    } catch (err) {
+      console.error("Failed to load batch intraday time series:", err);
+    }
+  }, []);
+
   // Load initial data (only once on mount)
   const loadInitialData = useCallback(async () => {
     setLoading(true);
@@ -120,29 +151,16 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
       }));
       setStocks(updatedStocks);
       
-      // Load time series data for all stocks
+      // Set loading to false first to show stock list immediately
+      setLoading(false);
+      
+      // Load intraday time series data asynchronously after UI is displayed (delayed loading)
+      // This improves perceived performance by showing stock list first
       const symbols = updatedStocks.map(({ stock }) => stock.symbol);
-      const newMap = new Map<string, Array<{
-        date: string;
-        open: number;
-        high: number;
-        low: number;
-        close: number;
-        volume: number;
-      }>>();
-      await Promise.all(
-        symbols.map(async (symbol) => {
-          try {
-            const data = await invoke<any[]>("get_time_series", { symbol });
-            if (data && data.length > 0) {
-              newMap.set(symbol, data);
-            }
-          } catch (err) {
-            console.debug("Failed to load time series for", symbol, err);
-          }
-        })
-      );
-      setTimeSeriesDataMap(newMap);
+      // Use setTimeout to defer loading after UI render
+      setTimeout(() => {
+        loadTimeSeriesData(symbols);
+      }, 100);
 
       const activeAlerts = alertsData.filter((alert) => alert.enabled);
       setAlerts(activeAlerts);
@@ -150,82 +168,56 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
       const triggered = alertsData.filter((alert) => alert.triggered).map((alert) => alert.symbol);
       setTriggeredAlertSymbols(new Set(triggered));
 
-      const positionsWithPrices = await Promise.all(
-        positionsData.map(async ([id, symbol, name, quantity, avgCost, currentPrice]) => {
-          let price = currentPrice || avgCost;
-          
-          // Priority 1: Get real-time price from quote (f43 is the current market price)
-          try {
-            const quote = await invoke<any>("get_stock_quote", { symbol });
-            if (quote && quote.price && quote.price > 0) {
-              price = quote.price;
-            } else if (quote && quote.previous_close && quote.previous_close > 0) {
-              // Fallback to previous_close if price is not available
-              price = quote.previous_close;
-            }
-          } catch (quoteErr) {
-            console.debug("Failed to fetch quote for", symbol, quoteErr);
+      // Fetch all stock data bundles using stockDataManager
+      const positionSymbols = positionsData.map(([_, symbol]) => symbol);
+      const stockBundles = await stockDataManager.getBatchStockData(positionSymbols);
+      
+      const positionsWithPrices = positionsData.map(([id, symbol, name, quantity, avgCost, currentPrice]) => {
+        const bundle = stockBundles.get(symbol);
+        let price = currentPrice || avgCost;
+        
+        // Get price from bundle
+        if (bundle?.quote) {
+          if (bundle.quote.price && bundle.quote.price > 0) {
+            price = bundle.quote.price;
+          } else if (bundle.quote.previous_close && bundle.quote.previous_close > 0) {
+            price = bundle.quote.previous_close;
           }
-          
-          // Priority 2: Fallback to time series if quote doesn't have valid data
-          if (!price || price === avgCost || price <= 0) {
-            try {
-              const timeSeriesData = await invoke<any[]>("get_time_series", { symbol });
-              if (timeSeriesData && timeSeriesData.length > 0) {
-                const latestData = timeSeriesData[timeSeriesData.length - 1];
-                if (latestData.close && latestData.close > 0) {
-                  price = latestData.close;
-                }
-              }
-            } catch (timeSeriesErr) {
-              console.debug("Failed to fetch time series for", symbol, timeSeriesErr);
-            }
+        }
+        
+        // Fallback to time series if quote doesn't have valid data
+        if ((!price || price === avgCost || price <= 0) && bundle?.time_series && bundle.time_series.length > 0) {
+          const latestData = bundle.time_series[bundle.time_series.length - 1];
+          if (latestData.close && latestData.close > 0) {
+            price = latestData.close;
           }
+        }
 
-          const validPrice = price && price > 0 ? price : avgCost;
-          const marketValue = quantity * validPrice;
-          const profit = (validPrice - avgCost) * quantity;
-          const profitPercent = avgCost > 0 ? ((validPrice - avgCost) / avgCost) * 100 : 0;
+        const validPrice = price && price > 0 ? price : avgCost;
+        const marketValue = quantity * validPrice;
+        const profit = (validPrice - avgCost) * quantity;
+        const profitPercent = avgCost > 0 ? ((validPrice - avgCost) / avgCost) * 100 : 0;
 
-          return {
-            id,
-            symbol,
-            name,
-            quantity,
-            avgCost,
-            currentPrice: validPrice,
-            marketValue,
-            profit,
-            profitPercent,
-          } as PortfolioPosition;
-        })
-      );
+        return {
+          id,
+          symbol,
+          name,
+          quantity,
+          avgCost,
+          currentPrice: validPrice,
+          marketValue,
+          profit,
+          profitPercent,
+        } as PortfolioPosition;
+      });
       setPositions(positionsWithPrices);
     } catch (err) {
       console.error("Error loading initial data:", err);
       setError(err instanceof Error ? err.message : "Failed to load data");
-    } finally {
       setLoading(false);
     }
-  }, []);
-
-  // Load time series data for stocks
-  const loadTimeSeriesData = useCallback(async (symbols: string[]) => {
-    const newMap = new Map(timeSeriesDataMap);
-    await Promise.all(
-      symbols.map(async (symbol) => {
-        try {
-          const data = await invoke<any[]>("get_time_series", { symbol });
-          if (data && data.length > 0) {
-            newMap.set(symbol, data);
-          }
-        } catch (err) {
-          console.debug("Failed to load time series for", symbol, err);
-        }
-      })
-    );
-    setTimeSeriesDataMap(newMap);
-  }, [timeSeriesDataMap]);
+    // Note: loading is set to false earlier after stocks are loaded for better UX
+  }, [loadTimeSeriesData]);
 
   // Independent async refresh functions for each data type
   const refreshStocks = useCallback(async () => {
@@ -284,59 +276,63 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
     }
   }, [t, refreshAlerts]);
 
+  const handleResetTriggered = useCallback(async (alertId: number) => {
+    try {
+      await invoke("reset_price_alert", { alertId });
+      await refreshAlerts();
+      showAlert(t("priceAlert.resetSuccess") || "Alert reset successfully");
+    } catch (err) {
+      console.error("Error resetting alert:", err);
+      showAlert(t("priceAlert.resetError") || "Failed to reset alert");
+    }
+  }, [refreshAlerts, showAlert, t]);
+
   const refreshPositions = useCallback(async () => {
     try {
       const positionsData = await invoke<Array<[number, string, string, number, number, number | null]>>("get_portfolio_positions");
-      const positionsWithPrices = await Promise.all(
-        positionsData.map(async ([id, symbol, name, quantity, avgCost, currentPrice]) => {
-          let price = currentPrice || avgCost;
-          
-          // Priority 1: Get real-time price from quote (f43 is the current market price)
-          try {
-            const quote = await invoke<any>("get_stock_quote", { symbol });
-            if (quote && quote.price && quote.price > 0) {
-              price = quote.price;
-            } else if (quote && quote.previous_close && quote.previous_close > 0) {
-              // Fallback to previous_close if price is not available
-              price = quote.previous_close;
-            }
-          } catch (quoteErr) {
-            console.debug("Failed to fetch quote for", symbol, quoteErr);
+      
+      // Fetch all stock data bundles using stockDataManager
+      const positionSymbols = positionsData.map(([_, symbol]) => symbol);
+      const stockBundles = await stockDataManager.getBatchStockData(positionSymbols);
+      
+      const positionsWithPrices = positionsData.map(([id, symbol, name, quantity, avgCost, currentPrice]) => {
+        const bundle = stockBundles.get(symbol);
+        let price = currentPrice || avgCost;
+        
+        // Get price from bundle
+        if (bundle?.quote) {
+          if (bundle.quote.price && bundle.quote.price > 0) {
+            price = bundle.quote.price;
+          } else if (bundle.quote.previous_close && bundle.quote.previous_close > 0) {
+            price = bundle.quote.previous_close;
           }
-          
-          // Priority 2: Fallback to time series if quote doesn't have valid data
-          if (!price || price === avgCost || price <= 0) {
-            try {
-              const timeSeriesData = await invoke<any[]>("get_time_series", { symbol });
-              if (timeSeriesData && timeSeriesData.length > 0) {
-                const latestData = timeSeriesData[timeSeriesData.length - 1];
-                if (latestData.close && latestData.close > 0) {
-                  price = latestData.close;
-                }
-              }
-            } catch (timeSeriesErr) {
-              console.debug("Failed to fetch time series for", symbol, timeSeriesErr);
-            }
+        }
+        
+        // Fallback to time series if quote doesn't have valid data
+        if ((!price || price === avgCost || price <= 0) && bundle?.time_series && bundle.time_series.length > 0) {
+          const latestData = bundle.time_series[bundle.time_series.length - 1];
+          if (latestData.close && latestData.close > 0) {
+            price = latestData.close;
           }
+        }
 
-          const validPrice = price && price > 0 ? price : avgCost;
-          const marketValue = quantity * validPrice;
-          const profit = (validPrice - avgCost) * quantity;
-          const profitPercent = avgCost > 0 ? ((validPrice - avgCost) / avgCost) * 100 : 0;
+        const validPrice = price && price > 0 ? price : avgCost;
+        const marketValue = quantity * validPrice;
+        const profit = (validPrice - avgCost) * quantity;
+        const profitPercent = avgCost > 0 ? ((validPrice - avgCost) / avgCost) * 100 : 0;
 
-          return {
-            id,
-            symbol,
-            name,
-            quantity,
-            avgCost,
-            currentPrice: validPrice,
-            marketValue,
-            profit,
-            profitPercent,
-          } as PortfolioPosition;
-        })
-      );
+        return {
+          id,
+          symbol,
+          name,
+          quantity,
+          avgCost,
+          currentPrice: validPrice,
+          marketValue,
+          profit,
+          profitPercent,
+        } as PortfolioPosition;
+      });
       setPositions(positionsWithPrices);
       
       // Load transactions
@@ -433,11 +429,18 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
     const alertsCheckInterval = setInterval(checkPriceAlerts, 60000);
     checkPriceAlerts();
     
+    // Listen for price alert changes from PriceAlertDialog
+    const handlePriceAlertChanged = () => {
+      refreshAlerts();
+    };
+    window.addEventListener("priceAlertChanged", handlePriceAlertChanged);
+    
     return () => {
       clearInterval(stocksInterval);
       clearInterval(alertsInterval);
       clearInterval(positionsInterval);
       clearInterval(alertsCheckInterval);
+      window.removeEventListener("priceAlertChanged", handlePriceAlertChanged);
     };
   }, [refreshStocks, refreshAlerts, refreshPositions, checkPriceAlerts]);
 
@@ -1150,6 +1153,15 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
                             <span className="alert-current-price">{t("priceAlert.current")}: {currentPrice.toFixed(2)}</span>
                           )}
                         </div>
+                        <div className="alert-actions">
+                          <button
+                            className="alert-action-btn"
+                            onClick={() => handleResetTriggered(alert.id)}
+                            title={t("priceAlert.reset") || "Reset"}
+                          >
+                            <Icon name="refresh" size={14} />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -1210,7 +1222,10 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
 
         {expandedCard === "realtime" && positions.length > 0 && (
           <div className="data-table-section">
-            <StockComparisonChart onStockSelect={onStockSelect} />
+            <StockComparisonChart 
+              onStockSelect={onStockSelect} 
+              positions={positions}
+            />
           </div>
         )}
 
@@ -1236,6 +1251,7 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
         }}
         symbol={priceAlertSymbol}
         currentPrice={priceAlertCurrentPrice}
+        onAlertChanged={refreshAlerts}
       />
     </div>
   );

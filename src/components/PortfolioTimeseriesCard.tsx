@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
+import { stockDataManager } from "../services/StockDataManager";
 import "./PortfolioTimeseriesCard.css";
 
 interface StockData {
@@ -87,46 +88,43 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
       const positionsData: Array<[number, string, string, number, number, number | null]> =
         await invoke("get_portfolio_positions");
 
-      const positionsWithPrices = await Promise.all(
-        positionsData.map(async ([id, symbol, name, quantity, avgCost, currentPrice]) => {
-          let price = currentPrice || avgCost;
-          let previousClose: number | undefined = undefined;
-          
-          // Priority 1: Get real-time price from quote (f43 is the current market price)
-          try {
-            const quote = await invoke<any>("get_stock_quote", { symbol });
-            if (quote) {
-              if (quote.price && quote.price > 0) {
-                price = quote.price;
-              } else if (quote.previous_close && quote.previous_close > 0) {
-                // Fallback to previous_close if price is not available
-                price = quote.previous_close;
-              }
-              previousClose = quote.previous_close;
-            }
-          } catch (err) {
-            console.debug("Failed to fetch quote for", symbol, err);
+      // Fetch all stock data bundles using stockDataManager
+      const positionSymbols = positionsData.map(([_, symbol]) => symbol);
+      const stockBundles = await stockDataManager.getBatchStockData(positionSymbols);
+      
+      const positionsWithPrices = positionsData.map(([id, symbol, name, quantity, avgCost, currentPrice]) => {
+        const bundle = stockBundles.get(symbol);
+        let price = currentPrice || avgCost;
+        let previousClose: number | undefined = undefined;
+        
+        // Get price from bundle
+        if (bundle?.quote) {
+          if (bundle.quote.price && bundle.quote.price > 0) {
+            price = bundle.quote.price;
+          } else if (bundle.quote.previous_close && bundle.quote.previous_close > 0) {
+            price = bundle.quote.previous_close;
           }
+          previousClose = bundle.quote.previous_close;
+        }
 
-          const validPrice = price && price > 0 ? price : avgCost;
-          const marketValue = quantity * validPrice;
-          const profit = (validPrice - avgCost) * quantity;
-          const profitPercent = avgCost > 0 ? ((validPrice - avgCost) / avgCost) * 100 : 0;
+        const validPrice = price && price > 0 ? price : avgCost;
+        const marketValue = quantity * validPrice;
+        const profit = (validPrice - avgCost) * quantity;
+        const profitPercent = avgCost > 0 ? ((validPrice - avgCost) / avgCost) * 100 : 0;
 
-          return {
-            id,
-            symbol,
-            name,
-            quantity,
-            avgCost,
-            currentPrice: validPrice,
-            marketValue,
-            profit,
-            profitPercent,
-            previousClose,
-          } as PortfolioPosition;
-        })
-      );
+        return {
+          id,
+          symbol,
+          name,
+          quantity,
+          avgCost,
+          currentPrice: validPrice,
+          marketValue,
+          profit,
+          profitPercent,
+          previousClose,
+        } as PortfolioPosition;
+      });
 
       // Limit to first 3 positions for better visualization
       const limitedPositions = positionsWithPrices.slice(0, 3);
@@ -142,57 +140,39 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
         }
       });
 
+      // Fetch benchmark index data bundles
+      const indexSymbols = BENCHMARK_INDICES.map(index => index.symbol);
+      const indexBundles = await stockDataManager.getBatchStockData(indexSymbols);
+      
       // Get previous closes for benchmark indices
-      await Promise.all(
-        BENCHMARK_INDICES.map(async (index) => {
-          try {
-            const quote = await invoke<any>("get_stock_quote", { symbol: index.symbol });
-            if (quote && quote.previous_close) {
-              previousClosesMap.set(index.symbol, quote.previous_close);
-            }
-          } catch (err) {
-            console.debug("Failed to fetch quote for index", index.symbol, err);
-          }
-        })
-      );
+      BENCHMARK_INDICES.forEach((index) => {
+        const bundle = indexBundles.get(index.symbol);
+        if (bundle?.quote?.previous_close) {
+          previousClosesMap.set(index.symbol, bundle.quote.previous_close);
+        }
+      });
 
       setCurrentPrices(pricesMap);
       setPreviousCloses(previousClosesMap);
 
-      // Fetch timeseries data for limited positions (can be slow, so do it async)
+      // Extract timeseries data from bundles for limited positions
       const timeseriesMap = new Map<string, StockData[]>();
-      await Promise.all(
-        limitedPositions.map(async (position) => {
-          try {
-            const tsData = await invoke<StockData[]>("get_time_series", {
-              symbol: position.symbol,
-            });
-            if (tsData && tsData.length > 0) {
-              timeseriesMap.set(position.symbol, tsData);
-            }
-          } catch (err) {
-            console.debug("Failed to fetch timeseries for", position.symbol, err);
-          }
-        })
-      );
+      limitedPositions.forEach((position) => {
+        const bundle = stockBundles.get(position.symbol);
+        if (bundle?.time_series && bundle.time_series.length > 0) {
+          timeseriesMap.set(position.symbol, bundle.time_series);
+        }
+      });
       setTimeseriesData(timeseriesMap);
 
-      // Fetch benchmark index data
+      // Extract benchmark index data from bundles
       const indexDataMap = new Map<string, StockData[]>();
-      await Promise.all(
-        BENCHMARK_INDICES.map(async (index) => {
-          try {
-            const indexData = await invoke<StockData[]>("get_time_series", {
-              symbol: index.symbol,
-            });
-            if (indexData && indexData.length > 0) {
-              indexDataMap.set(index.symbol, indexData);
-            }
-          } catch (err) {
-            console.debug("Failed to fetch timeseries for index", index.symbol, err);
-          }
-        })
-      );
+      BENCHMARK_INDICES.forEach((index) => {
+        const bundle = indexBundles.get(index.symbol);
+        if (bundle?.time_series && bundle.time_series.length > 0) {
+          indexDataMap.set(index.symbol, bundle.time_series);
+        }
+      });
       setIndexData(indexDataMap);
     } catch (err) {
       console.error("Error loading portfolio timeseries:", err);

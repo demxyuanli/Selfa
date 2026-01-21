@@ -28,6 +28,9 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const [searchResults, setSearchResults] = useState<StockInfo[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [filterMode, setFilterMode] = useState(false);
+  const [currentMarketFilter, setCurrentMarketFilter] = useState<string | null>(null);
+  const [currentSectorFilter, setCurrentSectorFilter] = useState<string | null>(null);
   const [editingGroup, setEditingGroup] = useState<string | null>(null);
   const [editingGroupName, setEditingGroupName] = useState("");
   const [editingTag, setEditingTag] = useState<TagInfo | null>(null);
@@ -69,7 +72,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
   }, [selectedTag, loadStocksByTag]);
 
   const searchStocks = useCallback(async (query: string) => {
-    if (!query.trim()) {
+    if (!query.trim() && !filterMode) {
       setSearchResults([]);
       setSearchError(null);
       return;
@@ -78,10 +81,25 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
     setSearching(true);
     setSearchError(null);
     try {
-      const results: StockInfo[] = await invoke("search_stocks", { query });
-      setSearchResults(results);
-      if (results.length === 0) {
-        setSearchError("No results found");
+      if (filterMode) {
+        // Use filter API
+        const results: StockInfo[] = await invoke("filter_stocks", {
+          marketFilter: currentMarketFilter,
+          sectorFilter: currentSectorFilter,
+          page: 1,
+          pageSize: 100,
+        });
+        setSearchResults(results);
+        if (results.length === 0) {
+          setSearchError("No results found");
+        }
+      } else {
+        // Use search API
+        const results: StockInfo[] = await invoke("search_stocks", { query });
+        setSearchResults(results);
+        if (results.length === 0) {
+          setSearchError("No results found");
+        }
       }
     } catch (err) {
       console.error("Search error:", err);
@@ -90,12 +108,24 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
     } finally {
       setSearching(false);
     }
-  }, []);
+  }, [filterMode, currentMarketFilter, currentSectorFilter]);
 
   useEffect(() => {
-    const timeoutId = setTimeout(() => searchStocks(searchQuery), 500);
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery, searchStocks]);
+    if (filterMode) {
+      searchStocks("");
+    } else {
+      const timeoutId = setTimeout(() => searchStocks(searchQuery), 500);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [searchQuery, searchStocks, filterMode]);
+
+  const handleFilter = (marketFilter: string | null, sectorFilter: string | null) => {
+    setFilterMode(true);
+    setCurrentMarketFilter(marketFilter);
+    setCurrentSectorFilter(sectorFilter);
+    setSearchQuery("");
+    searchStocks("");
+  };
 
   const handleAddToFavorites = async (stock: StockInfo) => {
     try {
@@ -326,7 +356,10 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
           {activePanel === "search" && (
             <SearchPanel
               searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
+              onSearchChange={(query) => {
+                setSearchQuery(query);
+                setFilterMode(false);
+              }}
               searchResults={searchResults}
               searching={searching}
               searchError={searchError}
@@ -335,6 +368,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
               onRemoveFromFavorites={handleRemoveFromFavorites}
               favoriteStocks={allStocks ? allStocks.map(s => ({ symbol: s.symbol, name: s.name, exchange: s.exchange })) : []}
               onToggle={onToggle}
+              onFilter={handleFilter}
             />
           )}
 

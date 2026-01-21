@@ -65,6 +65,7 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
     const modelMap: Record<string, string> = {
       "groq:llama-3.1-70b-versatile": "Groq Llama 3.1 70B",
       "groq:mixtral-8x7b-32768": "Groq Mixtral 8x7B",
+      "gemini:gemini-3-flash-preview": "Gemini 3 Flash Preview",
       "gemini:gemini-2.5-flash": "Gemini 2.5 Flash",
       "gemini:gemini-1.5-flash": "Gemini 1.5 Flash",
       "gemini:gemini-1.5-pro": "Gemini 1.5 Pro",
@@ -384,6 +385,7 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
                     <optgroup label={t("aiAgent.freeModels")}>
                       <option value="groq:llama-3.1-70b-versatile">Groq Llama 3.1 70B (Free)</option>
                       <option value="groq:mixtral-8x7b-32768">Groq Mixtral 8x7B (Free)</option>
+                      <option value="gemini:gemini-3-flash-preview">Google Gemini 3 Flash Preview (Free)</option>
                       <option value="gemini:gemini-2.5-flash">Google Gemini 2.5 Flash (Free) - Recommended</option>
                       <option value="gemini:gemini-1.5-flash">Google Gemini 1.5 Flash (Free)</option>
                       <option value="gemini:gemini-1.5-pro">Google Gemini 1.5 Pro (Free)</option>

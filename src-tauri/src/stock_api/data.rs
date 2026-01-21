@@ -130,59 +130,83 @@ pub async fn fetch_time_series(symbol: &str) -> Result<Vec<StockData>, String> {
     
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0")
+        .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| format!("Client error: {}", e))?;
     
-    let response = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
-    
-    if !response.status().is_success() {
-        return Err(format!("API error: {}", response.status()));
-    }
-    
-    let json: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| format!("Parse error: {}", e))?;
-    
-    let data = &json["data"];
-    if data.is_null() {
-        return Err("No data returned".to_string());
-    }
-    
-    let klines = data["klines"]
-        .as_array()
-        .ok_or("No kline data")?;
-    
-    let mut result = Vec::new();
-    
-    for kline in klines {
-        if let Some(line) = kline.as_str() {
-            let parts: Vec<&str> = line.split(',').collect();
-            if parts.len() >= 6 {
-                let date = parts[0].to_string();
-                let open = parts[1].parse::<f64>().unwrap_or(0.0);
-                let close = parts[2].parse::<f64>().unwrap_or(0.0);
-                let high = parts[3].parse::<f64>().unwrap_or(0.0);
-                let low = parts[4].parse::<f64>().unwrap_or(0.0);
-                let volume = parts[5].parse::<i64>().unwrap_or(0);
+    // Retry up to 3 times for network errors
+    let mut last_error = None;
+    for attempt in 0..3 {
+        let response_result = client
+            .get(&url)
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await;
+        
+        match response_result {
+            Ok(response) => {
+                if !response.status().is_success() {
+                    return Err(format!("API error: {}", response.status()));
+                }
                 
-                result.push(StockData {
-                    date,
-                    open,
-                    high,
-                    low,
-                    close,
-                    volume,
-                });
+                match response.json::<serde_json::Value>().await {
+                    Ok(json) => {
+                        let data = &json["data"];
+                        if data.is_null() {
+                            return Err("No data returned".to_string());
+                        }
+                        
+                        let klines = data["klines"]
+                            .as_array()
+                            .ok_or("No kline data")?;
+                        
+                        let mut result = Vec::new();
+                        
+                        for kline in klines {
+                            if let Some(line) = kline.as_str() {
+                                let parts: Vec<&str> = line.split(',').collect();
+                                if parts.len() >= 6 {
+                                    let date = parts[0].to_string();
+                                    let open = parts[1].parse::<f64>().unwrap_or(0.0);
+                                    let close = parts[2].parse::<f64>().unwrap_or(0.0);
+                                    let high = parts[3].parse::<f64>().unwrap_or(0.0);
+                                    let low = parts[4].parse::<f64>().unwrap_or(0.0);
+                                    let volume = parts[5].parse::<i64>().unwrap_or(0);
+                                    
+                                    result.push(StockData {
+                                        date,
+                                        open,
+                                        high,
+                                        low,
+                                        close,
+                                        volume,
+                                    });
+                                }
+                            }
+                        }
+                        
+                        return Ok(result);
+                    }
+                    Err(e) => {
+                        last_error = Some(format!("Parse error: {}", e));
+                        if attempt < 2 {
+                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                            continue;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                last_error = Some(format!("Network error: {}", e));
+                if attempt < 2 {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(500 * (attempt + 1) as u64)).await;
+                    continue;
+                }
             }
         }
     }
     
-    Ok(result)
+    Err(last_error.unwrap_or_else(|| "Unknown error".to_string()))
 }
 
 pub async fn fetch_stock_history(symbol: &str, period: &str) -> Result<Vec<StockData>, String> {
@@ -210,11 +234,161 @@ pub async fn fetch_stock_history(symbol: &str, period: &str) -> Result<Vec<Stock
     
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0")
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("Client error: {}", e))?;
+    
+    // Helper function to parse response
+    let parse_response = |json: serde_json::Value| -> Result<Vec<StockData>, String> {
+        let data = &json["data"];
+        if data.is_null() {
+            return Err("No data returned".to_string());
+        }
+        
+        let klines = data["klines"]
+            .as_array()
+            .ok_or("No kline data")?;
+        
+        let mut result = Vec::new();
+        
+        for kline in klines {
+            if let Some(line) = kline.as_str() {
+                let parts: Vec<&str> = line.split(',').collect();
+                if parts.len() >= 6 {
+                    let date = parts[0].to_string();
+                    let open = parts[1].parse::<f64>().unwrap_or(0.0);
+                    let close = parts[2].parse::<f64>().unwrap_or(0.0);
+                    let high = parts[3].parse::<f64>().unwrap_or(0.0);
+                    let low = parts[4].parse::<f64>().unwrap_or(0.0);
+                    let volume = parts[5].parse::<i64>().unwrap_or(0);
+                    
+                    result.push(StockData {
+                        date,
+                        open,
+                        high,
+                        low,
+                        close,
+                        volume,
+                    });
+                }
+            }
+        }
+        
+        Ok(result)
+    };
+    
+    // Helper function to make a request
+    let make_request = || async {
+        client
+            .get(&url)
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await
+    };
+    
+    // First attempt
+    let response_result = make_request().await;
+    match response_result {
+        Ok(response) => {
+            if !response.status().is_success() {
+                return Err(format!("API error: {}", response.status()));
+            }
+            
+            match response.json::<serde_json::Value>().await {
+                Ok(json) => return parse_response(json),
+                Err(_e) => {
+                    // Parse error, try immediate retry
+                }
+            }
+        }
+        Err(_) => {
+            // Network error, try immediate retry
+        }
+    }
+    
+    // Immediate retry (second attempt)
+    let response_result = make_request().await;
+    match response_result {
+        Ok(response) => {
+            if !response.status().is_success() {
+                return Err(format!("API error: {}", response.status()));
+            }
+            
+            match response.json::<serde_json::Value>().await {
+                Ok(json) => return parse_response(json),
+                Err(_e) => {
+                    // Parse error, wait 5 minutes and retry
+                }
+            }
+        }
+        Err(_) => {
+            // Network error, wait 5 minutes and retry
+        }
+    }
+    
+    // Wait 5 minutes and retry (third attempt)
+    tokio::time::sleep(tokio::time::Duration::from_secs(300)).await;
+    
+    let response_result = make_request().await;
+    match response_result {
+        Ok(response) => {
+            if !response.status().is_success() {
+                return Err(format!("API error after 5min retry: {}", response.status()));
+            }
+            
+            match response.json::<serde_json::Value>().await {
+                Ok(json) => parse_response(json),
+                Err(e) => Err(format!("Parse error after 5min retry: {}", e))
+            }
+        }
+        Err(e) => Err(format!("Network error after 5min retry: {}", e))
+    }
+}
+
+pub async fn filter_stocks_by_market_and_sector(market_filter: Option<&str>, sector_filter: Option<&str>, page: usize, page_size: usize) -> Result<Vec<StockInfo>, String> {
+    // Build filter string
+    // m:0+t:6 means all A-shares (Shanghai + Shenzhen)
+    // m:1 means Shanghai market
+    // m:0 means Shenzhen market
+    // b:BK0477 means a specific sector
+    let mut filter_parts = Vec::new();
+    
+    if let Some(market) = market_filter {
+        match market {
+            "all" => filter_parts.push("m:0+t:6".to_string()), // All A-shares
+            "sh" => filter_parts.push("m:1".to_string()), // Shanghai
+            "sz" => filter_parts.push("m:0".to_string()), // Shenzhen
+            _ => filter_parts.push("m:0+t:6".to_string()), // Default to all A-shares
+        }
+    } else {
+        filter_parts.push("m:0+t:6".to_string()); // Default to all A-shares
+    }
+    
+    if let Some(sector) = sector_filter {
+        if !sector.is_empty() {
+            filter_parts.push(format!("b:{}", sector));
+        }
+    }
+    
+    let fs = filter_parts.join("+");
+    
+    // Fields: f12=code, f14=name, f2=price, f3=change_percent, f4=change, f5=volume, f6=amount
+    let fields = "f12,f14,f2,f3,f4,f5,f6";
+    
+    let url = format!(
+        "http://push2.eastmoney.com/api/qt/clist/get?pn={}&pz={}&fs={}&fields={}&np=1",
+        page, page_size, fs, fields
+    );
+    
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0")
+        .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| format!("Client error: {}", e))?;
     
     let response = client
         .get(&url)
+        .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
         .map_err(|e| format!("Network error: {}", e))?;
@@ -230,39 +404,39 @@ pub async fn fetch_stock_history(symbol: &str, period: &str) -> Result<Vec<Stock
     
     let data = &json["data"];
     if data.is_null() {
-        return Err("No data returned".to_string());
+        return Ok(Vec::new());
     }
     
-    let klines = data["klines"]
-        .as_array()
-        .ok_or("No kline data")?;
+    let stocks = data["diff"].as_array()
+        .ok_or("No stock data in response")?;
     
-    let mut result = Vec::new();
+    let mut results = Vec::new();
     
-    for kline in klines {
-        if let Some(line) = kline.as_str() {
-            let parts: Vec<&str> = line.split(',').collect();
-            if parts.len() >= 6 {
-                let date = parts[0].to_string();
-                let open = parts[1].parse::<f64>().unwrap_or(0.0);
-                let close = parts[2].parse::<f64>().unwrap_or(0.0);
-                let high = parts[3].parse::<f64>().unwrap_or(0.0);
-                let low = parts[4].parse::<f64>().unwrap_or(0.0);
-                let volume = parts[5].parse::<i64>().unwrap_or(0);
-                
-                result.push(StockData {
-                    date,
-                    open,
-                    high,
-                    low,
-                    close,
-                    volume,
-                });
-            }
+    for stock in stocks {
+        let code = stock["f12"].as_str().unwrap_or("");
+        let name = stock["f14"].as_str().unwrap_or("");
+        
+        if code.is_empty() || name.is_empty() {
+            continue;
         }
+        
+        // Determine exchange from code
+        let exchange = if code.starts_with("6") || code == "000001" {
+            "SH".to_string()
+        } else if code.starts_with("0") || code.starts_with("3") {
+            "SZ".to_string()
+        } else {
+            "SH".to_string() // Default to Shanghai
+        };
+        
+        results.push(StockInfo {
+            symbol: code.to_string(),
+            name: name.to_string(),
+            exchange,
+        });
     }
     
-    Ok(result)
+    Ok(results)
 }
 
 pub async fn search_stocks_by_query(query: &str) -> Result<Vec<StockInfo>, String> {

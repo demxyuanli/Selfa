@@ -38,34 +38,85 @@ const TimeSeriesThumbnail: React.FC<TimeSeriesThumbnailProps> = ({ data, height 
 
   const option = useMemo(() => {
     if (!data || data.length === 0) {
+      console.debug("TimeSeriesThumbnail: No data provided");
       return {};
     }
 
     const dataMap = new Map<string, { price: number; volume: number }>();
     data.forEach((d) => {
       const dateStr = d.date;
-      const timeStr = dateStr.includes(" ") ? dateStr.split(" ")[1] : dateStr;
+      // Handle different date formats:
+      // - "YYYY-MM-DD HH:MM:SS" -> extract "HH:MM"
+      // - "YYYY-MM-DD HH:MM" -> extract "HH:MM"
+      // - "HH:MM" -> use directly
+      let timeStr: string;
+      if (dateStr.includes(" ")) {
+        const timePart = dateStr.split(" ")[1];
+        // Extract HH:MM from HH:MM:SS if needed
+        timeStr = timePart.split(":").slice(0, 2).join(":");
+      } else if (dateStr.includes(":")) {
+        // Already in HH:MM format
+        timeStr = dateStr.split(":").slice(0, 2).join(":");
+      } else {
+        // Fallback: try to use as-is
+        timeStr = dateStr;
+      }
       dataMap.set(timeStr, { price: d.close, volume: d.volume });
     });
 
+    // Debug: log data mapping
+    if (dataMap.size > 0) {
+      const sampleTimes = Array.from(dataMap.keys()).slice(0, 5);
+      console.debug("TimeSeriesThumbnail: Mapped times sample:", sampleTimes);
+    }
+
     let lastMorningPrice: number | null = null;
+    let lastPrice: number | null = null;
     const prices: (number | null)[] = fullTradingTimes.map((time) => {
-      const dataPoint = dataMap.get(time);
+      // Try exact match first
+      let dataPoint = dataMap.get(time);
+      
+      // If no exact match, try to find nearest 5-minute interval
+      // 5-minute K-line data points are at :00, :05, :10, :15, :20, :25, :30, :35, :40, :45, :50, :55
+      if (!dataPoint) {
+        const [hours, minutes] = time.split(":").map(Number);
+        // Round down to nearest 5-minute interval
+        const roundedMinutes = Math.floor(minutes / 5) * 5;
+        const roundedTime = `${hours.toString().padStart(2, "0")}:${roundedMinutes.toString().padStart(2, "0")}`;
+        dataPoint = dataMap.get(roundedTime);
+      }
+      
       if (dataPoint) {
         const [hours, minutes] = time.split(":").map(Number);
         const totalMinutes = hours * 60 + minutes;
         if (totalMinutes < 13 * 60) {
           lastMorningPrice = dataPoint.price;
         }
+        lastPrice = dataPoint.price;
         return dataPoint.price;
       }
+      
+      // Use last known price for continuity
+      if (lastPrice !== null) {
+        return lastPrice;
+      }
+      
+      // Use last morning price at 13:00 for continuity
       if (time === "13:00" && lastMorningPrice !== null) {
+        lastPrice = lastMorningPrice;
         return lastMorningPrice;
       }
+      
       return null;
     });
 
     const validPrices = prices.filter((p): p is number => p !== null);
+    
+    // Debug: log valid prices count
+    if (validPrices.length === 0) {
+      console.warn("TimeSeriesThumbnail: No valid prices found. Data count:", data.length, "Mapped times:", Array.from(dataMap.keys()));
+    }
+    
     const minPrice = validPrices.length > 0 ? Math.min(...validPrices) : 0;
     const maxPrice = validPrices.length > 0 ? Math.max(...validPrices) : 0;
     const priceRange = maxPrice - minPrice;

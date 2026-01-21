@@ -424,6 +424,10 @@ function AppContent() {
           tabs.find(tab => tab.id === activeTabId)?.quote?.price ||
           undefined
         }
+        onAlertChanged={() => {
+          // Trigger refresh in other components via custom event
+          window.dispatchEvent(new CustomEvent("priceAlertChanged"));
+        }}
       />
     </div>
   );

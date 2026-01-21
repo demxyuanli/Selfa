@@ -351,6 +351,7 @@ IMPORTANT INSTRUCTIONS:
             let model_name = model.strip_prefix("gemini:").unwrap_or("gemini-2.5-flash");
             // Map to correct API model names
             match model_name {
+                "gemini-3-flash-preview" => "gemini-3-flash-preview",
                 "gemini-1.5-flash" => "gemini-1.5-flash",
                 "gemini-1.5-pro" => "gemini-1.5-pro",
                 "gemini-2.5-flash" => "gemini-2.5-flash",
@@ -388,18 +389,25 @@ IMPORTANT INSTRUCTIONS:
         let mut last_error = String::new();
         let mut tried_models = vec![gemini_model.to_string()];
         
-        // List of models to try in order
+        // List of models to try in order (removed deprecated models)
         let models_to_try = vec![
             gemini_model,
             "gemini-2.5-flash",
             "gemini-1.5-flash",
             "gemini-1.5-pro",
-            "gemini-pro",
         ];
         
         // Try v1 API first (for newer models)
+        let mut api_key_invalid = false;
+        let mut quota_exceeded = false;
         for model_name in &models_to_try {
             if response.is_some() {
+                break;
+            }
+            if api_key_invalid {
+                break;
+            }
+            if quota_exceeded {
                 break;
             }
             
@@ -422,6 +430,32 @@ IMPORTANT INSTRUCTIONS:
                         if !tried_models.contains(&model_name.to_string()) {
                             tried_models.push(model_name.to_string());
                         }
+                        
+                        // Check if error is related to invalid or expired API key
+                        if error_text.contains("API_KEY_INVALID") || 
+                           error_text.contains("API key not valid") ||
+                           error_text.contains("INVALID_ARGUMENT") && error_text.contains("API key") {
+                            api_key_invalid = true;
+                            // Check if API key is expired
+                            if error_text.contains("expired") || error_text.contains("renew") {
+                                last_error = format!("API key expired. Please renew your Gemini API key at https://makersuite.google.com/app/apikey. You may need to create a new API key if the current one has expired.");
+                            } else {
+                                last_error = format!("Invalid API key. Please check your Gemini API key at https://makersuite.google.com/app/apikey. Error: {}", error_text);
+                            }
+                            break;
+                        }
+                        // Check if quota exceeded (429) - stop trying other models
+                        if status == 429 || error_text.contains("RESOURCE_EXHAUSTED") || 
+                           error_text.contains("quota") || error_text.contains("rate limit") {
+                            quota_exceeded = true;
+                            last_error = format!("API quota exceeded. You have reached your Gemini API usage limit. Please check your usage at https://ai.dev/rate-limit or upgrade your plan. For more information: https://ai.google.dev/gemini-api/docs/rate-limits");
+                            break;
+                        }
+                        // Check if model not found (404) - skip this model and try next
+                        if status == 404 && error_text.contains("not found") {
+                            // Skip this model and continue with next one
+                            continue;
+                        }
                         last_error = format!("v1 API error {} for {}: {}", status, model_name, error_text);
                     }
                 }
@@ -434,10 +468,16 @@ IMPORTANT INSTRUCTIONS:
             }
         }
         
-        // If v1 failed, try v1beta
-        if response.is_none() {
+        // If v1 failed and API key is valid and quota not exceeded, try v1beta
+        if response.is_none() && !api_key_invalid && !quota_exceeded {
             for model_name in &models_to_try {
                 if response.is_some() {
+                    break;
+                }
+                if api_key_invalid {
+                    break;
+                }
+                if quota_exceeded {
                     break;
                 }
                 
@@ -460,6 +500,32 @@ IMPORTANT INSTRUCTIONS:
                             if !tried_models.contains(&model_name.to_string()) {
                                 tried_models.push(model_name.to_string());
                             }
+                            
+                            // Check if error is related to invalid or expired API key
+                            if error_text.contains("API_KEY_INVALID") || 
+                               error_text.contains("API key not valid") ||
+                               error_text.contains("INVALID_ARGUMENT") && error_text.contains("API key") {
+                                api_key_invalid = true;
+                                // Check if API key is expired
+                                if error_text.contains("expired") || error_text.contains("renew") {
+                                    last_error = format!("API key expired. Please renew your Gemini API key at https://makersuite.google.com/app/apikey. You may need to create a new API key if the current one has expired.");
+                                } else {
+                                    last_error = format!("Invalid API key. Please check your Gemini API key at https://makersuite.google.com/app/apikey. Error: {}", error_text);
+                                }
+                                break;
+                            }
+                            // Check if quota exceeded (429) - stop trying other models
+                            if status == 429 || error_text.contains("RESOURCE_EXHAUSTED") || 
+                               error_text.contains("quota") || error_text.contains("rate limit") {
+                                quota_exceeded = true;
+                                last_error = format!("API quota exceeded. You have reached your Gemini API usage limit. Please check your usage at https://ai.dev/rate-limit or upgrade your plan. For more information: https://ai.google.dev/gemini-api/docs/rate-limits");
+                                break;
+                            }
+                            // Check if model not found (404) - skip this model and try next
+                            if status == 404 && error_text.contains("not found") {
+                                // Skip this model and continue with next one
+                                continue;
+                            }
                             last_error = format!("v1beta API error {} for {}: {}", status, model_name, error_text);
                         }
                     }
@@ -474,8 +540,12 @@ IMPORTANT INSTRUCTIONS:
         }
         
         response.ok_or_else(|| {
-            format!("Gemini API error. Tried models: {}. Last error: {}", 
-                tried_models.join(", "), last_error)
+            if api_key_invalid || quota_exceeded {
+                last_error.clone()
+            } else {
+                format!("Gemini API error. Tried models: {}. Last error: {}", 
+                    tried_models.join(", "), last_error)
+            }
         })?
     } else if api_provider == "huggingface" {
         // Hugging Face Inference API

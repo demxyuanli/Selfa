@@ -54,12 +54,31 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
     const dataMap = new Map<string, { price: number; volume: number }>();
     data.forEach((d) => {
       const dateStr = d.date;
-      const timeStr = dateStr.includes(" ") ? dateStr.split(" ")[1] : dateStr;
+      let timeStr: string;
+      if (dateStr.includes(" ")) {
+        const timePart = dateStr.split(" ")[1];
+        // Extract HH:MM from HH:MM:SS if needed
+        timeStr = timePart.split(":").slice(0, 2).join(":");
+      } else if (dateStr.includes(":")) {
+        // Already in HH:MM format
+        timeStr = dateStr.split(":").slice(0, 2).join(":");
+      } else {
+        // Fallback: try to use as-is
+        timeStr = dateStr;
+      }
+      // Normalize time format to HH:MM (pad with zeros if needed)
+      const parts = timeStr.split(":");
+      if (parts.length >= 2) {
+        const hours = parts[0].padStart(2, "0");
+        const minutes = parts[1].padStart(2, "0");
+        timeStr = `${hours}:${minutes}`;
+      }
       dataMap.set(timeStr, { price: d.close, volume: d.volume });
     });
 
     // Map prices and volumes to full trading times
-    // Ensure continuity between 11:30 and 13:00 by using last morning price for 13:00 if no data
+    // Use forward fill for missing data points to ensure continuity
+    let lastValidPrice: number | null = null;
     let lastMorningPrice: number | null = null;
     const prices: (number | null)[] = fullTradingTimes.map((time) => {
       const dataPoint = dataMap.get(time);
@@ -70,11 +89,17 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
         if (totalMinutes < 13 * 60) {
           lastMorningPrice = dataPoint.price;
         }
+        lastValidPrice = dataPoint.price;
         return dataPoint.price;
       }
       // If this is 13:00 and we have last morning price, use it to ensure continuity
       if (time === "13:00" && lastMorningPrice !== null) {
+        lastValidPrice = lastMorningPrice;
         return lastMorningPrice;
+      }
+      // Forward fill: use last valid price for missing data points
+      if (lastValidPrice !== null) {
+        return lastValidPrice;
       }
       return null;
     });
@@ -398,7 +423,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
           data: prices,
           smooth: false,
           symbol: "none",
-          connectNulls: false, // Don't connect null values, but we ensure continuity at 13:00
+          connectNulls: true, // Connect null values using forward fill to ensure continuity
           lineStyle: {
             color: "#007acc",
             width: 1,
