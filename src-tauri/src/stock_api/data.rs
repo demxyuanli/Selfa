@@ -306,42 +306,36 @@ pub async fn fetch_stock_history(symbol: &str, period: &str) -> Result<Vec<Stock
         }
     }
     
-    // Immediate retry (second attempt)
+    // Short delay then retry (second attempt)
+    tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
     let response_result = make_request().await;
     match response_result {
         Ok(response) => {
             if !response.status().is_success() {
                 return Err(format!("API error: {}", response.status()));
             }
-            
             match response.json::<serde_json::Value>().await {
                 Ok(json) => return parse_response(json),
-                Err(_e) => {
-                    // Parse error, wait 5 minutes and retry
-                }
+                Err(_e) => {}
             }
         }
-        Err(_) => {
-            // Network error, wait 5 minutes and retry
-        }
+        Err(_) => {}
     }
-    
-    // Wait 5 minutes and retry (third attempt)
-    tokio::time::sleep(tokio::time::Duration::from_secs(300)).await;
-    
+
+    // Brief delay and final retry (third attempt)
+    tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
     let response_result = make_request().await;
     match response_result {
         Ok(response) => {
             if !response.status().is_success() {
-                return Err(format!("API error after 5min retry: {}", response.status()));
+                return Err(format!("API error after retry: {}", response.status()));
             }
-            
             match response.json::<serde_json::Value>().await {
                 Ok(json) => parse_response(json),
-                Err(e) => Err(format!("Parse error after 5min retry: {}", e))
+                Err(e) => Err(format!("Parse error after retry: {}", e)),
             }
         }
-        Err(e) => Err(format!("Network error after 5min retry: {}", e))
+        Err(e) => Err(format!("Network error after retry: {}", e)),
     }
 }
 

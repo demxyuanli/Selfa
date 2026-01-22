@@ -116,10 +116,16 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
             color: "#3e3e42",
           },
         },
+        axisPointer: {
+          snap: true,
+        },
       },
       yAxis: {
         type: "value",
         scale: true,
+        axisPointer: {
+          snap: true,
+        },
         axisLabel: {
           color: "#858585",
           fontSize: 11,
@@ -196,6 +202,7 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
         trigger: "axis",
         axisPointer: {
           type: "cross",
+          snap: true,
         },
         backgroundColor: "rgba(37, 37, 38, 0.95)",
         borderColor: "#3e3e42",

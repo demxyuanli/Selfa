@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { useAlert } from "../contexts/AlertContext";
 import Icon from "./Icon";
 import "./StockComments.css";
 
@@ -18,6 +19,7 @@ interface StockCommentsProps {
 
 const StockComments: React.FC<StockCommentsProps> = ({ symbol, quote }) => {
   const { t } = useTranslation();
+  const { showConfirm } = useAlert();
   const [comments, setComments] = useState<StockComment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [isAdding, setIsAdding] = useState(false);
@@ -81,12 +83,12 @@ const StockComments: React.FC<StockCommentsProps> = ({ symbol, quote }) => {
     }
   };
 
-  const handleDeleteComment = (id: string) => {
-    if (window.confirm(t("comments.confirmDelete"))) {
-      const updated = comments.filter((c) => c.id !== id);
-      setComments(updated);
-      saveComments(updated);
-    }
+  const handleDeleteComment = async (id: string) => {
+    const ok = await showConfirm(t("comments.confirmDelete"));
+    if (!ok) return;
+    const updated = comments.filter((c) => c.id !== id);
+    setComments(updated);
+    saveComments(updated);
   };
 
   const formatDate = (timestamp: number) => {

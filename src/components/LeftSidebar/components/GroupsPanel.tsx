@@ -94,7 +94,7 @@ const GroupsPanel: React.FC<GroupsPanelProps> = ({
                     className="group-name-input"
                     value={editingGroupName}
                     onChange={(e) => onEditingGroupNameChange(e.target.value)}
-                    onBlur={onSaveEditGroup}
+                    onBlur={onCancelEditGroup}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") onSaveEditGroup();
                       else if (e.key === "Escape") onCancelEditGroup();

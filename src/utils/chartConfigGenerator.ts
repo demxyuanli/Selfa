@@ -42,11 +42,12 @@ export interface ChartConfigOptions {
   chipData: ChipDistributionResult | null;
   indicatorParams: IndicatorParams;
   selectedDateIndex?: number | null;
+  chipCalculationData?: StockData[]; // Add this to track the data used for chip calculation
   t: (key: string) => string;
 }
 
 export function generateChartConfig(options: ChartConfigOptions): any {
-  const { klineData, overlayIndicator, oscillatorType, showSignals, chipData, indicatorParams, selectedDateIndex, t } = options;
+  const { klineData, overlayIndicator, oscillatorType, showSignals, chipData, indicatorParams, selectedDateIndex, chipCalculationData, t } = options;
 
   if (!klineData || klineData.length === 0) return {};
 
@@ -225,6 +226,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       gridIndex: 0, 
       axisLabel: { fontSize: 9, color: "#858585" },
       splitLine: { show: false },
+      axisPointer: { snap: true },
     },
     { 
       type: "category", 
@@ -232,13 +234,15 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       gridIndex: 1, 
       axisLabel: { fontSize: 9, color: "#858585" },
       splitLine: { show: false },
+      axisPointer: { snap: true },
     },
   ];
   const yAxis: any[] = [
     { 
       type: "value", 
       gridIndex: 0, 
-      scale: true, 
+      scale: true,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
       splitLine: {
         show: true,
@@ -272,13 +276,15 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       type: "category", 
       data: dates, 
       gridIndex: 2, 
-      axisLabel: { fontSize: 9, color: "#858585" } 
+      axisLabel: { fontSize: 9, color: "#858585" },
+      axisPointer: { snap: true },
     });
     yAxis.push({
       type: "value",
       gridIndex: 2,
       min: 0,
       max: 100,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
     });
     series.push({
@@ -354,11 +360,13 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       type: "category", 
       data: dates, 
       gridIndex: 2, 
-      axisLabel: { fontSize: 9, color: "#858585" } 
+      axisLabel: { fontSize: 9, color: "#858585" },
+      axisPointer: { snap: true },
     });
     yAxis.push({ 
       type: "value", 
-      gridIndex: 2, 
+      gridIndex: 2,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
       splitLine: {
         show: true,
@@ -401,12 +409,13 @@ export function generateChartConfig(options: ChartConfigOptions): any {
     );
   } else if (oscillatorType === "kdj") {
     const kdj = calculateKDJ(highs, lows, closes, indicatorParams.kdjPeriod);
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
       min: 0,
       max: 100,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
     });
     series.push(
@@ -425,10 +434,11 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       }
     }
 
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585", formatter: (value: number) => `${value.toFixed(1)}%` },
     });
     series.push({
@@ -452,7 +462,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
     });
   } else if (oscillatorType === "cci") {
     const cciData = calculateCCI(highs, lows, closes, indicatorParams.cciPeriod);
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
@@ -496,12 +506,13 @@ export function generateChartConfig(options: ChartConfigOptions): any {
     });
   } else if (oscillatorType === "adx") {
     const adxData = calculateADX(highs, lows, closes, indicatorParams.adxPeriod);
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
       min: 0,
       max: 100,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
     });
     series.push({
@@ -542,12 +553,13 @@ export function generateChartConfig(options: ChartConfigOptions): any {
     });
   } else if (oscillatorType === "dmi") {
     const dmiData = calculateADX(highs, lows, closes, indicatorParams.adxPeriod);
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
       min: 0,
       max: 100,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
     });
     series.push({
@@ -588,12 +600,13 @@ export function generateChartConfig(options: ChartConfigOptions): any {
     });
   } else if (oscillatorType === "stochrsi") {
     const stochRsiData = calculateStochRSI(closes, indicatorParams.stochRsiRsiPeriod, indicatorParams.stochRsiStochPeriod, indicatorParams.stochRsiKPeriod, indicatorParams.stochRsiDPeriod);
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
       min: 0,
       max: 100,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
     });
     series.push({
@@ -646,12 +659,13 @@ export function generateChartConfig(options: ChartConfigOptions): any {
         bbPercent.push(null);
       }
     }
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
       min: 0,
       max: 100,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585", formatter: (value: number) => `${value}%` },
     });
     series.push({
@@ -707,6 +721,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       min: 0,
       axisLabel: { show: false },
       splitLine: { show: false },
+      axisPointer: { show: false }, // Chip xAxis should not participate in crosshair
     });
 
     const chipYAxisIndex = yAxis.length;
@@ -718,17 +733,42 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       max: mainYAxis.max !== undefined ? mainYAxis.max : maxPrice,
       position: "right",  // Position Y-axis on the right side to align with K-line chart boundary
       inverse: false,
+      axisPointer: { 
+        snap: true,
+        show: true,
+      },
       axisLabel: { show: false },
       splitLine: { show: false },
     });
 
-    // Only show chip distribution for the selected date (or last date if none selected)
-    const displayDateIndex = (selectedDateIndex !== null && selectedDateIndex !== undefined && selectedDateIndex >= 0 && selectedDateIndex < chipData.dailyDistributions.length)
-      ? selectedDateIndex
-      : chipData.dailyDistributions.length - 1;
+    // Map selectedDateIndex from klineData to chipData.dailyDistributions
+    // chipData.dailyDistributions is based on chipCalculationData, which may be longer than klineData
+    let displayDateIndex = chipData.dailyDistributions.length - 1;
+    if (selectedDateIndex !== null && selectedDateIndex !== undefined && selectedDateIndex >= 0 && selectedDateIndex < klineData.length) {
+      const selectedDate = klineData[selectedDateIndex].date;
+      const dateKey = selectedDate.includes(" ") ? selectedDate.split(" ")[0] : selectedDate;
+      
+      // Find the corresponding index in chipData.dailyDistributions
+      const chipIndex = chipData.dailyDistributions.findIndex((dist) => {
+        const distDateKey = dist.date.includes(" ") ? dist.date.split(" ")[0] : dist.date;
+        return distDateKey === dateKey;
+      });
+      
+      if (chipIndex >= 0 && chipIndex < chipData.dailyDistributions.length) {
+        displayDateIndex = chipIndex;
+      } else {
+        // Fallback: try to use selectedDateIndex if chipCalculationData length matches klineData
+        if (chipCalculationData && chipCalculationData.length === klineData.length && selectedDateIndex < chipData.dailyDistributions.length) {
+          displayDateIndex = selectedDateIndex;
+        }
+      }
+    }
     
     const dayDist = chipData.dailyDistributions[displayDateIndex];
-    const dayPrice = closes[displayDateIndex];
+    // Get the price from the corresponding klineData or chipCalculationData
+    const dayPrice = (selectedDateIndex !== null && selectedDateIndex !== undefined && selectedDateIndex >= 0 && selectedDateIndex < closes.length)
+      ? closes[selectedDateIndex]
+      : (chipCalculationData && displayDateIndex < chipCalculationData.length ? chipCalculationData[displayDateIndex].close : closes[closes.length - 1]);
     
     // Find max chip amount for this day for scaling
     const maxChipAmount = Math.max(...dayDist.chipAmounts, 1);
@@ -836,6 +876,13 @@ export function generateChartConfig(options: ChartConfigOptions): any {
 
   return {
     backgroundColor: "transparent",
+    axisPointer: {
+      link: [{ xAxisIndex: "all" }],
+      snap: true,
+      label: {
+        backgroundColor: "#777",
+      },
+    },
     grid: grids,
     xAxis,
     yAxis,
@@ -855,7 +902,25 @@ export function generateChartConfig(options: ChartConfigOptions): any {
     series,
     tooltip: {
       trigger: "axis",
-      axisPointer: { type: "cross" },
+      axisPointer: { 
+        type: "cross", 
+        snap: true,
+        link: [{ xAxisIndex: "all" }],
+        crossStyle: {
+          color: "#007acc",
+          width: 1,
+          type: "dashed",
+        },
+        lineStyle: {
+          color: "#007acc",
+          width: 1,
+          type: "dashed",
+        },
+        label: {
+          backgroundColor: "#007acc",
+          color: "#fff",
+        },
+      },
       backgroundColor: "rgba(37, 37, 38, 0.95)",
       borderColor: "#555",
       borderWidth: 1,

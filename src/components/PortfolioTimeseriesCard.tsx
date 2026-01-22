@@ -636,6 +636,10 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
       ],
       tooltip: {
         trigger: "axis",
+        axisPointer: {
+          type: "cross",
+          snap: true,
+        },
         backgroundColor: "rgba(37, 37, 38, 0.95)",
         borderColor: "#555",
         textStyle: { color: "#ccc", fontSize: 12 },
@@ -687,6 +691,9 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
           data: fullTradingTimes,
           boundaryGap: false,
           gridIndex: 0,
+          axisPointer: {
+            snap: true,
+          },
           axisLabel: {
             show: false, // Hide labels in upper area
             fontSize: 9,
@@ -702,6 +709,9 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
           data: fullTradingTimes,
           boundaryGap: false,
           gridIndex: 1,
+          axisPointer: {
+            snap: true,
+          },
           axisLabel: {
             fontSize: 9,
             color: "#858585",
@@ -723,6 +733,9 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
           min: indexYAxisMin,
           max: indexYAxisMax,
           gridIndex: 0,
+          axisPointer: {
+            snap: true,
+          },
           axisLabel: {
             fontSize: 9,
             color: "#858585",
@@ -742,6 +755,9 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
           min: stockYAxisMin,
           max: stockYAxisMax,
           gridIndex: 1,
+          axisPointer: {
+            snap: true,
+          },
           axisLabel: {
             fontSize: 9,
             color: "#858585",
@@ -759,6 +775,9 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
           type: "value",
           gridIndex: 0,
           position: "right",
+          axisPointer: {
+            snap: true,
+          },
           axisLabel: {
             show: false, // Hide volume axis labels
             fontSize: 9,

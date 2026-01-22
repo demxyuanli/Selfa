@@ -137,6 +137,13 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
 
     return {
       backgroundColor: "#1e1e1e",
+      axisPointer: {
+        link: [{ xAxisIndex: [0, 1] }],
+        snap: true,
+        label: {
+          backgroundColor: "#777",
+        },
+      },
       grid: [
         {
           left: "5%",
@@ -156,6 +163,9 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
           type: "category",
           data: fullTradingTimes,
           boundaryGap: false,
+          axisPointer: {
+            snap: true,
+          },
           axisLine: {
             lineStyle: {
               color: "#3e3e42",
@@ -247,6 +257,9 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
               color: "#3e3e42",
             },
           },
+          axisPointer: {
+            snap: true,
+          },
           axisLabel: {
             color: "#858585",
             fontSize: 9,
@@ -301,6 +314,9 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
           scale: true,
           min: yAxisMin,
           max: yAxisMax,
+          axisPointer: {
+            snap: true,
+          },
           splitArea: {
             show: true,
             areaStyle: {
@@ -335,6 +351,9 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
           type: "value",
           gridIndex: 1,
           scale: true,
+          axisPointer: {
+            snap: true,
+          },
           axisLabel: {
             color: "#858585",
             fontSize: compact ? 7 : 9,
@@ -372,6 +391,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
         trigger: "axis",
         axisPointer: {
           type: "cross",
+          snap: true,
           lineStyle: {
             color: "#007acc",
             width: 1,

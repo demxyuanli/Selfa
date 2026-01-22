@@ -152,6 +152,10 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
     return {
       tooltip: {
         trigger: "axis",
+        axisPointer: {
+          type: "cross",
+          snap: true,
+        },
         backgroundColor: "rgba(37, 37, 38, 0.95)",
         borderColor: "#555",
         textStyle: { color: "#ccc" },
@@ -172,9 +176,15 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
         data: allDates,
         axisLabel: { color: "#858585", fontSize: 9 },
         splitLine: { show: false },
+        axisPointer: {
+          snap: true,
+        },
       },
       yAxis: {
         type: "value",
+        axisPointer: {
+          snap: true,
+        },
         axisLabel: { color: "#858585", fontSize: 9 },
         splitLine: { lineStyle: { color: "rgba(133, 133, 133, 0.15)" } },
       },

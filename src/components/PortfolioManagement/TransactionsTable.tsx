@@ -25,9 +25,21 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
   onReload,
 }) => {
   const { t } = useTranslation();
-  const { showAlert } = useAlert();
+  const { showAlert, showConfirm } = useAlert();
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [editingQuantity, setEditingQuantity] = useState<string>("");
+
+  const handleDeleteTransaction = async (id: number) => {
+    const ok = await showConfirm(t("portfolio.confirmDelete"));
+    if (!ok) return;
+    try {
+      await invoke("delete_portfolio_transaction", { id });
+      await onReload();
+    } catch (err) {
+      console.error("Error deleting transaction:", err);
+      showAlert(t("portfolio.deleteError"));
+    }
+  };
 
   const filteredTransactions = selectedTransactionSymbol
     ? transactions.filter((transaction) => transaction.symbol === selectedTransactionSymbol)
@@ -136,13 +148,14 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                                 setEditingQuantity(val);
                               }
                             }}
-                            onBlur={async () => {
-                              const newQuantity = parseInt(editingQuantity) || 0;
-                              await handleQuantityUpdate(transaction.id, newQuantity, transaction.quantity);
+                            onBlur={() => {
+                              setEditingTransactionId(null);
+                              setEditingQuantity("");
                             }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
-                                e.currentTarget.blur();
+                                const newQuantity = parseInt(editingQuantity) || 0;
+                                handleQuantityUpdate(transaction.id, newQuantity, transaction.quantity);
                               } else if (e.key === "Escape") {
                                 setEditingTransactionId(null);
                                 setEditingQuantity("");
@@ -163,16 +176,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                       <td>{transaction.notes || "-"}</td>
                       <td>
                         <button
-                          onClick={() => {
-                            if (confirm(t("portfolio.confirmDelete"))) {
-                              invoke("delete_portfolio_transaction", { id: transaction.id })
-                                .then(() => onReload())
-                                .catch((err) => {
-                                  console.error("Error deleting transaction:", err);
-                                  showAlert(t("portfolio.deleteError"));
-                                });
-                            }
-                          }}
+                          onClick={() => handleDeleteTransaction(transaction.id)}
                           className="delete-btn"
                           title={t("portfolio.delete")}
                         >

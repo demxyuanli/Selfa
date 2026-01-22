@@ -12,17 +12,17 @@ interface TransfersTableProps {
 
 const TransfersTable: React.FC<TransfersTableProps> = ({ transfers, onReload }) => {
   const { t } = useTranslation();
-  const { showAlert } = useAlert();
+  const { showAlert, showConfirm } = useAlert();
 
   const handleDelete = async (id: number) => {
-    if (confirm(t("portfolio.confirmDelete"))) {
-      try {
-        await invoke("delete_capital_transfer", { id });
-        await onReload();
-      } catch (err) {
-        console.error("Error deleting transfer:", err);
-        showAlert(t("portfolio.deleteError") + ": " + (err instanceof Error ? err.message : String(err)));
-      }
+    const ok = await showConfirm(t("portfolio.confirmDelete"));
+    if (!ok) return;
+    try {
+      await invoke("delete_capital_transfer", { id });
+      await onReload();
+    } catch (err) {
+      console.error("Error deleting transfer:", err);
+      showAlert(t("portfolio.deleteError") + ": " + (err instanceof Error ? err.message : String(err)));
     }
   };
 

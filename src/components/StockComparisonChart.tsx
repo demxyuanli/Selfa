@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
@@ -270,6 +270,7 @@ const StockComparisonChart: React.FC<StockComparisonChartProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [selectedStocks, setSelectedStocks] = useState<Set<string>>(new Set());
   const fullTradingTimes = useMemo(() => generateFullTradingTimes(), []);
+  const chartRef = useRef<any>(null);
 
   // Define benchmark indices - memoized to prevent infinite loops
   const BENCHMARK_INDICES = useMemo(() => [
@@ -854,6 +855,11 @@ const StockComparisonChart: React.FC<StockComparisonChartProps> = ({
       ],
       tooltip: {
         trigger: "axis",
+        axisPointer: {
+          type: "cross",
+          snap: true,
+          link: [{ xAxisIndex: "all" }],
+        },
         backgroundColor: "rgba(37, 37, 38, 0.95)",
         borderColor: "#555",
         textStyle: { color: "#ccc", fontSize: 12 },
@@ -911,6 +917,9 @@ const StockComparisonChart: React.FC<StockComparisonChartProps> = ({
           axisLine: {
             lineStyle: { color: "#555" },
           },
+          axisPointer: {
+            snap: true,
+          },
         },
         // Lower x-axis for stocks
         {
@@ -929,6 +938,9 @@ const StockComparisonChart: React.FC<StockComparisonChartProps> = ({
           axisLine: {
             lineStyle: { color: "#555" },
           },
+          axisPointer: {
+            snap: true,
+          },
         },
       ],
       yAxis: [
@@ -939,6 +951,9 @@ const StockComparisonChart: React.FC<StockComparisonChartProps> = ({
           min: indexYAxisMin,
           max: indexYAxisMax,
           gridIndex: 0,
+          axisPointer: {
+            snap: true,
+          },
           axisLabel: {
             fontSize: 9,
             color: (value: number) => {
@@ -962,6 +977,9 @@ const StockComparisonChart: React.FC<StockComparisonChartProps> = ({
           min: stockYAxisMin,
           max: stockYAxisMax,
           gridIndex: 1,
+          axisPointer: {
+            snap: true,
+          },
           axisLabel: {
             fontSize: 9,
             color: (value: number) => {
@@ -1154,11 +1172,40 @@ const StockComparisonChart: React.FC<StockComparisonChartProps> = ({
           {hasData ? (
             <div className="chart-chart-container">
               <ReactECharts
+                ref={chartRef}
                 option={chartOption}
                 style={{ height: "100%", width: "100%" }}
                 opts={{ renderer: "canvas" }}
                 notMerge={true}
                 lazyUpdate={false}
+                onEvents={{
+                  mousemove: (params: any) => {
+                    if (chartRef.current && params.offsetX !== undefined) {
+                      const echartsInstance = chartRef.current.getEchartsInstance();
+                      if (echartsInstance) {
+                        try {
+                          const xAxisModel = echartsInstance.getModel().getComponent("xAxis", 0);
+                          if (xAxisModel) {
+                            const coord = echartsInstance.convertFromPixel({ xAxisIndex: 0 }, [params.offsetX, params.offsetY]);
+                            if (coord && coord[0] !== undefined) {
+                              const nearestIndex = Math.round(coord[0]);
+                              if (nearestIndex >= 0 && nearestIndex < fullTradingTimes.length) {
+                                echartsInstance.dispatchAction({
+                                  type: "showTip",
+                                  x: params.offsetX,
+                                  y: params.offsetY,
+                                  dataIndex: nearestIndex,
+                                });
+                              }
+                            }
+                          }
+                        } catch (e) {
+                          // Fallback to default behavior if conversion fails
+                        }
+                      }
+                    }
+                  },
+                }}
               />
             </div>
           ) : (

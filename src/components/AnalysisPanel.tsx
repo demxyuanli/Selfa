@@ -537,19 +537,24 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         { left: "8%", right: "3%", top: "65%", height: "25%" },
       ],
       xAxis: [
-        { type: "category", data: times, gridIndex: 0, axisLabel: { fontSize: 9, color: "#858585" } },
-        { type: "category", data: times, gridIndex: 1, axisLabel: { show: false } },
+        { type: "category", data: times, gridIndex: 0, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } },
+        { type: "category", data: times, gridIndex: 1, axisLabel: { show: false }, axisPointer: { snap: true } },
       ],
       yAxis: [
-        { type: "value", gridIndex: 0, scale: true, axisLabel: { fontSize: 9, color: "#858585" } },
-        { type: "value", gridIndex: 1, scale: true, axisLabel: { fontSize: 9, color: "#858585" } },
+        { type: "value", gridIndex: 0, scale: true, axisPointer: { snap: true }, axisLabel: { fontSize: 9, color: "#858585" } },
+        { type: "value", gridIndex: 1, scale: true, axisPointer: { snap: true }, axisLabel: { fontSize: 9, color: "#858585" } },
       ],
       series: [
         { name: t("stock.price"), type: "line", data: prices, smooth: false, symbol: "none", lineStyle: { color: "#007acc", width: 1 } },
         { name: `MA${maPeriod}`, type: "line", data: maData, smooth: true, symbol: "none", lineStyle: { color: "#f39c12", width: 1, type: "dashed" } },
         { name: t("stock.volume"), type: "bar", xAxisIndex: 1, yAxisIndex: 1, data: volumes, itemStyle: { color: "#3498db" } },
       ],
-      tooltip: { trigger: "axis", backgroundColor: "rgba(37, 37, 38, 0.95)", textStyle: { color: "#ccc", fontSize: 10 } },
+      tooltip: { 
+        trigger: "axis", 
+        axisPointer: { type: "cross", snap: true },
+        backgroundColor: "rgba(37, 37, 38, 0.95)", 
+        textStyle: { color: "#ccc", fontSize: 10 } 
+      },
       legend: { data: [t("stock.price"), `MA${maPeriod}`, t("stock.volume")], textStyle: { color: "#858585", fontSize: 9 }, top: 0 },
     };
   }, [timeSeriesData, tsParams.maPeriod, t]);
@@ -583,14 +588,14 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         { left: "8%", right: "3%", top: "80%", height: "15%" },
       ],
       xAxis: [
-        { type: "category", data: dates, gridIndex: 0, axisLabel: { fontSize: 9, color: "#858585" } },
-        { type: "category", data: dates, gridIndex: 1, axisLabel: { show: false } },
-        { type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } },
+        { type: "category", data: dates, gridIndex: 0, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } },
+        { type: "category", data: dates, gridIndex: 1, axisLabel: { show: false }, axisPointer: { snap: true } },
+        { type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } },
       ],
       yAxis: [
-        { type: "value", gridIndex: 0, scale: true, axisLabel: { fontSize: 9, color: "#858585" } },
-        { type: "value", gridIndex: 1, scale: true, axisLabel: { fontSize: 9, color: "#858585" } },
-        { type: "value", gridIndex: 2, scale: true, axisLabel: { fontSize: 9, color: "#858585" } },
+        { type: "value", gridIndex: 0, scale: true, axisPointer: { snap: true }, axisLabel: { fontSize: 9, color: "#858585" } },
+        { type: "value", gridIndex: 1, scale: true, axisPointer: { snap: true }, axisLabel: { fontSize: 9, color: "#858585" } },
+        { type: "value", gridIndex: 2, scale: true, axisPointer: { snap: true }, axisLabel: { fontSize: 9, color: "#858585" } },
       ],
       series: [
         { name: t("stock.price"), type: "line", data: closes, smooth: false, symbol: "none", lineStyle: { color: "#007acc", width: 1.5 } },
@@ -602,7 +607,12 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         { name: "Histogram", type: "bar", xAxisIndex: 1, yAxisIndex: 1, data: histogram.map(v => ({ value: v, itemStyle: { color: v && v > 0 ? "#2ecc71" : "#e74c3c" } })) },
         { name: "RSI", type: "line", xAxisIndex: 2, yAxisIndex: 2, data: calculateRSIArray(closes, klParams.rsiPeriod), symbol: "none", lineStyle: { color: "#9b59b6", width: 1 } },
       ],
-      tooltip: { trigger: "axis", backgroundColor: "rgba(37, 37, 38, 0.95)", textStyle: { color: "#ccc", fontSize: 10 } },
+      tooltip: { 
+        trigger: "axis", 
+        axisPointer: { type: "cross", snap: true },
+        backgroundColor: "rgba(37, 37, 38, 0.95)", 
+        textStyle: { color: "#ccc", fontSize: 10 } 
+      },
       legend: { data: [t("stock.price"), "MA5", "MA10", "MA20"], textStyle: { color: "#858585", fontSize: 8 }, top: 0 },
     };
   }, [klineData, klParams, t]);

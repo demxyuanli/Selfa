@@ -57,7 +57,7 @@ interface FavoritesDashboardProps {
 
 const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }) => {
   const { t } = useTranslation();
-  const { showAlert } = useAlert();
+  const { showAlert, showConfirm } = useAlert();
   const [stocks, setStocks] = useState<Array<{ stock: StockInfo; quote: StockQuote | null }>>([]);
   const [alerts, setAlerts] = useState<PriceAlertInfo[]>([]);
   const [positions, setPositions] = useState<PortfolioPosition[]>([]);
@@ -538,14 +538,14 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
   };
 
   const handleRemoveStock = async (symbol: string, name: string) => {
-    if (confirm(t("sidebar.confirmDeleteStock", { symbol: `${symbol} (${name})` }))) {
-      try {
-        await invoke("remove_stock", { symbol });
-        await refreshStocks();
-      } catch (err) {
-        console.error("Error removing stock:", err);
-        showAlert(err instanceof Error ? err.message : String(err));
-      }
+    const ok = await showConfirm(t("sidebar.confirmDeleteStock", { symbol: `${symbol} (${name})` }));
+    if (!ok) return;
+    try {
+      await invoke("remove_stock", { symbol });
+      await refreshStocks();
+    } catch (err) {
+      console.error("Error removing stock:", err);
+      showAlert(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -585,6 +585,10 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
       setSortDirection("desc");
     }
   }, [sortField, sortDirection]);
+
+  const positionSymbols = useMemo(() => {
+    return new Set(positions.map(p => p.symbol));
+  }, [positions]);
 
   const sortedStocks = useMemo(() => {
     if (!sortField) {
@@ -856,6 +860,7 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
                         >
                           <td className="stock-symbol" style={{ width: columnWidths.get(0), minWidth: 60 }} onClick={() => handleStockClick(stock)}>
                             {stock.symbol}
+                            {positionSymbols.has(stock.symbol) && <span className="position-indicator" title={t("portfolio.positions")}>★</span>}
                             {hasTriggeredAlert && <span className="alert-indicator" title={t("priceAlert.triggered")}>⚠</span>}
                           </td>
                         <td 

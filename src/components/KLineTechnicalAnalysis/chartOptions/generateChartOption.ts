@@ -238,14 +238,15 @@ export function generateChartOption(params: ChartOptionParams): any {
   });
 
   const xAxis: any[] = [
-    { type: "category", data: dates, gridIndex: 0, axisLabel: { fontSize: 9, color: "#858585" }, splitLine: { show: false } },
-    { type: "category", data: dates, gridIndex: 1, axisLabel: { show: false }, splitLine: { show: false } },
+    { type: "category", data: dates, gridIndex: 0, axisLabel: { fontSize: 9, color: "#858585" }, splitLine: { show: false }, axisPointer: { snap: true } },
+    { type: "category", data: dates, gridIndex: 1, axisLabel: { show: false }, splitLine: { show: false }, axisPointer: { snap: true } },
   ];
   const yAxis: any[] = [
     {
       type: "value",
       gridIndex: 0,
       scale: true,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
       splitLine: {
         show: true,
@@ -260,6 +261,7 @@ export function generateChartOption(params: ChartOptionParams): any {
       type: "value",
       gridIndex: 1,
       scale: true,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
       splitLine: {
         show: true,
@@ -274,12 +276,13 @@ export function generateChartOption(params: ChartOptionParams): any {
 
   if (oscillatorType === "rsi") {
     const rsi = calculateRSI(closes, indicatorParams.rsiPeriod);
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, splitLine: { show: false } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, splitLine: { show: false }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
       min: 0,
       max: 100,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
       splitLine: {
         show: true,
@@ -368,10 +371,11 @@ export function generateChartOption(params: ChartOptionParams): any {
     });
   } else if (oscillatorType === "macd") {
     const macd = calculateMACD(closes, indicatorParams.macdFast, indicatorParams.macdSlow, indicatorParams.macdSignal);
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, splitLine: { show: false } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, splitLine: { show: false }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
       splitLine: {
         show: true,
@@ -414,12 +418,13 @@ export function generateChartOption(params: ChartOptionParams): any {
     );
   } else if (oscillatorType === "kdj") {
     const kdj = calculateKDJ(highs, lows, closes, indicatorParams.kdjPeriod);
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
       min: 0,
       max: 100,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
     });
     series.push(
@@ -437,10 +442,11 @@ export function generateChartOption(params: ChartOptionParams): any {
         momentumData.push(null);
       }
     }
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585", formatter: (value: number) => `${value.toFixed(1)}%` },
     });
     series.push({
@@ -464,10 +470,11 @@ export function generateChartOption(params: ChartOptionParams): any {
     });
   } else if (oscillatorType === "cci") {
     const cciData = calculateCCI(highs, lows, closes, indicatorParams.cciPeriod);
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
     });
     series.push({
@@ -508,12 +515,13 @@ export function generateChartOption(params: ChartOptionParams): any {
     });
   } else if (oscillatorType === "adx") {
     const adxData = calculateADX(highs, lows, closes, indicatorParams.adxPeriod);
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
       min: 0,
       max: 100,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
     });
     series.push({
@@ -554,12 +562,13 @@ export function generateChartOption(params: ChartOptionParams): any {
     });
   } else if (oscillatorType === "dmi") {
     const dmiData = calculateADX(highs, lows, closes, 14);
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
       min: 0,
       max: 100,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
     });
     series.push({
@@ -606,12 +615,13 @@ export function generateChartOption(params: ChartOptionParams): any {
       indicatorParams.stochRsiKPeriod,
       indicatorParams.stochRsiDPeriod
     );
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
       min: 0,
       max: 100,
+      axisPointer: { snap: true },
       axisLabel: { fontSize: 9, color: "#858585" },
     });
     series.push({
@@ -664,7 +674,7 @@ export function generateChartOption(params: ChartOptionParams): any {
         bbPercent.push(null);
       }
     }
-    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585", formatter: (value: number) => `${value}%` } });
+    xAxis.push({ type: "category", data: dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#858585", formatter: (value: number) => `${value}%` }, axisPointer: { snap: true } });
     yAxis.push({
       type: "value",
       gridIndex: 2,
@@ -715,6 +725,13 @@ export function generateChartOption(params: ChartOptionParams): any {
 
   return {
     backgroundColor: "transparent",
+    axisPointer: {
+      link: [{ xAxisIndex: "all" }],
+      snap: true,
+      label: {
+        backgroundColor: "#777",
+      },
+    },
     grid: grids,
     xAxis,
     yAxis,
@@ -736,6 +753,7 @@ export function generateChartOption(params: ChartOptionParams): any {
       trigger: "axis",
       axisPointer: {
         type: "cross",
+        snap: true,
         crossStyle: {
           color: "#007acc",
           width: 1,

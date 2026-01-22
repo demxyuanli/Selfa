@@ -66,7 +66,7 @@ export function generatePortfolioChartOption(params: PortfolioChartOptionParams)
           value: pos.marketValue,
           name: pos.symbol,
           itemStyle: {
-            color: pos.profitPercent >= 0 ? "#00ff00" : "#ff0000",
+            color: pos.profitPercent >= 0 ? "#ff0000" : "#00ff00",
           },
         })),
       },

@@ -48,7 +48,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ onMenuAction, onSettingsClick }) =>
       console.log("Window minimized");
     } catch (error) {
       console.error("Failed to minimize window:", error);
-      alert(`Failed to minimize: ${error}`);
+      showAlert(`Failed to minimize: ${error}`);
     }
   };
 

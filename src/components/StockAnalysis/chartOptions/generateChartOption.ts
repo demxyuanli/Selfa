@@ -22,21 +22,33 @@ export function generateChartOption(params: ChartOptionParams): any {
     const ma = closes.map((_, i) => i < tsParams.maPeriod - 1 ? null : calculateMA(closes.slice(0, i + 1), tsParams.maPeriod));
     return {
       backgroundColor: "transparent",
+      axisPointer: {
+        link: [{ xAxisIndex: [0, 1] }],
+        snap: true,
+        label: {
+          backgroundColor: "#777",
+        },
+      },
       grid: [{ left: "8%", right: "3%", top: "8%", height: "55%" }, { left: "8%", right: "3%", top: "70%", height: "25%" }],
       xAxis: [
-        { type: "category", data: dates, gridIndex: 0, axisLabel: { fontSize: 9, color: "#858585" } },
-        { type: "category", data: dates, gridIndex: 1, axisLabel: { show: false } },
+        { type: "category", data: dates, gridIndex: 0, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } },
+        { type: "category", data: dates, gridIndex: 1, axisLabel: { show: false }, axisPointer: { snap: true } },
       ],
       yAxis: [
-        { type: "value", gridIndex: 0, scale: true, axisLabel: { fontSize: 9, color: "#858585" } },
-        { type: "value", gridIndex: 1, scale: true, axisLabel: { fontSize: 9, color: "#858585" } },
+        { type: "value", gridIndex: 0, scale: true, axisPointer: { snap: true }, axisLabel: { fontSize: 9, color: "#858585" } },
+        { type: "value", gridIndex: 1, scale: true, axisPointer: { snap: true }, axisLabel: { fontSize: 9, color: "#858585" } },
       ],
       series: [
         { name: t("stock.price"), type: "line", data: closes, symbol: "none", lineStyle: { color: "#007acc", width: 1.5 } },
         { name: `MA${tsParams.maPeriod}`, type: "line", data: ma, symbol: "none", lineStyle: { color: "#f39c12", width: 1, type: "dashed" } },
         { name: t("stock.volume"), type: "bar", xAxisIndex: 1, yAxisIndex: 1, data: volumes, itemStyle: { color: "#3498db" } },
       ],
-      tooltip: { trigger: "axis", backgroundColor: "rgba(37, 37, 38, 0.95)", textStyle: { color: "#ccc", fontSize: 10 } },
+      tooltip: { 
+        trigger: "axis", 
+        axisPointer: { type: "cross", snap: true },
+        backgroundColor: "rgba(37, 37, 38, 0.95)", 
+        textStyle: { color: "#ccc", fontSize: 10 } 
+      },
     };
   } else {
     const ma5 = closes.map((_, i) => i < 4 ? null : calculateMA(closes.slice(0, i + 1), 5));
@@ -45,6 +57,13 @@ export function generateChartOption(params: ChartOptionParams): any {
     
     return {
       backgroundColor: "transparent",
+      axisPointer: {
+        link: [{ xAxisIndex: [0, 1] }],
+        snap: true,
+        label: {
+          backgroundColor: "#777",
+        },
+      },
       grid: [{ left: "8%", right: "3%", top: "8%", height: "55%" }, { left: "8%", right: "3%", top: "70%", height: "25%" }],
       xAxis: [
         { 
@@ -53,6 +72,7 @@ export function generateChartOption(params: ChartOptionParams): any {
           gridIndex: 0, 
           axisLabel: { fontSize: 9, color: "#858585" },
           splitLine: { show: false },
+          axisPointer: { snap: true },
         },
         { 
           type: "category", 
@@ -60,6 +80,7 @@ export function generateChartOption(params: ChartOptionParams): any {
           gridIndex: 1, 
           axisLabel: { fontSize: 9, color: "#858585" },
           splitLine: { show: false },
+          axisPointer: { snap: true },
         },
       ],
       yAxis: [
@@ -99,7 +120,12 @@ export function generateChartOption(params: ChartOptionParams): any {
         { name: "MA20", type: "line", data: ma20, symbol: "none", lineStyle: { color: "#ff00ff", width: 1 } },
         { name: t("stock.volume"), type: "bar", xAxisIndex: 1, yAxisIndex: 1, data: volumes.map((v, i) => ({ value: v, itemStyle: { color: closes[i] >= (closes[i-1] || closes[i]) ? "#2ecc71" : "#e74c3c" } })) },
       ],
-      tooltip: { trigger: "axis", backgroundColor: "rgba(37, 37, 38, 0.95)", textStyle: { color: "#ccc", fontSize: 10 } },
+      tooltip: { 
+        trigger: "axis", 
+        axisPointer: { type: "cross", snap: true },
+        backgroundColor: "rgba(37, 37, 38, 0.95)", 
+        textStyle: { color: "#ccc", fontSize: 10 } 
+      },
       legend: { data: [t("stock.price"), "MA5", "MA10", "MA20"], textStyle: { color: "#858585", fontSize: 8 }, top: 0 },
     };
   }

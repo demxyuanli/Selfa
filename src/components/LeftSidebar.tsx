@@ -19,7 +19,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
   onStockRemove,
 }) => {
   const { t } = useTranslation();
-  const { showAlert } = useAlert();
+  const { showAlert, showConfirm } = useAlert();
   const UNGROUPED_GROUP = t("sidebar.ungroupedGroup");
 
   const [activePanel, setActivePanel] = useState<PanelType>("favorites");
@@ -149,16 +149,16 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
   };
 
   const handleRemoveStock = async (symbol: string) => {
-    if (confirm(t("sidebar.confirmDeleteStock", { symbol }))) {
-      try {
-        await invoke("remove_stock", { symbol });
-        refreshAll();
-        if (onStockRemove) {
-          onStockRemove(symbol);
-        }
-      } catch (err) {
-        console.error("Error removing stock:", err);
+    const ok = await showConfirm(t("sidebar.confirmDeleteStock", { symbol }));
+    if (!ok) return;
+    try {
+      await invoke("remove_stock", { symbol });
+      refreshAll();
+      if (onStockRemove) {
+        onStockRemove(symbol);
       }
+    } catch (err) {
+      console.error("Error removing stock:", err);
     }
   };
 
@@ -179,13 +179,13 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
       showAlert(t("sidebar.cannotDeleteUngrouped"));
       return;
     }
-    if (confirm(t("sidebar.confirmDeleteGroup", { name: groupName }))) {
-      try {
-        await invoke("delete_stock_group", { name: groupName });
-        loadGroups();
-      } catch (err) {
-        showAlert(err instanceof Error ? err.message : String(err));
-      }
+    const ok = await showConfirm(t("sidebar.confirmDeleteGroup", { name: groupName }));
+    if (!ok) return;
+    try {
+      await invoke("delete_stock_group", { name: groupName });
+      loadGroups();
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -199,7 +199,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
       loadGroups();
       setEditingGroup(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : String(err));
+      showAlert(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -218,7 +218,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
       loadGroups();
       loadAllStocks();
     } catch (err) {
-      alert(err instanceof Error ? err.message : String(err));
+      showAlert(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -230,7 +230,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
       setNewTagName("");
       setNewTagColor(DEFAULT_TAG_COLORS[Math.floor(Math.random() * DEFAULT_TAG_COLORS.length)]);
     } catch (err) {
-      alert(err instanceof Error ? err.message : String(err));
+      showAlert(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -244,22 +244,22 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
       }
       setEditingTag(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : String(err));
+      showAlert(err instanceof Error ? err.message : String(err));
     }
   };
 
   const handleDeleteTag = async (tagId: number) => {
-    if (confirm(t("sidebar.confirmDeleteTag"))) {
-      try {
-        await invoke("delete_tag", { tagId });
-        loadTags();
-        loadAllStocks();
-        if (selectedTag?.id === tagId) {
-          setSelectedTag(null);
-        }
-      } catch (err) {
-        showAlert(err instanceof Error ? err.message : String(err));
+    const ok = await showConfirm(t("sidebar.confirmDeleteTag"));
+    if (!ok) return;
+    try {
+      await invoke("delete_tag", { tagId });
+      loadTags();
+      loadAllStocks();
+      if (selectedTag?.id === tagId) {
+        setSelectedTag(null);
       }
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : String(err));
     }
   };
 

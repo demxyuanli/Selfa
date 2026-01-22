@@ -96,39 +96,60 @@ pub async fn get_stock_history(
     if let Some(cached_data) = cache.get_history(&symbol, &period).await {
         return Ok(cached_data);
     }
-    
-    let latest_date = db.get_latest_kline_date(&symbol, &period)
+
+    let latest_date = db
+        .get_latest_kline_date(&symbol, &period)
         .map_err(|e| format!("Database error: {}", e))?;
-    
-    let cached = db.get_kline(&symbol, &period, None)
+
+    let cached = db
+        .get_kline(&symbol, &period, None)
         .map_err(|e| format!("Database error: {}", e))?;
-    
+
+    let skip_network = !cached.is_empty()
+        && !cache
+            .should_fetch_from_network(&symbol, &period, 600)
+            .await;
+
+    if skip_network {
+        cache
+            .set_history(symbol.clone(), period.clone(), cached.clone())
+            .await;
+        return Ok(cached);
+    }
+
     let fetched = fetch_stock_history(&symbol, &period).await?;
-    
+    cache.record_fetch_time(&symbol, &period).await;
+
     let result = if let Some(ref latest) = latest_date {
         let new_data: Vec<StockData> = fetched
             .into_iter()
             .filter(|d| d.date > *latest)
             .collect();
-        
+
         if !new_data.is_empty() {
             let mut data = cached;
             data.extend(new_data);
             data.sort_by(|a, b| a.date.cmp(&b.date));
             let final_data = data.clone();
-            cache.set_history(symbol.clone(), period.clone(), final_data).await;
+            cache
+                .set_history(symbol.clone(), period.clone(), final_data)
+                .await;
             data
         } else {
             if !cached.is_empty() {
-                cache.set_history(symbol.clone(), period.clone(), cached.clone()).await;
+                cache
+                    .set_history(symbol.clone(), period.clone(), cached.clone())
+                    .await;
             }
             cached
         }
     } else {
-        cache.set_history(symbol.clone(), period.clone(), fetched.clone()).await;
+        cache
+            .set_history(symbol.clone(), period.clone(), fetched.clone())
+            .await;
         fetched
     };
-    
+
     Ok(result)
 }
 

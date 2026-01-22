@@ -86,15 +86,22 @@ const KLineChipAnalysis: React.FC<KLineChipAnalysisProps> = ({ klineData, symbol
       chipData,
       indicatorParams,
       selectedDateIndex,
+      chipCalculationData,
       t,
     });
-  }, [klineData, overlayIndicator, oscillatorType, showSignals, chipData, indicatorParams, selectedDateIndex, t]);
+  }, [klineData, overlayIndicator, oscillatorType, showSignals, chipData, indicatorParams, selectedDateIndex, chipCalculationData, t]);
 
   // Handle mouse move on chart to update chip distribution
   const handleChartEvents = {
     mousemove: (params: any) => {
-      // Handle mouse move on K-line series or when tooltip shows
-      if (params.componentType === "series") {
+      // Handle mouse move on any component (series, xAxis, etc.)
+      if (params.dataIndex !== null && params.dataIndex !== undefined && params.dataIndex >= 0 && params.dataIndex < klineData.length) {
+        setSelectedDateIndex(params.dataIndex);
+      }
+    },
+    // Listen to tooltip update events for better responsiveness
+    updateAxisPointer: (params: any) => {
+      if (params && params.currTrigger !== "none") {
         const dataIndex = params.dataIndex;
         if (dataIndex !== null && dataIndex !== undefined && dataIndex >= 0 && dataIndex < klineData.length) {
           setSelectedDateIndex(dataIndex);

@@ -281,10 +281,16 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
         splitLine: {
           show: false,
         },
+        axisPointer: {
+          snap: true,
+        },
       },
       yAxis: {
         type: "value",
         scale: true,
+        axisPointer: {
+          snap: true,
+        },
         axisLabel: {
           color: "#858585",
           fontSize: 9,
@@ -328,6 +334,10 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
       }),
       tooltip: {
         trigger: "axis",
+        axisPointer: {
+          type: "cross",
+          snap: true,
+        },
         backgroundColor: "rgba(37, 37, 38, 0.95)",
         borderColor: "#555",
         borderWidth: 1,

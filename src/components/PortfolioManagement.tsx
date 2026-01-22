@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import ChartDialog from "./ChartDialog";
@@ -17,7 +17,7 @@ import "./PortfolioManagement.css";
 
 const PortfolioManagement: React.FC = () => {
   const { t } = useTranslation();
-  const { positions, transactions, loadPortfolio, refreshPrices } = usePortfolio();
+  const { positions, transactions, loadPortfolio, refreshPrices, quickRefresh } = usePortfolio();
   const [selectedTransactionSymbol, setSelectedTransactionSymbol] = useState<string | null>(null);
   const [showAddTransactionDialog, setShowAddTransactionDialog] = useState(false);
   const [showAddTransferDialog, setShowAddTransferDialog] = useState(false);
@@ -25,7 +25,7 @@ const PortfolioManagement: React.FC = () => {
   const [capitalTransfers, setCapitalTransfers] = useState<CapitalTransfer[]>([]);
   const [initialBalance, setInitialBalance] = useState<number | null>(null);
 
-  const loadCapitalTransfers = React.useCallback(async () => {
+  const loadCapitalTransfers = useCallback(async () => {
     try {
       const transfers = await invoke<Array<[number, string, number, string, string | null]>>("get_capital_transfers");
       const formattedTransfers: CapitalTransfer[] = transfers.map(([id, transferType, amount, transferDate, notes]) => ({
@@ -41,7 +41,7 @@ const PortfolioManagement: React.FC = () => {
     }
   }, []);
 
-  const loadInitialBalance = React.useCallback(async () => {
+  const loadInitialBalance = useCallback(async () => {
     try {
       const balance = await invoke<number | null>("get_initial_balance");
       setInitialBalance(balance);
@@ -104,7 +104,7 @@ const PortfolioManagement: React.FC = () => {
         <PortfolioChart positions={positions} onZoom={() => setIsChartDialogOpen(true)} />
       </div>
 
-      <AddTransactionDialog isOpen={showAddTransactionDialog} onClose={() => setShowAddTransactionDialog(false)} onAdd={loadPortfolio} />
+      <AddTransactionDialog isOpen={showAddTransactionDialog} onClose={() => setShowAddTransactionDialog(false)} onAdd={quickRefresh} />
       <AddTransferDialog isOpen={showAddTransferDialog} onClose={() => setShowAddTransferDialog(false)} onAdd={loadCapitalTransfers} />
 
       <ChartDialog

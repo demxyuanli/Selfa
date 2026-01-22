@@ -441,6 +441,10 @@ const BacktestAnalysis: React.FC<BacktestAnalysisProps> = ({ klineData }) => {
     return {
       tooltip: {
         trigger: "axis",
+        axisPointer: {
+          type: "cross",
+          snap: true,
+        },
         backgroundColor: "rgba(37, 37, 38, 0.95)",
         borderColor: "#555",
         textStyle: { color: "#ccc" },
@@ -460,17 +464,22 @@ const BacktestAnalysis: React.FC<BacktestAnalysisProps> = ({ klineData }) => {
         type: "category",
         data: dates,
         axisLabel: { color: "#858585", fontSize: 9 },
+        axisPointer: {
+          snap: true,
+        },
       },
       yAxis: [
         {
           type: "value",
           name: t("analysis.price"),
+          axisPointer: { snap: true },
           axisLabel: { color: "#858585", fontSize: 9 },
           splitLine: { lineStyle: { color: "rgba(133, 133, 133, 0.15)" } },
         },
         {
           type: "value",
           name: t("analysis.equity"),
+          axisPointer: { snap: true },
           axisLabel: { color: "#858585", fontSize: 9 },
           splitLine: { show: false },
         },

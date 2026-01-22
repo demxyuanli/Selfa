@@ -36,7 +36,7 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
   onAlertChanged,
 }) => {
   const { t } = useTranslation();
-  const { showAlert } = useAlert();
+  const { showAlert, showConfirm } = useAlert();
   const [alerts, setAlerts] = useState<PriceAlertInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingAlert, setEditingAlert] = useState<PriceAlertInfo | null>(null);
@@ -217,9 +217,8 @@ const PriceAlertDialog: React.FC<PriceAlertDialogProps> = ({
   };
 
   const handleDeleteAlert = async (alertId: number) => {
-    if (!confirm(t("priceAlert.confirmDelete"))) {
-      return;
-    }
+    const ok = await showConfirm(t("priceAlert.confirmDelete"));
+    if (!ok) return;
 
     try {
       await invoke("delete_price_alert", { alertId });

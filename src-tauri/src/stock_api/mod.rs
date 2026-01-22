@@ -3,13 +3,19 @@ pub mod utils;
 pub mod data;
 pub mod technical_indicators;
 pub mod prediction;
+pub mod prediction_advanced;
+pub mod prediction_arima;
 pub mod ai_analysis;
+pub mod ai_analysis_json;
+pub mod ai_analysis_local;
 
-// Re-export commonly used types
 pub use types::*;
-
-// Re-export public functions
+pub use utils::*;
 pub use data::*;
 pub use technical_indicators::*;
 pub use prediction::*;
+pub use prediction_advanced::*;
+pub use prediction_arima::*;
 pub use ai_analysis::*;
+pub use ai_analysis_json::*;
+pub use ai_analysis_local::*;

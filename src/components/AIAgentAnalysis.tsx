@@ -227,10 +227,16 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
         splitLine: {
           show: false,
         },
+        axisPointer: {
+          snap: true,
+        },
       },
       yAxis: {
         type: "value",
         scale: true,
+        axisPointer: {
+          snap: true,
+        },
         axisLabel: {
           color: "#858585",
           fontSize: 9,
@@ -326,6 +332,10 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
       ],
       tooltip: {
         trigger: "axis",
+        axisPointer: {
+          type: "cross",
+          snap: true,
+        },
         backgroundColor: "rgba(37, 37, 38, 0.95)",
         borderColor: "#555",
         borderWidth: 1,

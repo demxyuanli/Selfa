@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
 import "./KLineChart.css";
@@ -33,6 +33,7 @@ const calculateMA = (data: StockData[], period: number): number[] => {
 
 const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
   const { t } = useTranslation();
+  const chartRef = useRef<any>(null);
   const option = useMemo(() => {
     if (!data || data.length === 0) {
       return {};
@@ -60,6 +61,13 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
 
     return {
       backgroundColor: "#1e1e1e",
+      axisPointer: {
+        link: [{ xAxisIndex: [0, 1] }],
+        snap: true,
+        label: {
+          backgroundColor: "#777",
+        },
+      },
       grid: [
         {
           left: "5%",
@@ -93,6 +101,9 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
               color: "#3e3e42",
             },
           },
+          axisPointer: {
+            snap: true,
+          },
         },
         {
           type: "category",
@@ -106,11 +117,17 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
           axisLabel: { show: false },
           min: "dataMin",
           max: "dataMax",
+          axisPointer: {
+            snap: true,
+          },
         },
       ],
       yAxis: [
         {
           scale: true,
+          axisPointer: {
+            snap: true,
+          },
           splitArea: {
             show: true,
             areaStyle: {
@@ -144,6 +161,9 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
           scale: true,
           gridIndex: 1,
           splitNumber: 2,
+          axisPointer: {
+            snap: true,
+          },
           axisLabel: { show: false },
           axisLine: { show: false },
           axisTick: { show: false },
@@ -300,6 +320,8 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
         trigger: "axis",
         axisPointer: {
           type: "cross",
+          snap: true,
+          link: [{ xAxisIndex: [0, 1] }],
         },
         backgroundColor: "rgba(37, 37, 38, 0.95)",
         borderColor: "#3e3e42",
@@ -354,9 +376,35 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
   return (
     <div className="kline-chart">
       <ReactECharts
+        ref={chartRef}
         option={option}
         style={{ height: "100%", width: "100%" }}
         opts={{ renderer: "canvas" }}
+        onEvents={{
+          mousemove: (params: any) => {
+            if (chartRef.current && data.length > 0 && params.offsetX !== undefined) {
+              const echartsInstance = chartRef.current.getEchartsInstance();
+              if (echartsInstance) {
+                try {
+                  const coord = echartsInstance.convertFromPixel({ xAxisIndex: 0 }, [params.offsetX, params.offsetY]);
+                  if (coord && coord[0] !== undefined) {
+                    const nearestIndex = Math.round(coord[0]);
+                    if (nearestIndex >= 0 && nearestIndex < data.length) {
+                      echartsInstance.dispatchAction({
+                        type: "showTip",
+                        x: params.offsetX,
+                        y: params.offsetY,
+                        dataIndex: nearestIndex,
+                      });
+                    }
+                  }
+                } catch (e) {
+                  // Fallback to default behavior if conversion fails
+                }
+              }
+            }
+          },
+        }}
       />
     </div>
   );

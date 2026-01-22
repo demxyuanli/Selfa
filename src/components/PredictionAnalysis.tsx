@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import * as echarts from "echarts";
 import ChartDialog from "./ChartDialog";
-import { getIconSvg } from "./IconUtils";
+import { getIconText } from "./IconUtils";
 import "./StockAnalysis.css";
 import "./PredictionAnalysis.css";
 
@@ -332,10 +332,16 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
         splitLine: {
           show: false,
         },
+        axisPointer: {
+          snap: true,
+        },
       },
       yAxis: {
         type: "value",
         scale: true,
+        axisPointer: {
+          snap: true,
+        },
         axisLabel: {
           color: "#858585",
           fontSize: 9,
@@ -450,7 +456,7 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
           markPoint: {
             data: predictions.map((pred, idx) => {
               const signalIconName = pred.signal === "buy" ? "buy" : pred.signal === "sell" ? "sell" : "neutral";
-              const signalIconSvg = getIconSvg(signalIconName, 10);
+              const signalIconText = getIconText(signalIconName);
               return {
                 name: t("analysis.predictedPrice"),
                 coord: [dates.length + idx, pred.predicted_price],
@@ -465,7 +471,7 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
                 label: {
                   show: idx === 0 || idx === predictions.length - 1,
                   position: idx === 0 ? "top" : "bottom",
-                  formatter: `${signalIconSvg} ${pred.date}\n¥${pred.predicted_price.toFixed(2)}`,
+                  formatter: `${signalIconText} ${pred.date}\n¥${pred.predicted_price.toFixed(2)}`,
                   fontSize: 9,
                   color: pred.signal === "buy" ? "#00ff00" : pred.signal === "sell" ? "#ff0000" : "#ff9800",
                   fontWeight: "bold",
@@ -508,6 +514,10 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
       ],
       tooltip: {
         trigger: "axis",
+        axisPointer: {
+          type: "cross",
+          snap: true,
+        },
         backgroundColor: "rgba(255, 255, 255, 0.98)",
         borderColor: "#ddd",
         borderWidth: 1,
@@ -530,11 +540,11 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
                           p.seriesName === t("analysis.prediction") ? "prediction" :
                           p.seriesName === t("analysis.upperBound") ? "arrowUp" :
                           p.seriesName === t("analysis.lowerBound") ? "arrowDown" : "chart";
-              const iconSvg = getIconSvg(iconName, 12, p.color);
+              const iconText = getIconText(iconName);
 
               result += `<div style="margin: 4px 0; padding: 2px 0;">
                 <span style="display:inline-block;width:10px;height:10px;background:${p.color};border-radius:50%;margin-right:6px;border: 1px solid #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.1);"></span>
-                ${iconSvg} ${p.seriesName}: <strong style="color: ${p.color}">${value}</strong>
+                <span style="font-size: 14px; margin-right: 4px;">${iconText}</span> ${p.seriesName}: <strong style="color: ${p.color}">${value}</strong>
               </div>`;
             }
           });
@@ -542,11 +552,11 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
           if (idx >= dates.length && predictions[idx - dates.length]) {
             const pred = predictions[idx - dates.length];
             const signalIconName = pred.signal === "buy" ? "buy" : pred.signal === "sell" ? "sell" : "neutral";
-            const signalIconSvg = getIconSvg(signalIconName, 14);
+            const signalIconText = getIconText(signalIconName);
             const signalText = pred.signal === "buy" ? t("analysis.bullish") : pred.signal === "sell" ? t("analysis.bearish") : t("analysis.neutral");
 
             result += `<div style="margin-top: 8px;padding-top: 8px;border-top: 2px solid #eee;">
-              <div style="margin: 4px 0;"><strong>${signalIconSvg} ${t("analysis.signal")}: ${signalText}</strong></div>
+              <div style="margin: 4px 0;"><strong><span style="font-size: 16px; margin-right: 4px;">${signalIconText}</span>${t("analysis.signal")}: ${signalText}</strong></div>
               <div style="margin: 4px 0;">${t("analysis.confidence")}: <strong style="color: ${pred.confidence > 70 ? '#00ff00' : pred.confidence > 50 ? '#ff9800' : '#ff0000'}">${pred.confidence.toFixed(1)}%</strong></div>
               <div style="margin: 4px 0;">${t("analysis.priceRange")}: ¥${pred.lower_bound.toFixed(2)} - ¥${pred.upper_bound.toFixed(2)}</div>
               <div style="margin: 4px 0; font-size: 11px; color: #666;">${t("analysis.method")}: ${pred.method}</div>
@@ -555,14 +565,6 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
 
           return result;
         },
-      axisPointer: {
-        type: "line",
-        lineStyle: {
-          color: "#666",
-          width: 1,
-          type: "solid",
-        },
-      },
       },
       legend: {
         data: [
