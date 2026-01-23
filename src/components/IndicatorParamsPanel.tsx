@@ -24,9 +24,9 @@ const IndicatorParamsPanel: React.FC<IndicatorParamsPanelProps> = ({
   const { t } = useTranslation();
 
   return (
-    <div className="analysis-column params-column">
-      <div className="column-header">{t("analysis.params")}</div>
-      <div className="params-content">
+    <div className="analysis-panel indicator-params-panel">
+      <div className="panel-header">{t("analysis.params")}</div>
+      <div className="panel-content">
         <div className="param-section">
           <label className="param-section-label">{t("analysis.overlayIndicator")}</label>
           <div className="param-inputs">

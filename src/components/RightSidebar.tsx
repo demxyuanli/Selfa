@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import TimeSeriesChart from "./TimeSeriesChart";
 import KLineChart from "./KLineChart";
 import Icon from "./Icon";
+import { useTradingHoursTimeseriesRefresh } from "../hooks/useTradingHoursTimeseriesRefresh";
 import "./RightSidebar.css";
 
 interface StockData {
@@ -23,6 +24,10 @@ interface RightSidebarProps {
   onToggle: () => void;
 }
 
+interface StockQuote {
+  previous_close: number;
+}
+
 const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
   const { t } = useTranslation();
   const [activePanel, setActivePanel] = useState<RightPanel>("timeSeries");
@@ -30,75 +35,50 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
   const [shTimeSeries, setShTimeSeries] = useState<StockData[]>([]);
   const [szTimeSeries, setSzTimeSeries] = useState<StockData[]>([]);
   const [cyTimeSeries, setCyTimeSeries] = useState<StockData[]>([]);
+  const [shQuote, setShQuote] = useState<StockQuote | null>(null);
+  const [szQuote, setSzQuote] = useState<StockQuote | null>(null);
+  const [cyQuote, setCyQuote] = useState<StockQuote | null>(null);
   const [shKLine, setShKLine] = useState<StockData[]>([]);
   const [szKLine, setSzKLine] = useState<StockData[]>([]);
   const [cyKLine, setCyKLine] = useState<StockData[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!visible || activePanel !== "timeSeries") {
-      return;
+  const fetchTimeSeriesData = useCallback(async () => {
+    try {
+      const [shTS, szTS, cyTS, shQ, szQ, cyQ] = await Promise.all([
+        invoke("get_time_series", { symbol: "000001" }),
+        invoke("get_time_series", { symbol: "399001" }),
+        invoke("get_time_series", { symbol: "399006" }),
+        invoke("get_stock_quote", { symbol: "000001" }),
+        invoke("get_stock_quote", { symbol: "399001" }),
+        invoke("get_stock_quote", { symbol: "399006" }),
+      ]);
+      const newShData = shTS as StockData[];
+      const newSzData = szTS as StockData[];
+      const newCyData = cyTS as StockData[];
+      
+      setShTimeSeries((prev) => (JSON.stringify(newShData) !== JSON.stringify(prev) ? newShData : prev));
+      setSzTimeSeries((prev) => (JSON.stringify(newSzData) !== JSON.stringify(prev) ? newSzData : prev));
+      setCyTimeSeries((prev) => (JSON.stringify(newCyData) !== JSON.stringify(prev) ? newCyData : prev));
+      
+      setShQuote(shQ as StockQuote);
+      setSzQuote(szQ as StockQuote);
+      setCyQuote(cyQ as StockQuote);
+    } catch (err) {
+      console.error("Error fetching time series data:", err);
     }
-    
-    let isInitialLoad = true;
-    
-    const fetchTimeSeriesData = async () => {
-      try {
-        const [shTS, szTS, cyTS] = await Promise.all([
-          invoke("get_time_series", { symbol: "000001" }),
-          invoke("get_time_series", { symbol: "399001" }),
-          invoke("get_time_series", { symbol: "399006" }),
-        ]);
-        
-        const newShData = shTS as StockData[];
-        const newSzData = szTS as StockData[];
-        const newCyData = cyTS as StockData[];
-        
-        // Use functional updates to access current state
-        setShTimeSeries((prev) => {
-          if (isInitialLoad || JSON.stringify(newShData) !== JSON.stringify(prev)) {
-            return newShData;
-          }
-          return prev;
-        });
-        setSzTimeSeries((prev) => {
-          if (isInitialLoad || JSON.stringify(newSzData) !== JSON.stringify(prev)) {
-            return newSzData;
-          }
-          return prev;
-        });
-        setCyTimeSeries((prev) => {
-          if (isInitialLoad || JSON.stringify(newCyData) !== JSON.stringify(prev)) {
-            return newCyData;
-          }
-          return prev;
-        });
-        
-        if (isInitialLoad) {
-          setLoading(false);
-          isInitialLoad = false;
-        }
-      } catch (err) {
-        console.error("Error fetching time series data:", err);
-        if (isInitialLoad) {
-          setLoading(false);
-          isInitialLoad = false;
-        }
-        // Don't clear existing data on error, keep showing cached data
-      }
-    };
+  }, []);
 
-    // Initial load
+  useEffect(() => {
+    if (!visible || activePanel !== "timeSeries") return;
     setLoading(true);
-    fetchTimeSeriesData();
-    
-    // Set up interval for periodic updates
-    const interval = setInterval(() => {
-      fetchTimeSeriesData();
-    }, 60000);
-    
-    return () => clearInterval(interval);
-  }, [visible, activePanel]);
+    fetchTimeSeriesData().finally(() => setLoading(false));
+  }, [visible, activePanel, fetchTimeSeriesData]);
+
+  useTradingHoursTimeseriesRefresh(fetchTimeSeriesData, {
+    enabled: visible && activePanel === "timeSeries",
+    intervalInMs: 15000,
+  });
 
   useEffect(() => {
     if (!visible || activePanel !== "dailyK") {
@@ -150,7 +130,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
                   {loading ? (
                     <div className="index-loading">Loading...</div>
                   ) : (
-                    <TimeSeriesChart key="sh" data={shTimeSeries} compact={true} />
+                    <TimeSeriesChart key="sh" data={shTimeSeries} quote={shQuote} compact={true} />
                   )}
                 </div>
                 <div className="index-chart-item">
@@ -158,7 +138,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
                   {loading ? (
                     <div className="index-loading">Loading...</div>
                   ) : (
-                    <TimeSeriesChart key="sz" data={szTimeSeries} compact={true} />
+                    <TimeSeriesChart key="sz" data={szTimeSeries} quote={szQuote} compact={true} />
                   )}
                 </div>
                 <div className="index-chart-item">
@@ -166,7 +146,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
                   {loading ? (
                     <div className="index-loading">Loading...</div>
                   ) : (
-                    <TimeSeriesChart key="cy" data={cyTimeSeries} compact={true} />
+                    <TimeSeriesChart key="cy" data={cyTimeSeries} quote={cyQuote} compact={true} />
                   )}
                 </div>
               </div>

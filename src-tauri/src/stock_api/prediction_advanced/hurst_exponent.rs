@@ -1,4 +1,6 @@
-use crate::stock_api::types::{StockData, PredictionResult};
+#![allow(dead_code)]
+
+use crate::stock_api::types::PredictionResult;
 use crate::stock_api::utils::{parse_date, add_days, calculate_variance, determine_signal};
 
 pub fn calculate_hurst_exponent(data: &[f64]) -> f64 {

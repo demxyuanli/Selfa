@@ -12,9 +12,13 @@ interface StockData {
   volume: number;
 }
 
+interface StockQuote {
+  previous_close: number;
+}
+
 interface TimeSeriesChartProps {
   data: StockData[];
-  quote?: any;
+  quote?: StockQuote | null;
   compact?: boolean; // For sidebar charts
 }
 
@@ -40,9 +44,9 @@ const generateFullTradingTimes = (): string[] => {
   return times;
 };
 
-const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false }) => {
+const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, quote, compact = false }) => {
   const { t } = useTranslation();
-  const [crosshairData, setCrosshairData] = useState<{ time: string; price: number; volume: number } | null>(null);
+  const [crosshairData, setCrosshairData] = useState<{ time: string; price: number; volume: number; percent: number } | null>(null);
   const fullTradingTimes = useMemo(() => generateFullTradingTimes(), []);
 
   const option = useMemo(() => {
@@ -50,7 +54,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
       return {};
     }
     
-    // Create a map of actual data by time
+    const previousClose = quote?.previous_close;
     const dataMap = new Map<string, { price: number; volume: number }>();
     data.forEach((d) => {
       const dateStr = d.date;
@@ -120,6 +124,15 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
     const yAxisMax = maxPrice;
     
     const avgPrice = validPrices.length > 0 ? validPrices.reduce((a, b) => a + b, 0) / validPrices.length : 0;
+
+    // Calculate percentage range if previous close is available
+    let percentMin: number | undefined;
+    let percentMax: number | undefined;
+    
+    if (previousClose) {
+      percentMin = ((yAxisMin - previousClose) / previousClose) * 100;
+      percentMax = ((yAxisMax - previousClose) / previousClose) * 100;
+    }
 
     const volumeColors = prices.map((price, index) => {
       if (price === null) {
@@ -378,6 +391,26 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
             },
           },
         },
+        {
+          type: "value",
+          scale: true,
+          min: percentMin,
+          max: percentMax,
+          position: "right",
+          axisLine: {
+            show: false,
+          },
+          axisLabel: {
+            color: "#858585",
+            fontSize: compact ? 7 : 9,
+            formatter: (value: number) => {
+              return value.toFixed(2) + "%";
+            },
+          },
+          splitLine: {
+            show: false,
+          },
+        },
       ],
       dataZoom: [
         {
@@ -426,10 +459,20 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
             `;
           }
 
+          let percentChangeStr = "";
+          if (previousClose && price !== undefined && price !== null) {
+            const change = price - previousClose;
+            const percent = (change / previousClose) * 100;
+            const color = change > 0 ? "#ff0000" : change < 0 ? "#00ff00" : "#cccccc";
+            const sign = change > 0 ? "+" : "";
+            percentChangeStr = `<div>${t("chart.change")}: <span style="color: ${color};">${sign}${percent.toFixed(2)}%</span></div>`;
+          }
+
           return `
             <div style="padding: 4px 0;">
               <div><strong>${time}</strong></div>
               <div>${t("chart.price")}: <span style="color: #cccccc;">${price.toFixed(2)}</span></div>
+              ${percentChangeStr}
               <div>${t("chart.avgPrice")}: <span style="color: #858585;">${avgPrice.toFixed(2)}</span></div>
               <div>${t("chart.volume")}: <span style="color: #cccccc;">${(volume / 10000).toFixed(2)}${t("common.tenThousand")}</span></div>
             </div>
@@ -503,7 +546,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
         },
       ],
     };
-  }, [data, fullTradingTimes, t]);
+  }, [data, fullTradingTimes, t, quote]);
 
   if (!data || data.length === 0) {
     return (
@@ -513,12 +556,23 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
     );
   }
 
+  const previousClose = quote?.previous_close;
+
   return (
     <div className="time-series-chart">
       {crosshairData && (
         <div className="crosshair-info">
           <div>{t("chart.time")}: {crosshairData.time}</div>
           <div>{t("chart.price")}: {crosshairData.price.toFixed(2)}</div>
+          {previousClose && (
+            <div>
+              {t("chart.change")}: 
+              <span style={{ color: crosshairData.price > previousClose ? "#ff0000" : crosshairData.price < previousClose ? "#00ff00" : "#cccccc" }}>
+                {crosshairData.price > previousClose ? "+" : ""}
+                {((crosshairData.price - previousClose) / previousClose * 100).toFixed(2)}%
+              </span>
+            </div>
+          )}
           <div>{t("chart.volume")}: {(crosshairData.volume / 10000).toFixed(2)}{t("common.tenThousand")}</div>
         </div>
       )}
@@ -546,6 +600,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, compact = false
                   time: time,
                   price: dataPoint.close,
                   volume: dataPoint.volume,
+                  percent: previousClose ? (dataPoint.close - previousClose) / previousClose * 100 : 0,
                 });
               } else {
                 setCrosshairData(null);
@@ -576,6 +631,10 @@ export default memo(TimeSeriesChart, (prevProps, nextProps) => {
   }
   // Also check compact prop
   if (prevProps.compact !== nextProps.compact) {
+    return false;
+  }
+  // Check quote
+  if (prevProps.quote?.previous_close !== nextProps.quote?.previous_close) {
     return false;
   }
   return true; // Props are equal, skip re-render

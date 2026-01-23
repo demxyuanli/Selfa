@@ -5,6 +5,40 @@ use chrono::Local;
 use std::sync::Arc;
 use tauri::State;
 
+fn get_latest_day_data(data: &[StockData]) -> Vec<StockData> {
+    if data.is_empty() {
+        return vec![];
+    }
+    
+    let mut sorted = data.to_vec();
+    sorted.sort_by(|a, b| b.date.cmp(&a.date));
+    
+    if let Some(first_item) = sorted.first() {
+        let last_date = if first_item.date.contains(" ") {
+            first_item.date.split(" ").next().unwrap_or("").to_string()
+        } else {
+            first_item.date.chars().take(10).collect()
+        };
+        
+        // Reverse back to chronological order for the chart
+        let mut daily_data: Vec<StockData> = sorted.into_iter()
+            .filter(|d| {
+                let d_date = if d.date.contains(" ") {
+                    d.date.split(" ").next().unwrap_or("")
+                } else {
+                    &d.date[..d.date.len().min(10)]
+                };
+                d_date == last_date
+            })
+            .collect();
+            
+        daily_data.sort_by(|a, b| a.date.cmp(&b.date));
+        daily_data
+    } else {
+        vec![]
+    }
+}
+
 #[tauri::command]
 pub async fn get_stock_quote(
     symbol: String,
@@ -302,27 +336,8 @@ pub async fn get_intraday_time_series(
             .unwrap_or_else(|| db.get_kline(&symbol, "5m", None).unwrap_or_default());
         
         if !cached_all.is_empty() {
-            let mut sorted = cached_all;
-            sorted.sort_by(|a, b| b.date.cmp(&a.date));
-            
-            if let Some(first_item) = sorted.first() {
-                let last_date = if first_item.date.contains(" ") {
-                    first_item.date.split(" ").next().unwrap_or("").to_string()
-                } else {
-                    first_item.date.chars().take(10).collect()
-                };
-                
-                let final_data: Vec<StockData> = sorted.into_iter()
-                    .filter(|d| {
-                        let d_date = if d.date.contains(" ") {
-                            d.date.split(" ").next().unwrap_or("")
-                        } else {
-                            &d.date[..d.date.len().min(10)]
-                        };
-                        d_date == last_date
-                    })
-                    .collect();
-                
+            let final_data = get_latest_day_data(&cached_all);
+            if !final_data.is_empty() {
                 return Ok(final_data);
             }
         }
@@ -367,46 +382,16 @@ pub async fn get_stock_data_bundle(
     };
 
     let today = Local::now().format("%Y-%m-%d").to_string();
-    let intraday = match cache.get_history(&symbol, "5m").await {
-        Some(data) => {
-            let today_data: Vec<StockData> = data.iter()
-                .filter(|d| d.date.starts_with(&today))
-                .cloned()
-                .collect();
-            if !today_data.is_empty() {
-                today_data
-            } else {
-                vec![]
-            }
-        }
-        None => {
-            let cached = db.get_kline(&symbol, "5m", None).unwrap_or_default();
-            let today_data: Vec<StockData> = cached.iter()
-                .filter(|d| d.date.starts_with(&today))
-                .cloned()
-                .collect();
-            
-            if today_data.is_empty() && is_trading_hours() {
-                if cache.should_fetch_from_network(&symbol, "5m", 30).await {
-                    if let Ok(fetched) = fetch_stock_history(&symbol, "5m").await {
-                        cache.record_fetch_time(&symbol, "5m").await;
-                        let today_fetched: Vec<StockData> = fetched.iter()
-                            .filter(|d| d.date.starts_with(&today))
-                            .cloned()
-                            .collect();
-                        if !today_fetched.is_empty() {
-                            cache.set_history(symbol.clone(), "5m".to_string(), fetched).await;
-                            return Ok(StockDataBundle {
-                                symbol,
-                                quote,
-                                time_series,
-                                intraday: today_fetched,
-                            });
-                        }
-                    }
-                }
-            }
+    let intraday = {
+        let today_data: Vec<StockData> = time_series.iter()
+            .filter(|d| d.date.starts_with(&today))
+            .cloned()
+            .collect();
+        
+        if !today_data.is_empty() {
             today_data
+        } else {
+            get_latest_day_data(&time_series)
         }
     };
 
@@ -460,48 +445,16 @@ pub async fn get_batch_stock_data_bundle(
             }
         };
         
-        let intraday = match cache.get_history(&symbol, "5m").await {
-            Some(data) => {
-                let today_data: Vec<StockData> = data.iter()
-                    .filter(|d| d.date.starts_with(&today))
-                    .cloned()
-                    .collect();
-                if !today_data.is_empty() {
-                    today_data
-                } else {
-                    vec![]
-                }
-            }
-            None => {
-                let cached = db.get_kline(&symbol, "5m", None).unwrap_or_default();
-                let today_data: Vec<StockData> = cached.iter()
-                    .filter(|d| d.date.starts_with(&today))
-                    .cloned()
-                    .collect();
-                
-                if today_data.is_empty() && is_trading_hours() {
-                    if cache.should_fetch_from_network(&symbol, "5m", 30).await {
-                        if let Ok(fetched) = fetch_stock_history(&symbol, "5m").await {
-                            cache.record_fetch_time(&symbol, "5m").await;
-                            let today_fetched: Vec<StockData> = fetched.iter()
-                                .filter(|d| d.date.starts_with(&today))
-                                .cloned()
-                                .collect();
-                            if !today_fetched.is_empty() {
-                                cache.set_history(symbol.clone(), "5m".to_string(), fetched).await;
-                                result.insert(symbol.clone(), StockDataBundle {
-                                    symbol: symbol.clone(),
-                                    quote,
-                                    time_series,
-                                    intraday: today_fetched,
-                                });
-                                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                                continue;
-                            }
-                        }
-                    }
-                }
+        let intraday = {
+            let today_data: Vec<StockData> = time_series.iter()
+                .filter(|d| d.date.starts_with(&today))
+                .cloned()
+                .collect();
+            
+            if !today_data.is_empty() {
                 today_data
+            } else {
+                get_latest_day_data(&time_series)
             }
         };
         

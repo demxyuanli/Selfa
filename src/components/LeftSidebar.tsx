@@ -7,6 +7,7 @@ import "./LeftSidebar.css";
 import { PanelType, StockInfo, StockWithTags, TagInfo, DEFAULT_TAG_COLORS, LeftSidebarProps } from "./LeftSidebar/types";
 import { useSidebarData } from "./LeftSidebar/hooks/useSidebarData";
 import { useDragReorder } from "./LeftSidebar/hooks/useDragReorder";
+import { useTradingHoursTimeseriesRefresh } from "../hooks/useTradingHoursTimeseriesRefresh";
 import SearchPanel from "./LeftSidebar/components/SearchPanel";
 import FavoritesPanel from "./LeftSidebar/components/FavoritesPanel";
 import GroupsPanel from "./LeftSidebar/components/GroupsPanel";
@@ -53,6 +54,11 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
     loadStocksByTag,
     refreshAll,
   } = useSidebarData(UNGROUPED_GROUP);
+
+  useTradingHoursTimeseriesRefresh(refreshAll, {
+    enabled: visible,
+    intervalInMs: 15000,
+  });
 
   const {
     draggedIndex,

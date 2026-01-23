@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { useAlert } from "../contexts/AlertContext";
 import { stockDataManager } from "../services/StockDataManager";
+import { useTradingHoursTimeseriesRefresh } from "../hooks/useTradingHoursTimeseriesRefresh";
 import Icon from "./Icon";
 import AddTransactionDialog from "./PortfolioManagement/dialogs/AddTransactionDialog";
 import PriceAlertDialog from "./PriceAlertDialog";
@@ -112,23 +113,40 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
     try {
       // Use stockDataManager to get intraday data
       const bundles = await stockDataManager.getBatchStockData(symbols);
+      const missingSymbols: string[] = [];
       setTimeSeriesDataMap(prev => {
         const newMap = new Map(prev);
         for (const [symbol, bundle] of bundles.entries()) {
           if (bundle?.intraday && bundle.intraday.length > 0) {
             newMap.set(symbol, bundle.intraday);
-            // Debug: log first data point to check format
-            if (bundle.intraday.length > 0) {
-              console.debug(`Loaded intraday data for ${symbol}:`, {
-                count: bundle.intraday.length,
-                first: bundle.intraday[0],
-                last: bundle.intraday[bundle.intraday.length - 1]
-              });
-            }
+            console.debug(`Loaded intraday data for ${symbol}:`, {
+              count: bundle.intraday.length,
+              first: bundle.intraday[0],
+              last: bundle.intraday[bundle.intraday.length - 1]
+            });
+          } else if (!bundle || !bundle.quote) {
+            missingSymbols.push(symbol);
           }
         }
         return newMap;
       });
+      // Retry missing symbols individually
+      if (missingSymbols.length > 0) {
+        for (const symbol of missingSymbols) {
+          try {
+            const bundle = await stockDataManager.getStockData(symbol, true);
+            if (bundle?.intraday && bundle.intraday.length > 0) {
+              setTimeSeriesDataMap(prev => {
+                const newMap = new Map(prev);
+                newMap.set(symbol, bundle.intraday);
+                return newMap;
+              });
+            }
+          } catch (err) {
+            console.debug(`Failed to retry intraday data for ${symbol}:`, err);
+          }
+        }
+      }
     } catch (err) {
       console.error("Failed to load batch intraday time series:", err);
     }
@@ -287,6 +305,22 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
     }
   }, [refreshAlerts, showAlert, t]);
 
+  const handleRemoveAlertsForSymbol = useCallback(async (symbol: string) => {
+    const ok = await showConfirm(t("priceAlert.confirmRemoveAlertsForSymbol"));
+    if (!ok) return;
+    const toRemove = alerts.filter((a) => a.symbol === symbol);
+    try {
+      for (const a of toRemove) {
+        await invoke("delete_price_alert", { alertId: a.id });
+      }
+      await refreshAlerts();
+      showAlert(t("priceAlert.removeSuccess"));
+    } catch (err) {
+      console.error("Error removing alerts:", err);
+      showAlert(err instanceof Error ? err.message : String(err));
+    }
+  }, [alerts, refreshAlerts, showAlert, showConfirm, t]);
+
   const refreshPositions = useCallback(async () => {
     try {
       const positionsData = await invoke<Array<[number, string, string, number, number, number | null]>>("get_portfolio_positions");
@@ -366,6 +400,15 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
     await Promise.all([refreshStocks(), refreshAlerts(), refreshPositions()]);
   }, [refreshStocks, refreshAlerts, refreshPositions]);
 
+  const refreshStocksAndPositions = useCallback(async () => {
+    await refreshStocks();
+    await refreshPositions();
+  }, [refreshStocks, refreshPositions]);
+
+  useTradingHoursTimeseriesRefresh(refreshStocksAndPositions, {
+    enabled: true,
+  });
+
   // Load initial data on mount
   useEffect(() => {
     loadInitialData();
@@ -414,35 +457,19 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
     }
   }, [resizingColumn, handleResizeMove, handleResizeEnd]);
 
-  // Set up independent refresh intervals for each data type
+  // Stocks and positions use useTradingHoursTimeseriesRefresh (9:00-11:30, 13:00-15:30)
   useEffect(() => {
-    // Refresh stocks every 30 seconds
-    const stocksInterval = setInterval(refreshStocks, 30000);
-    
-    // Refresh alerts every 60 seconds
     const alertsInterval = setInterval(refreshAlerts, 60000);
-    
-    // Refresh positions every 30 seconds
-    const positionsInterval = setInterval(refreshPositions, 30000);
-    
-    // Check price alerts every 60 seconds
     const alertsCheckInterval = setInterval(checkPriceAlerts, 60000);
     checkPriceAlerts();
-    
-    // Listen for price alert changes from PriceAlertDialog
-    const handlePriceAlertChanged = () => {
-      refreshAlerts();
-    };
+    const handlePriceAlertChanged = () => { refreshAlerts(); };
     window.addEventListener("priceAlertChanged", handlePriceAlertChanged);
-    
     return () => {
-      clearInterval(stocksInterval);
       clearInterval(alertsInterval);
-      clearInterval(positionsInterval);
       clearInterval(alertsCheckInterval);
       window.removeEventListener("priceAlertChanged", handlePriceAlertChanged);
     };
-  }, [refreshStocks, refreshAlerts, refreshPositions, checkPriceAlerts]);
+  }, [refreshAlerts, checkPriceAlerts]);
 
   // Load custom names from localStorage
   useEffect(() => {
@@ -920,6 +947,31 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
                             </td>
                             <td className="stock-actions" style={{ width: columnWidths.get(7), minWidth: 60 }} onClick={(e) => e.stopPropagation()}>
                               <div className="action-buttons">
+                                {alerts.some((a) => a.symbol === stock.symbol) ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveAlertsForSymbol(stock.symbol);
+                                    }}
+                                    className="action-btn"
+                                    title={t("priceAlert.removeAlert")}
+                                  >
+                                    <Icon name="close" size={14} />
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPriceAlertSymbol(stock.symbol);
+                                      setPriceAlertCurrentPrice(quote?.price ?? 0);
+                                      setShowPriceAlertDialog(true);
+                                    }}
+                                    className="action-btn"
+                                    title={t("priceAlert.addAlert")}
+                                  >
+                                    <Icon name="warning" size={14} />
+                                  </button>
+                                )}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -957,6 +1009,31 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
                             </td>
                             <td className="stock-actions" style={{ width: columnWidths.get(7), minWidth: 60 }} onClick={(e) => e.stopPropagation()}>
                               <div className="action-buttons">
+                                {alerts.some((a) => a.symbol === stock.symbol) ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveAlertsForSymbol(stock.symbol);
+                                    }}
+                                    className="action-btn"
+                                    title={t("priceAlert.removeAlert")}
+                                  >
+                                    <Icon name="close" size={14} />
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPriceAlertSymbol(stock.symbol);
+                                      setPriceAlertCurrentPrice(0);
+                                      setShowPriceAlertDialog(true);
+                                    }}
+                                    className="action-btn"
+                                    title={t("priceAlert.addAlert")}
+                                  >
+                                    <Icon name="warning" size={14} />
+                                  </button>
+                                )}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();

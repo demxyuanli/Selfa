@@ -1,7 +1,7 @@
 // Chart Configuration Generator for K-Line Chip Analysis
 
 import { StockData } from "./technicalIndicators";
-import { ChipDistributionResult } from "./chipDistribution";
+import { ChipDistributionResult, computeChipMetrics } from "./chipDistribution";
 import {
   calculateSMA,
   calculateEMA,
@@ -836,7 +836,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
           const amount = params.value[0];
           const price = params.value[1];
           const isProfit = price < dayPrice;
-          const dayDate = dates[displayDateIndex] || "";
+          const dayDate = dayDist.date ? (dayDist.date.includes(" ") ? dayDist.date.split(" ")[0] : dayDist.date) : "";
           return `<div>
             <div><strong>${t("stock.date")}: ${dayDate}</strong></div>
             <div><strong>${t("stock.price")}: ${price.toFixed(2)}</strong></div>
@@ -872,12 +872,46 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#2196F3", width: 1.5, type: "dashed" },
       z: 10,
     });
+
+    const dayMetrics = computeChipMetrics(
+      chipData.priceLevels,
+      dayDist.chipAmounts,
+      dayPrice,
+      chipData.minPrice,
+      chipData.maxPrice
+    );
+    if (dayMetrics.supportLevel != null) {
+      series.push({
+        name: t("analysis.chipSupport"),
+        type: "line",
+        xAxisIndex: chipGridIndex,
+        yAxisIndex: chipYAxisIndex,
+        data: [[0, dayMetrics.supportLevel], [maxChipAmount * 1.1, dayMetrics.supportLevel]],
+        symbol: "none",
+        lineStyle: { color: "#4CAF50", width: 1, type: "dotted" },
+        z: 9,
+      });
+    }
+    if (dayMetrics.resistanceLevel != null) {
+      series.push({
+        name: t("analysis.chipResistance"),
+        type: "line",
+        xAxisIndex: chipGridIndex,
+        yAxisIndex: chipYAxisIndex,
+        data: [[0, dayMetrics.resistanceLevel], [maxChipAmount * 1.1, dayMetrics.resistanceLevel]],
+        symbol: "none",
+        lineStyle: { color: "#F44336", width: 1, type: "dotted" },
+        z: 9,
+      });
+    }
   }
+
+  const mainXAxisIndices = oscillatorType !== "none" ? [0, 1, 2] : [0, 1];
 
   return {
     backgroundColor: "transparent",
     axisPointer: {
-      link: [{ xAxisIndex: "all" }],
+      link: [{ xAxisIndex: mainXAxisIndices }],
       snap: true,
       label: {
         backgroundColor: "#777",
@@ -905,7 +939,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       axisPointer: { 
         type: "cross", 
         snap: true,
-        link: [{ xAxisIndex: "all" }],
+        link: [{ xAxisIndex: mainXAxisIndices }],
         crossStyle: {
           color: "#007acc",
           width: 1,

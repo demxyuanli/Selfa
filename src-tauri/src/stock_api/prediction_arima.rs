@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use super::types::PredictionResult;
 use super::utils::{parse_date, add_days, calculate_variance, determine_signal, calculate_trend_slope, calculate_autocorrelation};
 

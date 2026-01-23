@@ -44,6 +44,16 @@ pub struct TechnicalIndicators {
     pub macd: Vec<f64>,
     pub macd_signal: Vec<f64>,
     pub macd_histogram: Vec<f64>,
+    pub vwap: Vec<f64>,
+    pub bollinger_middle: Vec<f64>,
+    pub bollinger_upper: Vec<f64>,
+    pub bollinger_lower: Vec<f64>,
+    pub bollinger_bandwidth: Vec<f64>,
+    pub atr: Vec<f64>,
+    pub kdj_k: Vec<f64>,
+    pub kdj_d: Vec<f64>,
+    pub kdj_j: Vec<f64>,
+    pub williams_r: Vec<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

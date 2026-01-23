@@ -25,7 +25,7 @@ impl StockCache {
             .build();
         
         let time_series_cache = Cache::builder()
-            .time_to_live(Duration::from_secs(60))
+            .time_to_live(Duration::from_secs(10))
             .build();
         
         let history_cache = Cache::builder()

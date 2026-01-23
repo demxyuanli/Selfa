@@ -90,6 +90,49 @@
   padding: 16px;
 }
 
+.chart-dialog-content-with-chip {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+
+.chart-dialog-chart {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.chart-dialog-chip-panel {
+  width: 260px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  font-size: 12px;
+  color: var(--text-primary);
+  border-left: 1px solid var(--border-color);
+  padding-left: 16px;
+}
+
+.chart-dialog-chip-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.chart-dialog-chip-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.chart-dialog-chip-row {
+  margin-top: 8px;
+}
+
+.chart-dialog-chip-tactics {
+  margin-top: 6px;
+  color: var(--color-warning, #f39c12);
+}
+
 .chart-dialog-content .no-data {
   display: flex;
   justify-content: center;

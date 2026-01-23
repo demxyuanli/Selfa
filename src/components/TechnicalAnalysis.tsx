@@ -42,6 +42,16 @@ interface TechnicalIndicators {
   macd: number[];
   macd_signal: number[];
   macd_histogram: number[];
+  vwap?: number[];
+  bollinger_middle?: number[];
+  bollinger_upper?: number[];
+  bollinger_lower?: number[];
+  bollinger_bandwidth?: number[];
+  atr?: number[];
+  kdj_k?: number[];
+  kdj_d?: number[];
+  kdj_j?: number[];
+  williams_r?: number[];
 }
 
 interface TechnicalAnalysisProps {

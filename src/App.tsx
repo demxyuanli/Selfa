@@ -50,6 +50,11 @@ function AppContent() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [priceAlertOpen, setPriceAlertOpen] = useState(false);
 
+  // Helper to check if running in Tauri
+  const isTauri = () => {
+    return typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__;
+  };
+
   // Default credentials
   const DEFAULT_USERNAME = "admin";
   const DEFAULT_PASSWORD = "admin";
@@ -80,6 +85,8 @@ function AppContent() {
     // Handle Tauri window close event (only fires on actual close, not refresh)
     let tauriUnlisten: (() => void) | null = null;
     const setupTauriCloseListener = async () => {
+      if (!isTauri()) return;
+      
       try {
         const appWindow = getCurrentWindow();
         const unlistenPromise = appWindow.onCloseRequested(() => {
@@ -351,6 +358,8 @@ function AppContent() {
 
   useEffect(() => {
     const checkAlerts = async () => {
+      if (!isTauri()) return;
+
       try {
         const triggeredAlerts = await invoke<Array<{
           id: number;

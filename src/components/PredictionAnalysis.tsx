@@ -199,7 +199,9 @@ type PredictionMethod =
   | "similarity"
   | "ensemble"
   | "fibonacci"
-  | "fibonacci_extension";
+  | "fibonacci_extension"
+  | "monte_carlo"
+  | "monte_carlo_advanced";
 
 const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) => {
   const { t } = useTranslation();
@@ -225,6 +227,8 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
       ensemble: t("analysis.methodEnsemble"),
       fibonacci: t("analysis.methodFibonacci"),
       fibonacci_extension: t("analysis.methodFibonacciExtension"),
+      monte_carlo: t("analysis.methodMonteCarlo"),
+      monte_carlo_advanced: t("analysis.methodMonteCarloAdvanced"),
     };
     return labels[m] || m;
   };
@@ -639,6 +643,8 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
                     <optgroup label={t("analysis.groupAdvanced")}>
                       <option value="similarity">{t("analysis.methodSimilarity")}</option>
                       <option value="ensemble">{t("analysis.methodEnsemble")}</option>
+                      <option value="monte_carlo">{t("analysis.methodMonteCarlo")}</option>
+                      <option value="monte_carlo_advanced">{t("analysis.methodMonteCarloAdvanced")}</option>
                     </optgroup>
                   </select>
                 </div>

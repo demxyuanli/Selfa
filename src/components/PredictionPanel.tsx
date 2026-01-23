@@ -31,7 +31,7 @@ interface PredictionPanelProps {
   onClose: () => void;
 }
 
-type PredictionMethod = "linear" | "ma" | "technical" | "polynomial";
+type PredictionMethod = "linear" | "ma" | "technical" | "polynomial" | "ensemble" | "monte_carlo";
 
 const PredictionPanel: React.FC<PredictionPanelProps> = ({
   klineData,
@@ -266,6 +266,8 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
             <option value="ma">{t("portfolio.movingAverage")}</option>
             <option value="technical">{t("portfolio.technicalIndicator")}</option>
             <option value="polynomial">{t("portfolio.polynomialRegression")}</option>
+            <option value="ensemble">{t("analysis.methodEnsemble")}</option>
+            <option value="monte_carlo">{t("analysis.methodMonteCarlo")}</option>
           </select>
         </div>
         <div className="control-group">

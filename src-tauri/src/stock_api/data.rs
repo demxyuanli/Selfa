@@ -14,26 +14,38 @@ pub async fn fetch_stock_quote(symbol: &str) -> Result<StockQuote, String> {
     );
 
     let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0")
-        .timeout(std::time::Duration::from_secs(10))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .timeout(std::time::Duration::from_secs(20))
         .build()
         .map_err(|e| format!("Client error: {}", e))?;
 
-    let response = client
-        .get(&url)
-        .timeout(std::time::Duration::from_secs(5))
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
-    
-    if !response.status().is_success() {
-        return Err(format!("API error: {}", response.status()));
+    let mut last_error = String::new();
+    let mut json_result: Option<serde_json::Value> = None;
+
+    for attempt in 0..3 {
+        match client.get(&url).timeout(std::time::Duration::from_secs(10)).send().await {
+            Ok(response) => {
+                if !response.status().is_success() {
+                    last_error = format!("API error: {}", response.status());
+                } else {
+                    match response.json::<serde_json::Value>().await {
+                        Ok(val) => {
+                            json_result = Some(val);
+                            break;
+                        }
+                        Err(e) => last_error = format!("Parse error: {}", e),
+                    }
+                }
+            }
+            Err(e) => last_error = format!("Network error: {}", e),
+        }
+        
+        if attempt < 2 {
+            tokio::time::sleep(tokio::time::Duration::from_millis(500 * (attempt + 1) as u64)).await;
+        }
     }
-    
-    let json: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| format!("Parse error: {}", e))?;
+
+    let json = json_result.ok_or(last_error)?;
     
     let data = &json["data"];
     if data.is_null() {
@@ -129,8 +141,8 @@ pub async fn fetch_time_series(symbol: &str) -> Result<Vec<StockData>, String> {
     );
     
     let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0")
-        .timeout(std::time::Duration::from_secs(15))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("Client error: {}", e))?;
     
@@ -139,7 +151,7 @@ pub async fn fetch_time_series(symbol: &str) -> Result<Vec<StockData>, String> {
     for attempt in 0..3 {
         let response_result = client
             .get(&url)
-            .timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(15))
             .send()
             .await;
         

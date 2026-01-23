@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useTradingHoursTimeseriesRefresh } from "../hooks/useTradingHoursTimeseriesRefresh";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import TimeSeriesChart from "./TimeSeriesChart";
@@ -61,23 +62,27 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
   const startWidthRef = useRef(0);
   const chartRenderingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    const fetchTimeSeriesData = async () => {
-      setTimeSeriesLoading(true);
-      try {
-        const tsData = await invoke("get_time_series", { symbol: tab.symbol });
-        setTimeSeriesData(tsData as StockData[]);
-      } catch (err) {
-        console.error("Error fetching time series data:", err);
-      } finally {
-        setTimeSeriesLoading(false);
-      }
-    };
-
-    if (tab.symbol) {
-      fetchTimeSeriesData();
+  const fetchTimeSeriesData = useCallback(async () => {
+    if (!tab.symbol) return;
+    setTimeSeriesLoading(true);
+    try {
+      const tsData = await invoke("get_time_series", { symbol: tab.symbol });
+      setTimeSeriesData(tsData as StockData[]);
+    } catch (err) {
+      console.error("Error fetching time series data:", err);
+    } finally {
+      setTimeSeriesLoading(false);
     }
   }, [tab.symbol]);
+
+  useEffect(() => {
+    if (tab.symbol) fetchTimeSeriesData();
+  }, [tab.symbol, fetchTimeSeriesData]);
+
+  useTradingHoursTimeseriesRefresh(fetchTimeSeriesData, {
+    enabled: !!tab.symbol,
+    intervalInMs: 15000,
+  });
 
   useEffect(() => {
     const fetchKLineData = async () => {

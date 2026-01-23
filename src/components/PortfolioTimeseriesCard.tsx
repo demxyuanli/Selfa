@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
 import { stockDataManager } from "../services/StockDataManager";
+import { useTradingHoursTimeseriesRefresh } from "../hooks/useTradingHoursTimeseriesRefresh";
 import "./PortfolioTimeseriesCard.css";
 
 interface StockData {
@@ -184,8 +185,12 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
 
   useEffect(() => {
     loadPortfolioAndTimeseries();
-    // No auto-refresh, only load once for progressive display
   }, [loadPortfolioAndTimeseries]);
+
+  useTradingHoursTimeseriesRefresh(loadPortfolioAndTimeseries, {
+    enabled: true,
+    intervalInMs: 30000,
+  });
 
   const chartOption = useMemo(() => {
     if (positions.length === 0) {

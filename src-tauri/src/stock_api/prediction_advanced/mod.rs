@@ -8,9 +8,13 @@ pub mod hurst_exponent;
 pub mod monte_carlo;
 pub mod ensemble;
 
+#[allow(unused_imports)]
 pub use support_resistance::*;
+#[allow(unused_imports)]
 pub use hurst_exponent::*;
+#[allow(unused_imports)]
 pub use monte_carlo::*;
+#[allow(unused_imports)]
 pub use ensemble::*;
 
 pub fn predict_mean_reversion(

@@ -29,9 +29,11 @@ pub fn predict_stock_price(
             "wma" => prediction_advanced::predict_weighted_ma(&closes, &last_date, period)?,
             "pattern" => prediction_advanced::predict_pattern_recognition(data, &last_date, period)?,
             "similarity" => prediction_advanced::predict_similarity_match(&closes, &last_date, period)?,
-            "ensemble" => prediction_advanced::predict_ensemble(data, &last_date, period)?,
+            "ensemble" => prediction_advanced::predict_ensemble_advanced(data, &last_date, period)?,
             "fibonacci" => prediction_advanced::predict_fibonacci_retracement(data, &last_date, period)?,
             "fibonacci_extension" => prediction_advanced::predict_fibonacci_extension(data, &last_date, period)?,
+            "monte_carlo" => prediction_advanced::predict_monte_carlo(data, &last_date, period)?,
+            "monte_carlo_advanced" => prediction_advanced::predict_monte_carlo_advanced(data, &last_date, period)?,
         _ => return Err(format!("Unknown prediction method: {}", method)),
     };
 

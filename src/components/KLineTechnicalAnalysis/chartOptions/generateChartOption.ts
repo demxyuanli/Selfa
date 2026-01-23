@@ -62,6 +62,78 @@ export function generateChartOption(params: ChartOptionParams): any {
   const supportLevel = Math.min(...lows.slice(-20));
   const resistanceLevel = Math.max(...highs.slice(-20));
 
+  const candlestickMarkLineData: any[] = [
+    {
+      name: t("analysis.supportLevel"),
+      yAxis: supportLevel,
+      label: {
+        show: true,
+        position: "insideEndRight",
+        formatter: `${t("analysis.supportLevel")}: ${supportLevel.toFixed(2)}`,
+        fontSize: 9,
+        color: "#00ff00",
+      },
+    },
+    {
+      name: t("analysis.resistanceLevel"),
+      yAxis: resistanceLevel,
+      label: {
+        show: true,
+        position: "insideEndRight",
+        formatter: `${t("analysis.resistanceLevel")}: ${resistanceLevel.toFixed(2)}`,
+        fontSize: 9,
+        color: "#ff0000",
+      },
+    },
+  ];
+
+  if (showGann) {
+    const referencePrice = calculateReferencePrice(gannConfig.referenceMode, klineData, gannConfig.customReferencePrice || undefined);
+    const anglesToUse = gannConfig.showMajorAngles ? [90, 180, 270, 360] : gannConfig.angles;
+    const gannResult = calculateGannSquareOf9({
+      referencePrice,
+      angles: anglesToUse,
+      cycles: gannConfig.cycles,
+    });
+
+    const visibleLevels = gannResult.levels.filter((level) => {
+      if (level.type === "support" && !gannConfig.showSupport) return false;
+      if (level.type === "resistance" && !gannConfig.showResistance) return false;
+      return true;
+    });
+
+    const priceMin = Math.min(...lows);
+    const priceMax = Math.max(...highs);
+    const priceRange = Math.max(priceMax - priceMin, priceMin * 0.01);
+    const extendedMin = priceMin - priceRange * 0.5;
+    const extendedMax = priceMax + priceRange * 0.5;
+
+    const filteredLevels = visibleLevels.filter((level) => level.price >= extendedMin && level.price <= extendedMax);
+
+    filteredLevels.forEach((level) => {
+      const isMajorAngle = [90, 180, 270, 360].includes(level.angle);
+      const lineColor = level.type === "support" ? (isMajorAngle ? "#00ff00" : "rgba(0, 255, 0, 0.5)") : isMajorAngle ? "#ff0000" : "rgba(255, 0, 0, 0.5)";
+      const lineWidth = isMajorAngle ? 1.5 : 1;
+      const lineType = isMajorAngle ? "solid" : "dashed";
+
+      candlestickMarkLineData.push({
+        yAxis: level.price,
+        label: {
+          show: isMajorAngle,
+          position: "insideEndRight",
+          formatter: `${level.type === "support" ? t("analysis.gannSupport") : t("analysis.gannResistance")} ${level.angle}°: ${level.price.toFixed(2)}`,
+          fontSize: 9,
+          color: lineColor,
+        },
+        lineStyle: {
+          color: lineColor,
+          width: lineWidth,
+          type: lineType,
+        },
+      });
+    });
+  }
+
   series.push({
     name: t("index.dailyK"),
     type: "candlestick",
@@ -80,30 +152,7 @@ export function generateChartOption(params: ChartOptionParams): any {
         type: "dashed",
         width: 1,
       },
-      data: [
-        {
-          name: t("analysis.supportLevel"),
-          yAxis: supportLevel,
-          label: {
-            show: true,
-            position: "insideEndRight",
-            formatter: `${t("analysis.supportLevel")}: ${supportLevel.toFixed(2)}`,
-            fontSize: 9,
-            color: "#00ff00",
-          },
-        },
-        {
-          name: t("analysis.resistanceLevel"),
-          yAxis: resistanceLevel,
-          label: {
-            show: true,
-            position: "insideEndRight",
-            formatter: `${t("analysis.resistanceLevel")}: ${resistanceLevel.toFixed(2)}`,
-            fontSize: 9,
-            color: "#ff0000",
-          },
-        },
-      ],
+      data: candlestickMarkLineData,
     },
   });
 
@@ -133,69 +182,6 @@ export function generateChartOption(params: ChartOptionParams): any {
   } else if (overlayIndicator === "vwap") {
     const vwap = calculateVWAP(klineData);
     series.push({ name: t("analysis.overlayVWAP"), type: "line", data: vwap, symbol: "none", lineStyle: { color: "#00bcd4", width: 1.5 } });
-  }
-
-  if (showGann) {
-    const referencePrice = calculateReferencePrice(gannConfig.referenceMode, klineData, gannConfig.customReferencePrice || undefined);
-    const anglesToUse = gannConfig.showMajorAngles ? [90, 180, 270, 360] : gannConfig.angles;
-    const gannResult = calculateGannSquareOf9({
-      referencePrice,
-      angles: anglesToUse,
-      cycles: gannConfig.cycles,
-    });
-
-    const visibleLevels = gannResult.levels.filter((level) => {
-      if (level.type === "support" && !gannConfig.showSupport) return false;
-      if (level.type === "resistance" && !gannConfig.showResistance) return false;
-      return true;
-    });
-
-    const priceMin = Math.min(...lows);
-    const priceMax = Math.max(...highs);
-    const priceRange = priceMax - priceMin;
-    const extendedMin = priceMin - priceRange * 0.1;
-    const extendedMax = priceMax + priceRange * 0.1;
-
-    const filteredLevels = visibleLevels.filter((level) => level.price >= extendedMin && level.price <= extendedMax);
-
-    const gannMarkLines: any[] = [];
-    filteredLevels.forEach((level) => {
-      const isMajorAngle = [90, 180, 270, 360].includes(level.angle);
-      const lineColor = level.type === "support" ? (isMajorAngle ? "#00ff00" : "rgba(0, 255, 0, 0.5)") : isMajorAngle ? "#ff0000" : "rgba(255, 0, 0, 0.5)";
-      const lineWidth = isMajorAngle ? 1.5 : 1;
-      const lineType = isMajorAngle ? "solid" : "dashed";
-
-      gannMarkLines.push({
-        yAxis: level.price,
-        label: {
-          show: isMajorAngle,
-          position: "insideEndRight",
-          formatter: `${level.type === "support" ? t("analysis.gannSupport") : t("analysis.gannResistance")} ${level.angle}°: ${level.price.toFixed(2)}`,
-          fontSize: 9,
-          color: lineColor,
-        },
-        lineStyle: {
-          color: lineColor,
-          width: lineWidth,
-          type: lineType,
-        },
-      });
-    });
-
-    if (gannMarkLines.length > 0) {
-      series.push({
-        name: t("analysis.gannSquareOf9"),
-        type: "line",
-        data: new Array(dates.length).fill(null),
-        symbol: "none",
-        lineStyle: { opacity: 0 },
-        markLine: {
-          silent: true,
-          symbol: "none",
-          data: gannMarkLines,
-        },
-      });
-    }
   }
 
   if (showSignals) {

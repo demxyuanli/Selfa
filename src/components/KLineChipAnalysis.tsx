@@ -4,9 +4,10 @@ import { invoke } from "@tauri-apps/api/core";
 import ReactECharts from "echarts-for-react";
 import ChartDialog from "./ChartDialog";
 import IndicatorParamsPanel from "./IndicatorParamsPanel";
+import ChipParamsPanel, { ChipParams } from "./ChipParamsPanel";
 import AnalysisResultsPanel from "./AnalysisResultsPanel";
 import { StockData } from "../utils/technicalIndicators";
-import { calculateChipDistribution } from "../utils/chipDistribution";
+import { calculateChipDistribution, computeChipMetrics } from "../utils/chipDistribution";
 import { generateChartConfig, IndicatorType, OscillatorType, IndicatorParams } from "../utils/chartConfigGenerator";
 import "./StockAnalysis.css";
 import "./KLineTechnicalAnalysis.css";
@@ -23,6 +24,13 @@ const KLineChipAnalysis: React.FC<KLineChipAnalysisProps> = ({ klineData, symbol
   const [selectedDateIndex, setSelectedDateIndex] = useState<number | null>(null);
   const [chipHistoryData, setChipHistoryData] = useState<StockData[]>([]);
   const chartRef = useRef<ReactECharts>(null);
+
+  // Chip Parameters
+  const [chipParams, setChipParams] = useState<ChipParams>({
+    lookbackPeriod: "1y",
+    decayFactor: 0.97,
+    priceBins: 100,
+  });
 
   // Dynamic parameters for indicators
   const [indicatorParams, setIndicatorParams] = useState<IndicatorParams>({
@@ -49,10 +57,10 @@ const KLineChipAnalysis: React.FC<KLineChipAnalysisProps> = ({ klineData, symbol
       if (!symbol) return;
       
       try {
-        // Fetch 1 year of daily data for more accurate chip distribution
+        // Fetch history data based on selected lookback period
         const historyData = await invoke("get_stock_history", {
           symbol: symbol,
-          period: "1y",
+          period: chipParams.lookbackPeriod,
         });
         setChipHistoryData(historyData as StockData[]);
       } catch (err) {
@@ -63,18 +71,51 @@ const KLineChipAnalysis: React.FC<KLineChipAnalysisProps> = ({ klineData, symbol
     };
 
     fetchChipHistoryData();
-  }, [symbol, klineData]);
+  }, [symbol, klineData, chipParams.lookbackPeriod]);
 
   // Use longer history data for chip distribution if available, otherwise use klineData
   const chipCalculationData = useMemo(() => {
     return chipHistoryData.length > klineData.length ? chipHistoryData : klineData;
   }, [chipHistoryData, klineData]);
 
-  // Calculate chip distribution using the best available data
+  // Calculate chip distribution using the best available data and custom params
   const chipData = useMemo(() => {
     if (chipCalculationData.length < 20) return null;
-    return calculateChipDistribution(chipCalculationData);
-  }, [chipCalculationData]);
+    return calculateChipDistribution(
+      chipCalculationData, 
+      chipParams.priceBins, 
+      chipParams.decayFactor
+    );
+  }, [chipCalculationData, chipParams.priceBins, chipParams.decayFactor]);
+
+  // Compute chip metrics for the selected day (or last day) to match the chip chart
+  const selectedDayChipMetrics = useMemo(() => {
+    if (!chipData?.dailyDistributions?.length) return null;
+    const dists = chipData.dailyDistributions;
+    let displayDateIndex = dists.length - 1;
+    if (selectedDateIndex != null && selectedDateIndex >= 0 && selectedDateIndex < klineData.length) {
+      const key = (klineData[selectedDateIndex].date || "").split(" ")[0] || klineData[selectedDateIndex].date;
+      const i = dists.findIndex((d) => ((d.date || "").split(" ")[0] || d.date) === key);
+      if (i >= 0) displayDateIndex = i;
+      else if (chipCalculationData.length === klineData.length && selectedDateIndex < dists.length) {
+        displayDateIndex = selectedDateIndex;
+      }
+    }
+    const dayDist = dists[displayDateIndex];
+    const dayPrice =
+      (chipCalculationData && displayDateIndex < chipCalculationData.length
+        ? chipCalculationData[displayDateIndex].close
+        : undefined) ??
+      (selectedDateIndex != null && selectedDateIndex < klineData.length ? klineData[selectedDateIndex].close : undefined) ??
+      chipData.currentPrice;
+    return computeChipMetrics(
+      chipData.priceLevels,
+      dayDist.chipAmounts,
+      dayPrice,
+      chipData.minPrice,
+      chipData.maxPrice
+    );
+  }, [chipData, chipCalculationData, klineData, selectedDateIndex]);
 
   // Generate chart configuration
   const chartOption = useMemo(() => {
@@ -91,29 +132,37 @@ const KLineChipAnalysis: React.FC<KLineChipAnalysisProps> = ({ klineData, symbol
     });
   }, [klineData, overlayIndicator, oscillatorType, showSignals, chipData, indicatorParams, selectedDateIndex, chipCalculationData, t]);
 
-  // Handle mouse move on chart to update chip distribution
-  const handleChartEvents = {
+  const chipSeriesNames = useMemo(() => [
+    t("analysis.chipDistribution"),
+    t("analysis.avgCost"),
+    t("stock.price"),
+    t("analysis.chipSupport"),
+    t("analysis.chipResistance"),
+  ], [t]);
+
+  const handleChartEvents = useMemo(() => ({
     mousemove: (params: any) => {
-      // Handle mouse move on any component (series, xAxis, etc.)
-      if (params.dataIndex !== null && params.dataIndex !== undefined && params.dataIndex >= 0 && params.dataIndex < klineData.length) {
+      if (params.seriesName && chipSeriesNames.includes(params.seriesName)) return;
+      if (params.dataIndex != null && params.dataIndex >= 0 && params.dataIndex < klineData.length) {
         setSelectedDateIndex(params.dataIndex);
       }
     },
-    // Listen to tooltip update events for better responsiveness
     updateAxisPointer: (params: any) => {
+      if (params && params.currTrigger !== "none" && params.seriesName && chipSeriesNames.includes(params.seriesName)) return;
       if (params && params.currTrigger !== "none") {
-        const dataIndex = params.dataIndex;
-        if (dataIndex !== null && dataIndex !== undefined && dataIndex >= 0 && dataIndex < klineData.length) {
+        let dataIndex = params.dataIndex;
+        if (dataIndex == null && params.axesInfo) {
+          const arr = Array.isArray(params.axesInfo) ? params.axesInfo : Object.values(params.axesInfo as object || {});
+          const xInfo = arr.find((a: any) => a && a.axisDim === "x" && (a.axisIndex === 0 || a.axisIndex === 1 || a.axisIndex === 2) && a.dataIndex != null);
+          if (xInfo) dataIndex = xInfo.dataIndex;
+        }
+        if (dataIndex != null && dataIndex >= 0 && dataIndex < klineData.length) {
           setSelectedDateIndex(dataIndex);
         }
       }
     },
-    // Also listen to global chart mouse move for better responsiveness
-    globalout: () => {
-      // Keep the last selected date when mouse leaves chart area
-      // Optionally reset to last date: setSelectedDateIndex(klineData.length - 1);
-    },
-  };
+    globalout: () => {},
+  }), [chipSeriesNames, klineData.length]);
 
   // Handle window resize to resize chart
   useEffect(() => {
@@ -149,14 +198,20 @@ const KLineChipAnalysis: React.FC<KLineChipAnalysisProps> = ({ klineData, symbol
     <div className="kline-technical-analysis">
       <div className="analysis-columns">
         {/* Left Column: Parameters */}
-        <IndicatorParamsPanel
-          overlayIndicator={overlayIndicator}
-          oscillatorType={oscillatorType}
-          showSignals={showSignals}
-          onOverlayIndicatorChange={setOverlayIndicator}
-          onOscillatorTypeChange={setOscillatorType}
-          onShowSignalsChange={setShowSignals}
-        />
+        <div className="analysis-column params-column">
+          <IndicatorParamsPanel
+            overlayIndicator={overlayIndicator}
+            oscillatorType={oscillatorType}
+            showSignals={showSignals}
+            onOverlayIndicatorChange={setOverlayIndicator}
+            onOscillatorTypeChange={setOscillatorType}
+            onShowSignalsChange={setShowSignals}
+          />
+          <ChipParamsPanel
+            params={chipParams}
+            onChange={setChipParams}
+          />
+        </div>
 
         <div className="column-divider" />
 
@@ -167,6 +222,7 @@ const KLineChipAnalysis: React.FC<KLineChipAnalysisProps> = ({ klineData, symbol
           showSignals={showSignals}
           indicatorParams={indicatorParams}
           chipData={chipData}
+          selectedDayChipMetrics={selectedDayChipMetrics}
           onIndicatorParamsChange={setIndicatorParams}
         />
 
@@ -206,6 +262,8 @@ const KLineChipAnalysis: React.FC<KLineChipAnalysisProps> = ({ klineData, symbol
         onClose={() => setIsChartDialogOpen(false)}
         title={`${t("analysis.klineChipAnalysis")} - ${t("chart.title")}`}
         chartOption={chartOption}
+        onEvents={handleChartEvents}
+        chipMetrics={selectedDayChipMetrics}
       />
     </div>
   );

@@ -1,7 +1,8 @@
+#![allow(dead_code)]
+
 use crate::stock_api::types::{StockData, PredictionResult};
-use crate::stock_api::utils::{parse_date, add_days, calculate_variance, determine_signal};
+use crate::stock_api::utils::{parse_date, add_days};
 use rand::prelude::*;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct MonteCarloConfig {
@@ -52,14 +53,12 @@ pub fn predict_monte_carlo_with_config(
         return Err("Could not calculate returns".to_string());
     }
 
-    // 计算波动率
     let volatility = if config.use_garch {
         calculate_garch_volatility(&returns, config.garch_alpha, config.garch_beta)
     } else {
         calculate_historical_volatility(&returns)
     };
 
-    // 运行Monte Carlo模拟
     let simulation_results = run_monte_carlo_simulations(
         closes.last().unwrap(),
         &returns,
@@ -68,7 +67,6 @@ pub fn predict_monte_carlo_with_config(
         period,
     );
 
-    // 分析模拟结果
     generate_prediction_from_simulations(
         &simulation_results,
         start_date,
@@ -85,7 +83,7 @@ fn calculate_returns(prices: &[f64]) -> Vec<f64> {
 
 fn calculate_historical_volatility(returns: &[f64]) -> f64 {
     if returns.is_empty() {
-        return 0.02; // 默认2%波动率
+        return 0.02;
     }
 
     let mean_return = returns.iter().sum::<f64>() / returns.len() as f64;
@@ -101,7 +99,7 @@ fn calculate_garch_volatility(returns: &[f64], alpha: f64, beta: f64) -> f64 {
         return calculate_historical_volatility(returns);
     }
 
-    let mut sigma_squared = returns[0].powi(2); // 初始波动率
+    let mut sigma_squared = returns[0].powi(2);
 
     for &ret in returns.iter().skip(1) {
         sigma_squared = (1.0 - alpha - beta) * ret.powi(2) + beta * sigma_squared;
@@ -126,16 +124,33 @@ fn run_monte_carlo_simulations(
         returns.iter().sum::<f64>() / returns.len() as f64
     };
 
+    let variance = if returns.len() > 1 {
+        returns.iter()
+            .map(|&r| (r - mean_return).powi(2))
+            .sum::<f64>() / (returns.len() - 1) as f64
+    } else {
+        0.0
+    };
+    let drift = mean_return - 0.5 * variance;
+
     for _ in 0..num_simulations {
         let mut price_path = vec![*start_price];
+        let mut current_price = *start_price;
 
         for _ in 0..period {
-            // 使用几何布朗运动模型
-            let random_shock: f64 = rng.sample(rand_distr::StandardNormal);
-            let daily_return = mean_return + volatility * random_shock;
+            let u1: f64 = rng.gen();
+            let u2: f64 = rng.gen();
+            let z = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
 
-            let new_price = price_path.last().unwrap() * (1.0 + daily_return);
-            price_path.push(new_price);
+            let shock = if rng.gen::<f64>() < 0.05 {
+                z * 3.0
+            } else {
+                z
+            };
+
+            let change = drift + volatility * shock;
+            current_price = current_price * change.exp();
+            price_path.push(current_price);
         }
 
         results.push(price_path);
@@ -170,7 +185,6 @@ fn generate_prediction_from_simulations(
 
         let mean_price = day_prices.iter().sum::<f64>() / day_prices.len() as f64;
 
-        // 计算分位数
         let lower_idx = ((1.0 - confidence_level) / 2.0 * day_prices.len() as f64) as usize;
         let upper_idx = ((1.0 + confidence_level) / 2.0 * day_prices.len() as f64) as usize;
 
@@ -179,7 +193,6 @@ fn generate_prediction_from_simulations(
         let upper_bound = *day_prices.get(upper_idx.min(last_idx))
             .unwrap_or(&day_prices[last_idx]);
 
-        // 计算概率分布
         let start_price = simulations[0][0];
         let probability_up = day_prices.iter()
             .filter(|&&price| price > start_price)
@@ -210,7 +223,6 @@ fn generate_prediction_from_simulations(
     Ok(results)
 }
 
-// 扩展的Monte Carlo方法：结合GARCH和跳跃扩散
 pub fn predict_monte_carlo_advanced(
     data: &[StockData],
     start_date: &str,
