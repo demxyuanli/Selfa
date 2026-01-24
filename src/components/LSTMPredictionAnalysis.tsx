@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
 import ChartDialog from "./ChartDialog";
@@ -14,21 +15,37 @@ interface StockData {
   volume: number;
 }
 
+interface PredictionResult {
+  date: string;
+  predicted_price: number;
+  confidence: number;
+  signal: "buy" | "sell" | "hold";
+  upper_bound: number;
+  lower_bound: number;
+  method: string;
+}
+
 interface LSTMPredictionAnalysisProps {
   klineData: StockData[];
 }
 
+type LSTMModelType = "local_simulation" | "deos_gpt" | "sspt" | "space_explore";
+
 // Simplified LSTM-like prediction using sequence analysis
 const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineData }) => {
   const { t } = useTranslation();
+  const [modelType, setModelType] = useState<LSTMModelType>("local_simulation");
   const [sequenceLength, setSequenceLength] = useState(30);
   const [predictionDays, setPredictionDays] = useState(10);
-  const [epochs, setEpochs] = useState(50);
+  const [epochs, setEpochs] = useState(5);
   const [learningRate, setLearningRate] = useState(0.01);
   const [isTraining, setIsTraining] = useState(false);
   const [isChartDialogOpen, setIsChartDialogOpen] = useState(false);
   const chartRef = useRef<ReactECharts>(null);
-  const [predictions, setPredictions] = useState<number[]>([]);
+  
+  // Unified state for predictions (either number[] for local or PredictionResult[] for backend)
+  // We will map everything to PredictionResult structure for consistency
+  const [predictions, setPredictions] = useState<PredictionResult[]>([]);
 
   // Normalize data
   const normalize = (values: number[]): { normalized: number[]; min: number; max: number } => {
@@ -48,76 +65,102 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
     return normalized.map((v) => v * range + min);
   };
 
-  // Create sequences for LSTM-like training
-  // const _createSequences = (data: number[], seqLength: number): Array<{ input: number[]; output: number }> => {
-  //   const sequences: Array<{ input: number[]; output: number }> = [];
-  //   for (let i = 0; i < data.length - seqLength; i++) {
-  //     sequences.push({
-  //       input: data.slice(i, i + seqLength),
-  //       output: data[i + seqLength],
-  //     });
-  //   }
-  //   return sequences;
-  // };
-
   // Simplified LSTM-like prediction using weighted moving average with momentum
-  const predictLSTM = async (): Promise<number[]> => {
+  const predictLocalSimulation = async (): Promise<PredictionResult[]> => {
     if (klineData.length < sequenceLength + 10) {
       throw new Error(t("analysis.insufficientData"));
     }
 
-    setIsTraining(true);
-
     // Simulate training delay
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
+    const closes = klineData.map((d) => d.close);
+    const { normalized, min, max } = normalize(closes);
+
+    // Use the last sequenceLength points for prediction
+    const lastSequence = normalized.slice(-sequenceLength);
+    const rawPredictions: number[] = [];
+
+    // Calculate momentum and trend
+    const recentChanges = normalized.slice(-20).map((val, idx, arr) => 
+      idx > 0 ? val - arr[idx - 1] : 0
+    );
+    const momentum = recentChanges.reduce((a, b) => a + b, 0) / recentChanges.length;
+    const trend = (normalized[normalized.length - 1] - normalized[normalized.length - 20]) / 20;
+
+    // Predict future values
+    let currentSequence = [...lastSequence];
+    for (let i = 0; i < predictionDays; i++) {
+      // Weighted average of recent values with momentum
+      const weights = currentSequence.map((_, idx) => Math.exp(-(sequenceLength - idx) * 0.1));
+      const weightedSum = currentSequence.reduce((sum, val, idx) => sum + val * weights[idx], 0);
+      const weightSum = weights.reduce((a, b) => a + b, 0);
+      let nextValue = weightedSum / weightSum;
+
+      // Add momentum and trend
+      nextValue = nextValue + momentum * 0.3 + trend * 0.2;
+
+      // Add some randomness based on historical volatility
+      const recentVolatility = normalized.slice(-10).reduce((sum, val, idx, arr) => {
+        if (idx === 0) return 0;
+        return sum + Math.abs(val - arr[idx - 1]);
+      }, 0) / 9;
+      const noise = (Math.random() - 0.5) * recentVolatility * 0.1;
+      nextValue = nextValue + noise;
+
+      // Clip to reasonable range
+      nextValue = Math.max(0, Math.min(1, nextValue));
+
+      rawPredictions.push(nextValue);
+      currentSequence = [...currentSequence.slice(1), nextValue];
+    }
+
+    // Denormalize predictions
+    const denormalized = denormalize(rawPredictions, min, max);
+    const lastDateStr = klineData[klineData.length - 1].date;
+    const lastDate = new Date(lastDateStr.includes(" ") ? lastDateStr.split(" ")[0] : lastDateStr);
+
+    return denormalized.map((price, idx) => {
+      const date = new Date(lastDate);
+      date.setDate(date.getDate() + idx + 1);
+      return {
+        date: date.toISOString().split("T")[0],
+        predicted_price: price,
+        confidence: 50, // Static confidence for simulation
+        signal: "hold",
+        upper_bound: price * 1.02,
+        lower_bound: price * 0.98,
+        method: "local_simulation"
+      };
+    });
+  };
+
+  const predictBackend = async (method: string): Promise<PredictionResult[]> => {
+    return await invoke("predict_stock_price", {
+      data: klineData,
+      method: method,
+      period: predictionDays,
+      // Pass epochs only for SSPT if needed, but currently backend doesn't take extra args dynamically.
+      // We can encode it or rely on defaults. For now, let's keep it simple.
+    });
+  };
+
+  const runPrediction = async () => {
+    if (klineData.length === 0) return;
+    
+    setIsTraining(true);
+    setPredictions([]);
+
     try {
-      const closes = klineData.map((d) => d.close);
-      const { normalized, min, max } = normalize(closes);
-
-      // Use the last sequenceLength points for prediction
-      const lastSequence = normalized.slice(-sequenceLength);
-      const predictions: number[] = [];
-
-      // Calculate momentum and trend
-      const recentChanges = normalized.slice(-20).map((val, idx, arr) => 
-        idx > 0 ? val - arr[idx - 1] : 0
-      );
-      const momentum = recentChanges.reduce((a, b) => a + b, 0) / recentChanges.length;
-      const trend = (normalized[normalized.length - 1] - normalized[normalized.length - 20]) / 20;
-
-      // Predict future values
-      let currentSequence = [...lastSequence];
-      for (let i = 0; i < predictionDays; i++) {
-        // Weighted average of recent values with momentum
-        const weights = currentSequence.map((_, idx) => Math.exp(-(sequenceLength - idx) * 0.1));
-        const weightedSum = currentSequence.reduce((sum, val, idx) => sum + val * weights[idx], 0);
-        const weightSum = weights.reduce((a, b) => a + b, 0);
-        let nextValue = weightedSum / weightSum;
-
-        // Add momentum and trend
-        nextValue = nextValue + momentum * 0.3 + trend * 0.2;
-
-        // Add some randomness based on historical volatility
-        const recentVolatility = normalized.slice(-10).reduce((sum, val, idx, arr) => {
-          if (idx === 0) return 0;
-          return sum + Math.abs(val - arr[idx - 1]);
-        }, 0) / 9;
-        const noise = (Math.random() - 0.5) * recentVolatility * 0.1;
-        nextValue = nextValue + noise;
-
-        // Clip to reasonable range
-        nextValue = Math.max(0, Math.min(1, nextValue));
-
-        predictions.push(nextValue);
-        currentSequence = [...currentSequence.slice(1), nextValue];
+      let results: PredictionResult[] = [];
+      if (modelType === "local_simulation") {
+        results = await predictLocalSimulation();
+      } else {
+        results = await predictBackend(modelType);
       }
-
-      // Denormalize predictions
-      const denormalized = denormalize(predictions, min, max);
-      setPredictions(denormalized);
-
-      return denormalized;
+      setPredictions(results);
+    } catch (error) {
+      console.error("Prediction failed:", error);
     } finally {
       setIsTraining(false);
     }
@@ -135,19 +178,19 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
     const actualDates = [...dates];
     const actualValues = [...closes];
 
-    // Generate future dates for predictions
-    const futureDates: string[] = [];
-    if (predictions.length > 0) {
-      const lastDate = new Date(dates[dates.length - 1]);
-      for (let i = 1; i <= predictions.length; i++) {
-        const nextDate = new Date(lastDate);
-        nextDate.setDate(nextDate.getDate() + i);
-        futureDates.push(nextDate.toISOString().split("T")[0]);
-      }
-    }
+    // Use prediction results
+    const predDates = predictions.map(p => p.date);
+    const predValues = predictions.map(p => p.predicted_price);
+    const upperBounds = predictions.map(p => p.upper_bound);
+    const lowerBounds = predictions.map(p => p.lower_bound);
 
-    const allDates = [...actualDates, ...futureDates];
-    const allValues = [...actualValues, ...new Array(actualDates.length).fill(null), ...predictions];
+    const allDates = [...actualDates, ...predDates];
+    
+    // To make the line continuous, we need to add the last actual point to the prediction series
+    const lastActualPrice = actualValues[actualValues.length - 1];
+    const paddedPredValues = [...new Array(actualDates.length - 1).fill(null), lastActualPrice, ...predValues];
+    const paddedUpper = [...new Array(actualDates.length).fill(null), ...upperBounds];
+    const paddedLower = [...new Array(actualDates.length).fill(null), ...lowerBounds];
 
     return {
       tooltip: {
@@ -159,16 +202,31 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
         backgroundColor: "rgba(37, 37, 38, 0.95)",
         borderColor: "#555",
         textStyle: { color: "#ccc" },
+        formatter: (params: any) => {
+          let res = `<div>${params[0].axisValue}</div>`;
+          params.forEach((param: any) => {
+             if (param.value !== null && param.value !== undefined) {
+               // Handle array data [index, value] or just value
+               const val = Array.isArray(param.value) ? param.value[1] : param.value;
+               if (val !== null) {
+                 res += `<div>${param.marker} ${param.seriesName}: ${Number(val).toFixed(2)}</div>`;
+               }
+             }
+          });
+          return res;
+        }
       },
       legend: {
-        data: [t("analysis.actualPrice"), t("analysis.lstmPrediction")],
+        data: [t("lstm.actualPrice"), t("lstm.lstmPrediction"), t("analysis.upperBound"), t("analysis.lowerBound")],
         textStyle: { color: "#858585", fontSize: 10 },
-        top: 0,
+        top: "2%",
+        left: "center",
       },
       grid: {
         left: "3%",
         right: "4%",
-        bottom: "3%",
+        top: "15%",
+        bottom: "8%",
         containLabel: true,
       },
       xAxis: {
@@ -190,16 +248,16 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
       },
       series: [
         {
-          name: t("analysis.actualPrice"),
+          name: t("lstm.actualPrice"),
           type: "line",
-          data: actualValues.map((v, i) => [i, v]),
+          data: actualValues,
           lineStyle: { color: "#007acc", width: 2 },
           itemStyle: { color: "#007acc" },
         },
         {
-          name: t("analysis.lstmPrediction"),
+          name: t("lstm.lstmPrediction"),
           type: "line",
-          data: allValues.map((v, i) => [i, v]),
+          data: paddedPredValues,
           lineStyle: { color: "#00ff00", width: 2, type: "dashed" },
           itemStyle: { color: "#00ff00" },
           markLine: {
@@ -212,6 +270,20 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
             ],
           },
         },
+        {
+          name: t("analysis.upperBound"),
+          type: "line",
+          data: paddedUpper,
+          lineStyle: { color: "#81c784", width: 1, type: "dotted", opacity: 0.5 },
+          symbol: "none",
+        },
+        {
+          name: t("analysis.lowerBound"),
+          type: "line",
+          data: paddedLower,
+          lineStyle: { color: "#81c784", width: 1, type: "dotted", opacity: 0.5 },
+          symbol: "none",
+        },
       ],
     };
   }, [klineData, predictions, t]);
@@ -220,23 +292,57 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
     <div className="lstm-prediction-analysis">
       <div className="analysis-columns">
         <div className="analysis-column params-column">
-          <div className="column-header">{t("analysis.lstmPrediction")}</div>
+          <div className="column-header">{t("lstm.lstmPrediction")}</div>
           <div className="params-content">
             <div className="param-section">
-              <label className="param-section-label">{t("analysis.sequenceLength")}</label>
-              <input
-                type="number"
-                value={sequenceLength}
-                onChange={(e) => setSequenceLength(parseInt(e.target.value) || 30)}
-                className="param-input"
-                min={10}
-                max={100}
-                step={5}
-              />
-              <div className="param-help">{t("analysis.sequenceLengthDesc")}</div>
+              <label className="param-section-label">{t("analysis.predictionMethod")}</label>
+              <select 
+                value={modelType} 
+                onChange={(e) => setModelType(e.target.value as LSTMModelType)}
+                className="param-select"
+                style={{ width: "100%", padding: "6px", backgroundColor: "#2d2d30", color: "#ccc", border: "1px solid #3e3e42", borderRadius: "2px" }}
+              >
+                <option value="deos_gpt">DeOS AlphaTimeGPT-2025 (Advanced)</option>
+                <option value="sspt">StockTime/SSPT (Fine-tuned)</option>
+                <option value="space_explore">NEOAI/SpaceExplore-27M (Latent)</option>
+                <option value="local_simulation">Local Simulation (Legacy)</option>
+              </select>
             </div>
+
+            {modelType === "sspt" && (
+              <div className="param-section">
+                <label className="param-section-label">{t("analysis.epochs")} (Fine-tuning)</label>
+                <input
+                  type="number"
+                  value={epochs}
+                  onChange={(e) => setEpochs(parseInt(e.target.value) || 5)}
+                  className="param-input"
+                  min={1}
+                  max={10}
+                  step={1}
+                />
+                <div className="param-help">1-5 epochs recommended for few-shot learning</div>
+              </div>
+            )}
+
+            {modelType === "local_simulation" && (
+              <div className="param-section">
+                <label className="param-section-label">{t("lstm.sequenceLength")}</label>
+                <input
+                  type="number"
+                  value={sequenceLength}
+                  onChange={(e) => setSequenceLength(parseInt(e.target.value) || 30)}
+                  className="param-input"
+                  min={10}
+                  max={100}
+                  step={5}
+                />
+                <div className="param-help">{t("lstm.sequenceLengthDesc")}</div>
+              </div>
+            )}
+            
             <div className="param-section">
-              <label className="param-section-label">{t("analysis.predictionDays")}</label>
+              <label className="param-section-label">{t("lstm.predictionDays")}</label>
               <input
                 type="number"
                 value={predictionDays}
@@ -246,43 +352,49 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
                 max={30}
               />
             </div>
-            <div className="param-section">
-              <label className="param-section-label">{t("analysis.epochs")}</label>
-              <input
-                type="number"
-                value={epochs}
-                onChange={(e) => setEpochs(parseInt(e.target.value) || 50)}
-                className="param-input"
-                min={10}
-                max={500}
-                step={10}
-                disabled={true}
-              />
-              <div className="param-help">{t("analysis.epochsDesc")}</div>
-            </div>
-            <div className="param-section">
-              <label className="param-section-label">{t("analysis.learningRate")}</label>
-              <input
-                type="number"
-                value={learningRate}
-                onChange={(e) => setLearningRate(parseFloat(e.target.value) || 0.01)}
-                className="param-input"
-                min={0.001}
-                max={0.1}
-                step={0.001}
-                disabled={true}
-              />
-              <div className="param-help">{t("analysis.learningRateDesc")}</div>
-            </div>
+
+            {modelType === "local_simulation" && (
+              <>
+                <div className="param-section">
+                  <label className="param-section-label">{t("analysis.epochs")}</label>
+                  <input
+                    type="number"
+                    value={epochs}
+                    onChange={(e) => setEpochs(parseInt(e.target.value) || 5)}
+                    className="param-input"
+                    min={1}
+                    max={10}
+                    step={1}
+                  />
+                  <div className="param-help">{t("analysis.epochsDesc")}</div>
+                </div>
+                <div className="param-section">
+                  <label className="param-section-label">{t("analysis.learningRate")}</label>
+                  <input
+                    type="number"
+                    value={learningRate}
+                    onChange={(e) => setLearningRate(parseFloat(e.target.value) || 0.01)}
+                    className="param-input"
+                    min={0.001}
+                    max={0.1}
+                    step={0.001}
+                    disabled={true}
+                  />
+                  <div className="param-help">{t("analysis.learningRateDesc")}</div>
+                </div>
+              </>
+            )}
+
             <div className="param-section">
               <button
-                onClick={predictLSTM}
-                disabled={isTraining || klineData.length < sequenceLength + 10}
+                onClick={runPrediction}
+                disabled={isTraining || klineData.length < 20}
                 className="param-btn primary"
               >
                 {isTraining ? t("analysis.training") : t("analysis.runLSTM")}
               </button>
             </div>
+            
             {predictions.length > 0 && (
               <div className="param-section">
                 <div className="prediction-results">
@@ -296,15 +408,21 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
                   <div className="result-item">
                     <span className="result-label">{t("analysis.predictedPrice")} ({predictionDays}{t("analysis.daysAfter")}):</span>
                     <span className="result-value">
-                      {predictions[predictions.length - 1]?.toFixed(2) || "-"}
+                      {predictions[predictions.length - 1]?.predicted_price.toFixed(2) || "-"}
                     </span>
                   </div>
                   <div className="result-item">
                     <span className="result-label">{t("analysis.expectedChange")}:</span>
-                    <span className={`result-value ${predictions[predictions.length - 1] > klineData[klineData.length - 1].close ? "positive" : "negative"}`}>
+                    <span className={`result-value ${predictions[predictions.length - 1].predicted_price > klineData[klineData.length - 1].close ? "positive" : "negative"}`}>
                       {predictions.length > 0
-                        ? (((predictions[predictions.length - 1] - klineData[klineData.length - 1].close) / klineData[klineData.length - 1].close) * 100).toFixed(2)
+                        ? (((predictions[predictions.length - 1].predicted_price - klineData[klineData.length - 1].close) / klineData[klineData.length - 1].close) * 100).toFixed(2)
                         : "-"}%
+                    </span>
+                  </div>
+                  <div className="result-item">
+                    <span className="result-label">{t("analysis.confidence")}:</span>
+                    <span className="result-value">
+                      {predictions[predictions.length - 1]?.confidence.toFixed(0)}%
                     </span>
                   </div>
                 </div>
@@ -317,11 +435,11 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
           <div className="column-header">
             <span>{t("analysis.chart")}</span>
             <button
-              className="chart-zoom-button-overlay"
+              className="chart-zoom-button"
               onClick={() => setIsChartDialogOpen(true)}
               title={t("chart.zoom")}
             >
-              ZO
+              {t("chart.zoomAbbr")}
             </button>
           </div>
           <div className="chart-content">
@@ -341,7 +459,7 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
       <ChartDialog
         isOpen={isChartDialogOpen}
         onClose={() => setIsChartDialogOpen(false)}
-        title={`${t("analysis.lstmPrediction")} - ${t("chart.title")}`}
+        title={`${t("lstm.lstmPrediction")} - ${t("chart.title")}`}
         chartOption={chartOption}
       />
     </div>

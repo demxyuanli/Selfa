@@ -146,10 +146,17 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
         <div className="analysis-column chart-column">
           <div className="column-header">
             <span>{t("analysis.chart")}</span>
+            <button
+              className="chart-zoom-button"
+              onClick={() => setIsChartDialogOpen(true)}
+              title={t("chart.zoom")}
+            >
+              ZO
+            </button>
           </div>
           {selectedDateIndex !== null && selectedDateIndex >= 0 && selectedDateIndex < klineData.length && (
             <div style={{ padding: "4px 12px", fontSize: "11px", color: "#858585", borderBottom: "1px solid #3e3e42" }}>
-              <strong style={{ color: "#007acc" }}>{t("analysis.selectedDate")}:</strong> {klineData[selectedDateIndex].date} | O: {klineData[selectedDateIndex].open.toFixed(2)} | H: {klineData[selectedDateIndex].high.toFixed(2)} | L: {klineData[selectedDateIndex].low.toFixed(2)} | C: {klineData[selectedDateIndex].close.toFixed(2)} | V: {(klineData[selectedDateIndex].volume / 10000).toFixed(2)}{t("common.tenThousand")}
+              <strong style={{ color: "#007acc" }}>{t("analysis.selectedDate")}:</strong> {klineData[selectedDateIndex].date} | {t("stock.openShort")}: {klineData[selectedDateIndex].open.toFixed(2)} | {t("stock.highShort")}: {klineData[selectedDateIndex].high.toFixed(2)} | {t("stock.lowShort")}: {klineData[selectedDateIndex].low.toFixed(2)} | {t("stock.closeShort")}: {klineData[selectedDateIndex].close.toFixed(2)} | {t("stock.volumeShort")}: {(klineData[selectedDateIndex].volume / 10000).toFixed(2)}{t("common.tenThousand")}
             </div>
           )}
           <div className="chart-content" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -157,16 +164,7 @@ const KLineTechnicalAnalysis: React.FC<KLineTechnicalAnalysisProps> = ({ klineDa
               {Object.keys(chartOption).length === 0 ? (
                 <div className="no-data">{t("analysis.noData")}</div>
               ) : (
-                <>
-                  <button
-                    className="chart-zoom-button-overlay"
-                    onClick={() => setIsChartDialogOpen(true)}
-                    title={t("chart.zoom")}
-                  >
-                    ZO
-                  </button>
-                  <ReactECharts ref={chartRef} option={chartOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "canvas" }} onEvents={handleChartEvents} />
-                </>
+                <ReactECharts ref={chartRef} option={chartOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "canvas" }} onEvents={handleChartEvents} />
               )}
             </div>
           </div>

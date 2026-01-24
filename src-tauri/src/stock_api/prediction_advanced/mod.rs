@@ -7,6 +7,9 @@ pub mod support_resistance;
 pub mod hurst_exponent;
 pub mod monte_carlo;
 pub mod ensemble;
+pub mod deos_alpha_time_gpt;
+pub mod sspt_fine_tune;
+pub mod space_explore_ai;
 
 #[allow(unused_imports)]
 pub use support_resistance::*;
@@ -16,6 +19,12 @@ pub use hurst_exponent::*;
 pub use monte_carlo::*;
 #[allow(unused_imports)]
 pub use ensemble::*;
+#[allow(unused_imports)]
+pub use deos_alpha_time_gpt::*;
+#[allow(unused_imports)]
+pub use sspt_fine_tune::*;
+#[allow(unused_imports)]
+pub use space_explore_ai::*;
 
 pub fn predict_mean_reversion(
     closes: &[f64],

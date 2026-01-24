@@ -1,6 +1,7 @@
 use crate::cache::StockCache;
 use crate::database::Database;
 use crate::stock_api::{fetch_stock_history, fetch_stock_quote, fetch_time_series, StockData, StockDataBundle, StockQuote, utils::is_trading_hours};
+use crate::stock_api::prediction_similarity::{find_similar_patterns, SimilarityResult};
 use chrono::Local;
 use std::sync::Arc;
 use tauri::State;
@@ -118,6 +119,32 @@ pub async fn get_all_favorites_quotes(
     }
 
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn get_similarity_prediction(
+    symbol: String,
+    period: String, // "daily", "weekly", etc.
+    lookback_window: usize,
+    forecast_horizon: usize,
+    cache: State<'_, Arc<StockCache>>,
+) -> Result<Vec<SimilarityResult>, String> {
+    let klt = match period.as_str() {
+        "daily" => "101",
+        "weekly" => "102",
+        "monthly" => "103",
+        _ => "101",
+    };
+
+    let data = if let Some(cached) = cache.get_history(&symbol, klt).await {
+        cached
+    } else {
+        // Fetch if not in cache (though usually it should be)
+        fetch_stock_history(&symbol, klt).await.map_err(|e| e.to_string())?
+    };
+
+    let results = find_similar_patterns(&data, lookback_window, forecast_horizon, 5);
+    Ok(results)
 }
 
 #[tauri::command]

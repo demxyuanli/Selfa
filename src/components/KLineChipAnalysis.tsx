@@ -84,9 +84,10 @@ const KLineChipAnalysis: React.FC<KLineChipAnalysisProps> = ({ klineData, symbol
     return calculateChipDistribution(
       chipCalculationData, 
       chipParams.priceBins, 
-      chipParams.decayFactor
+      chipParams.decayFactor,
+      t
     );
-  }, [chipCalculationData, chipParams.priceBins, chipParams.decayFactor]);
+  }, [chipCalculationData, chipParams.priceBins, chipParams.decayFactor, t]);
 
   // Compute chip metrics for the selected day (or last day) to match the chip chart
   const selectedDayChipMetrics = useMemo(() => {
@@ -113,7 +114,8 @@ const KLineChipAnalysis: React.FC<KLineChipAnalysisProps> = ({ klineData, symbol
       dayDist.chipAmounts,
       dayPrice,
       chipData.minPrice,
-      chipData.maxPrice
+      chipData.maxPrice,
+      t
     );
   }, [chipData, chipCalculationData, klineData, selectedDateIndex]);
 
@@ -232,27 +234,25 @@ const KLineChipAnalysis: React.FC<KLineChipAnalysisProps> = ({ klineData, symbol
         <div className="analysis-column chart-column">
           <div className="column-header">
             <span>{t("analysis.chart")}</span>
+            <button
+              className="chart-zoom-button"
+              onClick={() => setIsChartDialogOpen(true)}
+              title={t("chart.zoom")}
+            >
+              {t("chart.zoomAbbr")}
+            </button>
           </div>
           <div className="chart-content">
             {Object.keys(chartOption).length === 0 ? (
               <div className="no-data">{t("analysis.noData")}</div>
             ) : (
-              <>
-                <button
-                  className="chart-zoom-button-overlay"
-                  onClick={() => setIsChartDialogOpen(true)}
-                  title={t("chart.zoom")}
-                >
-                  ZO
-                </button>
-                <ReactECharts
-                  ref={chartRef}
-                  option={chartOption}
-                  style={{ height: "100%", width: "100%" }}
-                  opts={{ renderer: "canvas" }}
-                  onEvents={handleChartEvents}
-                />
-              </>
+              <ReactECharts
+                ref={chartRef}
+                option={chartOption}
+                style={{ height: "100%", width: "100%" }}
+                opts={{ renderer: "canvas" }}
+                onEvents={handleChartEvents}
+              />
             )}
           </div>
         </div>

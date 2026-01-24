@@ -1,3 +1,4 @@
+use super::candlestick_patterns::detect_patterns;
 use super::types::{StockData, TechnicalIndicators};
 
 pub struct MacdResult {
@@ -36,6 +37,9 @@ pub fn calculate_indicators(data: Vec<StockData>) -> TechnicalIndicators {
     let kdj = calculate_kdj(&data, 9, 3, 3);
     let williams_r = calculate_williams_r(&data, 14);
 
+    let (dkx, madkx) = calculate_dkx(&data, 20, 10);
+    let patterns = detect_patterns(&data);
+
     TechnicalIndicators {
         sma_20,
         sma_50,
@@ -55,7 +59,24 @@ pub fn calculate_indicators(data: Vec<StockData>) -> TechnicalIndicators {
         kdj_d: kdj.d,
         kdj_j: kdj.j,
         williams_r,
+        dkx,
+        madkx,
+        patterns,
     }
+}
+
+pub fn calculate_dkx(data: &[StockData], period: usize, ma_period: usize) -> (Vec<f64>, Vec<f64>) {
+    let mut mid_prices = Vec::with_capacity(data.len());
+    for d in data {
+        // DKX typical price: (3C + L + O + H) / 6
+        let mid = (3.0 * d.close + d.low + d.open + d.high) / 6.0;
+        mid_prices.push(mid);
+    }
+
+    let dkx = calculate_sma(&mid_prices, period);
+    let madkx = calculate_sma(&dkx, ma_period);
+
+    (dkx, madkx)
 }
 
 // ---------------------------------------------------------------------------

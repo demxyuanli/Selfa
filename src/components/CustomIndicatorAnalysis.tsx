@@ -41,85 +41,85 @@ interface IndicatorAnalysis {
 
 interface PresetModel {
   id: string;
-  name: string;
-  category: string;
+  nameKey: string;
+  categoryId: "trend" | "momentum";
   formulaTemplate: string;
   defaultParams: Record<string, number>;
-  description: string;
+  descriptionKey: string;
 }
 
 const PRESET_MODELS: PresetModel[] = [
   {
     id: "sma",
-    name: "SMA (Simple Moving Average)",
-    category: "Trend",
+    nameKey: "analysis.presetModels.sma.name",
+    categoryId: "trend",
     formulaTemplate: "MA(CLOSE, {period})",
     defaultParams: { period: 20 },
-    description: "Simple moving average",
+    descriptionKey: "analysis.presetModels.sma.description",
   },
   {
     id: "ema",
-    name: "EMA (Exponential Moving Average)",
-    category: "Trend",
+    nameKey: "analysis.presetModels.ema.name",
+    categoryId: "trend",
     formulaTemplate: "EMA(CLOSE, {period})",
     defaultParams: { period: 12 },
-    description: "Exponential moving average",
+    descriptionKey: "analysis.presetModels.ema.description",
   },
   {
     id: "macd",
-    name: "MACD",
-    category: "Momentum",
+    nameKey: "analysis.presetModels.macd.name",
+    categoryId: "momentum",
     formulaTemplate: "EMA(CLOSE, {fast}) - EMA(CLOSE, {slow})",
     defaultParams: { fast: 12, slow: 26 },
-    description: "MACD line",
+    descriptionKey: "analysis.presetModels.macd.description",
   },
   {
     id: "sma5",
-    name: "SMA 5",
-    category: "Trend",
+    nameKey: "analysis.presetModels.sma5.name",
+    categoryId: "trend",
     formulaTemplate: "MA(CLOSE, {period})",
     defaultParams: { period: 5 },
-    description: "5-period SMA",
+    descriptionKey: "analysis.presetModels.sma5.description",
   },
   {
     id: "sma10",
-    name: "SMA 10",
-    category: "Trend",
+    nameKey: "analysis.presetModels.sma10.name",
+    categoryId: "trend",
     formulaTemplate: "MA(CLOSE, {period})",
     defaultParams: { period: 10 },
-    description: "10-period SMA",
+    descriptionKey: "analysis.presetModels.sma10.description",
   },
   {
     id: "ema26",
-    name: "EMA 26",
-    category: "Trend",
+    nameKey: "analysis.presetModels.ema26.name",
+    categoryId: "trend",
     formulaTemplate: "EMA(CLOSE, {period})",
     defaultParams: { period: 26 },
-    description: "26-period EMA",
+    descriptionKey: "analysis.presetModels.ema26.description",
   },
   {
     id: "triple_ma",
-    name: "Triple MA Crossover",
-    category: "Trend",
+    nameKey: "analysis.presetModels.triple_ma.name",
+    categoryId: "trend",
     formulaTemplate: "(MA(CLOSE, {fast}) + MA(CLOSE, {medium}) + MA(CLOSE, {slow})) / 3",
     defaultParams: { fast: 5, medium: 10, slow: 20 },
-    description: "Average of three MAs",
+    descriptionKey: "analysis.presetModels.triple_ma.description",
   },
   {
     id: "price_change",
-    name: "Price Change %",
-    category: "Momentum",
+    nameKey: "analysis.presetModels.price_change.name",
+    categoryId: "momentum",
     formulaTemplate: "((CLOSE - REF(CLOSE, {period})) / REF(CLOSE, {period})) * 100",
     defaultParams: { period: 1 },
-    description: "Percentage price change",
+    descriptionKey: "analysis.presetModels.price_change.description",
   },
   {
     id: "ema_cross",
-    name: "EMA Cross Signal",
-    category: "Trend",
+    nameKey: "analysis.presetModels.ema_cross.name",
+    categoryId: "trend",
     formulaTemplate: "EMA(CLOSE, {fast}) - EMA(CLOSE, {slow})",
     defaultParams: { fast: 12, slow: 26 },
-    description: "EMA crossover indicator",
+    descriptionKey: "analysis.presetModels.ema_cross.description",
   },
 ];
 
@@ -228,7 +228,7 @@ const CustomIndicatorAnalysis: React.FC<CustomIndicatorAnalysisProps> = ({ kline
     setSelectedPreset(presetId);
     const preset = PRESET_MODELS.find(p => p.id === presetId);
     if (preset) {
-      setIndicatorName(preset.name);
+      setIndicatorName(t(preset.nameKey));
       setPresetParams({ ...preset.defaultParams });
       // Generate formula with default params
       let generatedFormula = preset.formulaTemplate;
@@ -431,7 +431,7 @@ const CustomIndicatorAnalysis: React.FC<CustomIndicatorAnalysisProps> = ({ kline
 
     const series: any[] = [
       {
-        name: "Price",
+        name: t("analysis.price"),
         type: "line",
         data: closes,
         smooth: true,
@@ -465,14 +465,16 @@ const CustomIndicatorAnalysis: React.FC<CustomIndicatorAnalysisProps> = ({ kline
         textStyle: { color: "#ccc" },
       },
       legend: {
-        data: ["Price", ...indicators.map((ind) => ind.name)],
+        data: [t("analysis.price"), ...indicators.map((ind) => ind.name)],
         textStyle: { color: "#858585", fontSize: 10 },
-        top: 0,
+        top: "2%",
+        left: "center",
       },
       grid: {
         left: "3%",
         right: "4%",
-        bottom: "3%",
+        top: "15%",
+        bottom: "8%",
         containLabel: true,
       },
       xAxis: {
@@ -493,7 +495,7 @@ const CustomIndicatorAnalysis: React.FC<CustomIndicatorAnalysisProps> = ({ kline
       },
       series: series,
     };
-  }, [klineData, indicators]);
+  }, [klineData, indicators, t]);
 
   return (
     <div className="custom-indicator-analysis">
@@ -511,15 +513,16 @@ const CustomIndicatorAnalysis: React.FC<CustomIndicatorAnalysisProps> = ({ kline
                 <option value="">{t("analysis.selectPreset")}</option>
                 {Object.entries(
                   PRESET_MODELS.reduce((acc, model) => {
-                    if (!acc[model.category]) acc[model.category] = [];
-                    acc[model.category].push(model);
+                    const categoryKey = model.categoryId === "trend" ? "categoryTrend" : "categoryMomentum";
+                    if (!acc[categoryKey]) acc[categoryKey] = [];
+                    acc[categoryKey].push(model);
                     return acc;
                   }, {} as Record<string, PresetModel[]>)
-                ).map(([category, models]) => (
-                  <optgroup key={category} label={category}>
+                ).map(([categoryKey, models]) => (
+                  <optgroup key={categoryKey} label={t(`analysis.${categoryKey}`)}>
                     {models.map((model) => (
                       <option key={model.id} value={model.id}>
-                        {model.name}
+                        {t(model.nameKey)}
                       </option>
                     ))}
                   </optgroup>
@@ -527,7 +530,7 @@ const CustomIndicatorAnalysis: React.FC<CustomIndicatorAnalysisProps> = ({ kline
               </select>
               {selectedPreset && (
                 <div className="preset-description">
-                  {PRESET_MODELS.find(p => p.id === selectedPreset)?.description}
+                  {t(PRESET_MODELS.find(p => p.id === selectedPreset)?.descriptionKey || "")}
                 </div>
               )}
             </div>
@@ -739,11 +742,11 @@ const CustomIndicatorAnalysis: React.FC<CustomIndicatorAnalysisProps> = ({ kline
           <div className="column-header">
             <span>{t("analysis.chart")}</span>
             <button
-              className="chart-zoom-button-overlay"
+              className="chart-zoom-button"
               onClick={() => setIsChartDialogOpen(true)}
               title={t("chart.zoom")}
             >
-              ZO
+              {t("chart.zoomAbbr")}
             </button>
           </div>
           <div className="chart-content">

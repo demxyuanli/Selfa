@@ -278,7 +278,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                 })
               }
             />
-            <span className="settings-unit">¥</span>
+            <span className="settings-unit">{t("common.currencySymbol")}</span>
           </div>
         </label>
         <div className="settings-description">
@@ -471,7 +471,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                 })
               }
             />
-            <span className="settings-unit">¥</span>
+            <span className="settings-unit">{t("common.currencySymbol")}</span>
           </div>
         </label>
         <div className="settings-description">

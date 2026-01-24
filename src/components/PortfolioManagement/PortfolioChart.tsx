@@ -48,8 +48,8 @@ const PortfolioChart: React.FC<PortfolioChartProps> = ({ positions, onZoom }) =>
     <div className="portfolio-chart">
       <div className="section-header">
         {t("portfolio.portfolioDistribution")}
-        <button className="chart-zoom-button-overlay" onClick={onZoom} title={t("chart.zoom")}>
-          ZO
+        <button className="chart-zoom-button" onClick={onZoom} title={t("chart.zoom")}>
+          {t("chart.zoomAbbr")}
         </button>
       </div>
       <div className="chart-content">

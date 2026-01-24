@@ -228,7 +228,7 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
           },
         },
         {
-          name: "MA5",
+          name: t("analysis.ma5"),
           type: "line",
           data: ma5,
           smooth: false,
@@ -242,7 +242,7 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
           },
         },
         {
-          name: "MA10",
+          name: t("analysis.ma10"),
           type: "line",
           data: ma10,
           smooth: false,
@@ -256,7 +256,7 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
           },
         },
         {
-          name: "MA20",
+          name: t("analysis.ma20"),
           type: "line",
           data: ma20,
           smooth: false,
@@ -270,7 +270,7 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
           },
         },
         {
-          name: "MA60",
+          name: t("analysis.ma60"),
           type: "line",
           data: ma60,
           smooth: false,
@@ -306,7 +306,7 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
         },
       ],
       legend: {
-        data: [t("chart.kline"), "MA5", "MA10", "MA20", "MA60"],
+        data: [t("chart.kline"), t("analysis.ma5"), t("analysis.ma10"), t("analysis.ma20"), t("analysis.ma60")],
           textStyle: {
             color: "#cccccc",
             fontSize: compact ? 5 : 6,
@@ -346,15 +346,20 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
               <div>${t("chart.volume")}: <span style="color: #cccccc;">${compact ? Math.round(stockData.volume / 100000000) : (stockData.volume / 10000).toFixed(2) + t("common.tenThousand")}</span></div>
           `;
 
+          const ma5Name = t("analysis.ma5");
+          const ma10Name = t("analysis.ma10");
+          const ma20Name = t("analysis.ma20");
+          const ma60Name = t("analysis.ma60");
+
           params.forEach((p: any) => {
-            if (p.seriesName === "MA5" && !isNaN(p.value)) {
-              html += `<div>MA5: <span style="color: #ffff00;">${p.value.toFixed(2)}</span></div>`;
-            } else if (p.seriesName === "MA10" && !isNaN(p.value)) {
-              html += `<div>MA10: <span style="color: #00ffff;">${p.value.toFixed(2)}</span></div>`;
-            } else if (p.seriesName === "MA20" && !isNaN(p.value)) {
-              html += `<div>MA20: <span style="color: #ff00ff;">${p.value.toFixed(2)}</span></div>`;
-            } else if (p.seriesName === "MA60" && !isNaN(p.value)) {
-              html += `<div>MA60: <span style="color: #00ff00;">${p.value.toFixed(2)}</span></div>`;
+            if (p.seriesName === ma5Name && !isNaN(p.value)) {
+              html += `<div>${ma5Name}: <span style="color: #ffff00;">${p.value.toFixed(2)}</span></div>`;
+            } else if (p.seriesName === ma10Name && !isNaN(p.value)) {
+              html += `<div>${ma10Name}: <span style="color: #00ffff;">${p.value.toFixed(2)}</span></div>`;
+            } else if (p.seriesName === ma20Name && !isNaN(p.value)) {
+              html += `<div>${ma20Name}: <span style="color: #ff00ff;">${p.value.toFixed(2)}</span></div>`;
+            } else if (p.seriesName === ma60Name && !isNaN(p.value)) {
+              html += `<div>${ma60Name}: <span style="color: #00ff00;">${p.value.toFixed(2)}</span></div>`;
             }
           });
 
@@ -368,7 +373,7 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
   if (!data || data.length === 0) {
     return (
       <div className="kline-chart">
-        <div className="chart-empty">No K-line data available</div>
+        <div className="chart-empty">{t("chart.noKlineData")}</div>
       </div>
     );
   }

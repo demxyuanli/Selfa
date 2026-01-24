@@ -551,7 +551,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, quote, compact 
   if (!data || data.length === 0) {
     return (
       <div className="time-series-chart">
-        <div className="chart-empty">No time series data available</div>
+        <div className="chart-empty">{t("chart.noTimeSeriesData")}</div>
       </div>
     );
   }

@@ -1185,9 +1185,9 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
                                   {transaction.transactionType === "buy" ? t("portfolio.buy") : t("portfolio.sell")}
                                 </td>
                                 <td>{transaction.quantity}</td>
-                                <td>¥{transaction.price.toFixed(2)}</td>
-                                <td>¥{transaction.amount.toFixed(2)}</td>
-                                <td>¥{transaction.commission.toFixed(2)}</td>
+                                <td>{t("common.currencySymbol")}{transaction.price.toFixed(2)}</td>
+                                <td>{t("common.currencySymbol")}{transaction.amount.toFixed(2)}</td>
+                                <td>{t("common.currencySymbol")}{transaction.commission.toFixed(2)}</td>
                                 <td>{transaction.transactionDate}</td>
                                 <td>{transaction.notes || "-"}</td>
                               </tr>

@@ -1,4 +1,16 @@
-use crate::stock_api::{calculate_indicators, predict_stock_price as api_predict_stock_price, ai_analyze_stock as api_ai_analyze_stock, StockData, StockQuote, TechnicalIndicators};
+use crate::stock_api::{
+    calculate_indicators, 
+    predict_stock_price as api_predict_stock_price, 
+    ai_analyze_stock as api_ai_analyze_stock, 
+    backtest::{run_backtest as api_run_backtest, BacktestConfig, BacktestResult},
+    analysis_intraday::{analyze_intraday_data, IntradayAnalysisResult},
+    StockData, StockQuote, TechnicalIndicators
+};
+
+#[tauri::command]
+pub fn run_backtest_command(data: Vec<StockData>, config: BacktestConfig) -> Result<BacktestResult, String> {
+    api_run_backtest(&data, config)
+}
 
 #[tauri::command]
 pub fn calculate_technical_indicators(data: Vec<StockData>) -> Result<TechnicalIndicators, String> {
@@ -32,4 +44,9 @@ pub async fn ai_analyze_stock(
         use_local_fallback,
     )
     .await
+}
+
+#[tauri::command]
+pub fn get_intraday_analysis(data: Vec<StockData>) -> Result<IntradayAnalysisResult, String> {
+    Ok(analyze_intraday_data(&data))
 }

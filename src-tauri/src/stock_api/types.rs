@@ -54,6 +54,9 @@ pub struct TechnicalIndicators {
     pub kdj_d: Vec<f64>,
     pub kdj_j: Vec<f64>,
     pub williams_r: Vec<f64>,
+    pub dkx: Vec<f64>,
+    pub madkx: Vec<f64>,
+    pub patterns: Vec<Option<String>>, // Name of pattern if detected for that day
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -76,7 +76,8 @@ export interface ChipDistributionResult {
 
 function calculateChipPrediction(
   metrics: ChipMetricsDetail,
-  currentPrice: number
+  currentPrice: number,
+  t?: (key: string) => string
 ): ChipPrediction {
   let score = 0;
   let confidence = 50;
@@ -92,58 +93,77 @@ function calculateChipPrediction(
     position
   } = metrics;
 
+  // Default translation function if not provided
+  const translate = t || ((key: string) => {
+    const defaultTranslations: Record<string, string> = {
+      "chipPredictionReasoning.lowSingleDense": "Low single peak dense: Classic bottom accumulation signal.",
+      "chipPredictionReasoning.highSingleDenseHighProfit": "High single peak with high profit: Risk of distribution/dump.",
+      "chipPredictionReasoning.highSingleDense": "High single peak: Trend continuation possible but risky.",
+      "chipPredictionReasoning.bottomConverging": "Bottom converging: Chips collecting at lows, stabilizing.",
+      "chipPredictionReasoning.multiPeak": "Multi-peak: Divergence in consensus, likely volatile/sideways.",
+      "chipPredictionReasoning.scattered": "Scattered chips: No clear consensus, weak trend support.",
+      "chipPredictionReasoning.extremelyHighProfit": "Extremely high profit ratio (>90%): Strong trend but overbought risk.",
+      "chipPredictionReasoning.extremelyLowProfit": "Extremely low profit ratio (<10%) at lows: Potential oversold bounce.",
+      "chipPredictionReasoning.heavyTrappedSupply": "Heavy trapped supply (>80%): Strong overhead resistance.",
+      "chipPredictionReasoning.priceAboveCost20": "Price 20% above avg cost: Profit taking likely.",
+      "chipPredictionReasoning.priceBelowCost20": "Price 20% below avg cost: Valuation attractive.",
+      "chipPredictionReasoning.highConcentration": "High chip concentration: Strong consensus, explosive move likely.",
+    };
+    return defaultTranslations[key] || key;
+  });
+
   // 1. Morphology Analysis
   if (morphology === "low_single_dense") {
     score += 40;
     confidence += 20;
-    reasoning.push("Low single peak dense: Classic bottom accumulation signal.");
+    reasoning.push(translate("analysis.chipPredictionReasoning.lowSingleDense"));
   } else if (morphology === "high_single_dense") {
     if (profitRatio > 80) {
       score -= 30;
-      reasoning.push("High single peak with high profit: Risk of distribution/dump.");
+      reasoning.push(translate("analysis.chipPredictionReasoning.highSingleDenseHighProfit"));
     } else {
       score += 10;
-      reasoning.push("High single peak: Trend continuation possible but risky.");
+      reasoning.push(translate("analysis.chipPredictionReasoning.highSingleDense"));
     }
   } else if (morphology === "bottom_converging") {
     score += 25;
-    reasoning.push("Bottom converging: Chips collecting at lows, stabilizing.");
+    reasoning.push(translate("analysis.chipPredictionReasoning.bottomConverging"));
   } else if (morphology === "multi_peak") {
     score -= 10;
-    reasoning.push("Multi-peak: Divergence in consensus, likely volatile/sideways.");
+    reasoning.push(translate("analysis.chipPredictionReasoning.multiPeak"));
   } else if (morphology === "scattered") {
     score -= 20;
-    reasoning.push("Scattered chips: No clear consensus, weak trend support.");
+    reasoning.push(translate("analysis.chipPredictionReasoning.scattered"));
   }
 
   // 2. Profit/Trapped Ratio Analysis
   if (profitRatio > 90) {
     score += 10; // Momentum strong, but watch out
-    reasoning.push("Extremely high profit ratio (>90%): Strong trend but overbought risk.");
+    reasoning.push(translate("analysis.chipPredictionReasoning.extremelyHighProfit"));
   } else if (profitRatio < 10 && position === "low") {
     score += 15; // Oversold bounce potential
-    reasoning.push("Extremely low profit ratio (<10%) at lows: Potential oversold bounce.");
+    reasoning.push(translate("analysis.chipPredictionReasoning.extremelyLowProfit"));
   }
 
   if (trappedRatio > 80) {
     score -= 20;
-    reasoning.push("Heavy trapped supply (>80%): Strong overhead resistance.");
+    reasoning.push(translate("analysis.chipPredictionReasoning.heavyTrappedSupply"));
   }
 
   // 3. Cost vs Price Analysis (ASR/CYS)
   const deviation = ((currentPrice - avgCost) / avgCost) * 100;
   if (deviation > 20) {
     score -= 10; // Too far above cost
-    reasoning.push(`Price 20% above avg cost: Profit taking likely.`);
+    reasoning.push(translate("analysis.chipPredictionReasoning.priceAboveCost20"));
   } else if (deviation < -20) {
     score += 15; // Too far below cost
-    reasoning.push(`Price 20% below avg cost: Valuation attractive.`);
+    reasoning.push(translate("analysis.chipPredictionReasoning.priceBelowCost20"));
   }
 
   // 4. Concentration
   if (concentration90 < 10) {
     confidence += 15;
-    reasoning.push("High chip concentration: Strong consensus, explosive move likely.");
+    reasoning.push(translate("analysis.chipPredictionReasoning.highConcentration"));
   }
 
   // Determine Signal
@@ -203,7 +223,8 @@ export function computeChipMetrics(
   chipAmounts: number[],
   currentPrice: number,
   minPrice: number,
-  maxPrice: number
+  maxPrice: number,
+  t?: (key: string) => string
 ): ChipMetricsDetail {
   const bins = priceLevels.length;
   const total = chipAmounts.reduce((s, a) => s + a, 0);
@@ -354,7 +375,7 @@ export function computeChipMetrics(
     mainPeaks: topPeaks,
   };
 
-  const prediction = calculateChipPrediction(baseMetrics, currentPrice);
+  const prediction = calculateChipPrediction(baseMetrics, currentPrice, t);
 
   return {
     ...baseMetrics,
@@ -368,7 +389,8 @@ import { getChipDistributionParams } from "./settings";
 export function calculateChipDistribution(
   data: StockData[],
   priceBins?: number,
-  decayFactor?: number
+  decayFactor?: number,
+  t?: (key: string) => string
 ): ChipDistributionResult | null {
   const defaults = getChipDistributionParams();
   const bins = priceBins ?? defaults.priceBins;
@@ -455,7 +477,7 @@ export function calculateChipDistribution(
   const concentration = meanChip > 0 ? (stdDev / meanChip) * 100 : 100;
 
   // Extended metrics: 90/70 concentration, support/resistance, morphology, etc.
-  const metrics = computeChipMetrics(priceLevels, chipDistribution, currentPrice, minPrice, maxPrice);
+  const metrics = computeChipMetrics(priceLevels, chipDistribution, currentPrice, minPrice, maxPrice, t);
 
   // Find main peaks (local maxima)
   const mainPeaks: Array<{ price: number; amount: number }> = [];
@@ -533,7 +555,8 @@ export function calculateChipDistribution(
   // Calculate prediction
   const prediction = calculateChipPrediction(
     metrics,
-    currentPrice
+    currentPrice,
+    t
   );
 
   return {

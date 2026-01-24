@@ -338,7 +338,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       },
     });
     series.push({
-      name: "RSI Overbought Area",
+      name: t("analysis.rsiOverboughtArea"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -452,7 +452,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       areaStyle: { opacity: 0.1, color: "#ff9800" },
     });
     series.push({
-      name: "Zero Line",
+      name: t("analysis.zeroLine"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -478,7 +478,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#e91e63", width: 1.5 },
     });
     series.push({
-      name: "Overbought (+100)",
+      name: t("analysis.overbought100"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -487,7 +487,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#ff0000", width: 1, type: "dashed" },
     });
     series.push({
-      name: "Oversold (-100)",
+      name: t("analysis.oversold100"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -496,7 +496,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#00ff00", width: 1, type: "dashed" },
     });
     series.push({
-      name: "Zero Line",
+      name: t("analysis.zeroLine"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -525,7 +525,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#9c27b0", width: 1.5 },
     });
     series.push({
-      name: "+DI",
+      name: t("analysis.plusDI"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -534,7 +534,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#00ff00", width: 1 },
     });
     series.push({
-      name: "-DI",
+      name: t("analysis.minusDI"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -543,7 +543,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#ff0000", width: 1 },
     });
     series.push({
-      name: "Trend Strength (25)",
+      name: t("analysis.trendStrength25"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -563,7 +563,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       axisLabel: { fontSize: 9, color: "#858585" },
     });
     series.push({
-      name: "+DI (Directional Indicator)",
+      name: t("analysis.plusDIFull"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -572,7 +572,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#00ff00", width: 1.5 },
     });
     series.push({
-      name: "-DI (Directional Indicator)",
+      name: t("analysis.minusDIFull"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -581,7 +581,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#ff0000", width: 1.5 },
     });
     series.push({
-      name: "ADX (Trend Strength)",
+      name: t("analysis.adxTrendStrength"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -590,7 +590,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#9c27b0", width: 1, type: "dashed" },
     });
     series.push({
-      name: "Trend Strength (25)",
+      name: t("analysis.trendStrength25"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -610,7 +610,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       axisLabel: { fontSize: 9, color: "#858585" },
     });
     series.push({
-      name: "StochRSI %K",
+      name: t("analysis.stochRsiK"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -619,7 +619,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#2196f3", width: 1.5 },
     });
     series.push({
-      name: "StochRSI %D",
+      name: t("analysis.stochRsiD"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -628,7 +628,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#ff5722", width: 1.5 },
     });
     series.push({
-      name: "Overbought (80)",
+      name: t("analysis.overbought80"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -637,7 +637,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#ff0000", width: 1, type: "dashed" },
     });
     series.push({
-      name: "Oversold (20)",
+      name: t("analysis.oversold20"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -669,7 +669,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       axisLabel: { fontSize: 9, color: "#858585", formatter: (value: number) => `${value}%` },
     });
     series.push({
-      name: "BB %B",
+      name: t("analysis.bbPercent"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -678,7 +678,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#9c27b0", width: 1.5 },
     });
     series.push({
-      name: "Overbought (80%)",
+      name: t("analysis.overbought80Percent"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -687,7 +687,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#ff0000", width: 1, type: "dashed" },
     });
     series.push({
-      name: "Oversold (20%)",
+      name: t("analysis.oversold20Percent"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -696,7 +696,7 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       lineStyle: { color: "#00ff00", width: 1, type: "dashed" },
     });
     series.push({
-      name: "Middle (50%)",
+      name: t("analysis.middle50Percent"),
       type: "line",
       xAxisIndex: 2,
       yAxisIndex: 2,
@@ -878,7 +878,8 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       dayDist.chipAmounts,
       dayPrice,
       chipData.minPrice,
-      chipData.maxPrice
+      chipData.maxPrice,
+      t
     );
     if (dayMetrics.supportLevel != null) {
       series.push({

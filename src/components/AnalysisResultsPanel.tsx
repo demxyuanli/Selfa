@@ -130,7 +130,7 @@ const AnalysisResultsPanel: React.FC<AnalysisResultsPanelProps> = ({
                 <div className="param-inputs">
                   {oscillatorType === "rsi" && (
                     <div className="param-row">
-                      <label>RSI {t("analysis.period")}</label>
+                      <label>{t("settings.rsiPeriod")}</label>
                       <input
                         type="number"
                         value={indicatorParams.rsiPeriod}
@@ -144,7 +144,7 @@ const AnalysisResultsPanel: React.FC<AnalysisResultsPanelProps> = ({
                   {oscillatorType === "macd" && (
                     <>
                       <div className="param-row">
-                        <label>MACD Fast</label>
+                        <label>{t("settings.macdFast")}</label>
                         <input
                           type="number"
                           value={indicatorParams.macdFast}
@@ -155,7 +155,7 @@ const AnalysisResultsPanel: React.FC<AnalysisResultsPanelProps> = ({
                         />
                       </div>
                       <div className="param-row">
-                        <label>MACD Slow</label>
+                        <label>{t("settings.macdSlow")}</label>
                         <input
                           type="number"
                           value={indicatorParams.macdSlow}
@@ -166,7 +166,7 @@ const AnalysisResultsPanel: React.FC<AnalysisResultsPanelProps> = ({
                         />
                       </div>
                       <div className="param-row">
-                        <label>MACD Signal</label>
+                        <label>{t("settings.macdSignal")}</label>
                         <input
                           type="number"
                           value={indicatorParams.macdSignal}
@@ -180,7 +180,7 @@ const AnalysisResultsPanel: React.FC<AnalysisResultsPanelProps> = ({
                   )}
                   {oscillatorType === "kdj" && (
                     <div className="param-row">
-                      <label>KDJ {t("analysis.period")}</label>
+                      <label>{t("settings.kdjPeriod")}</label>
                       <input
                         type="number"
                         value={indicatorParams.kdjPeriod}
@@ -193,7 +193,7 @@ const AnalysisResultsPanel: React.FC<AnalysisResultsPanelProps> = ({
                   )}
                   {oscillatorType === "momentum" && (
                     <div className="param-row">
-                      <label>{t("analysis.period")}</label>
+                      <label>{t("settings.momentumPeriod")}</label>
                       <input
                         type="number"
                         value={indicatorParams.momentumPeriod}
@@ -206,7 +206,7 @@ const AnalysisResultsPanel: React.FC<AnalysisResultsPanelProps> = ({
                   )}
                   {oscillatorType === "cci" && (
                     <div className="param-row">
-                      <label>CCI {t("analysis.period")}</label>
+                      <label>{t("settings.cciPeriod")}</label>
                       <input
                         type="number"
                         value={indicatorParams.cciPeriod}
@@ -219,7 +219,7 @@ const AnalysisResultsPanel: React.FC<AnalysisResultsPanelProps> = ({
                   )}
                   {oscillatorType === "adx" && (
                     <div className="param-row">
-                      <label>ADX {t("analysis.period")}</label>
+                      <label>{t("settings.adxPeriod")}</label>
                       <input
                         type="number"
                         value={indicatorParams.adxPeriod}
@@ -233,7 +233,7 @@ const AnalysisResultsPanel: React.FC<AnalysisResultsPanelProps> = ({
                   {oscillatorType === "stochrsi" && (
                     <>
                       <div className="param-row">
-                        <label>RSI {t("analysis.period")}</label>
+                        <label>{t("settings.rsiPeriod")}</label>
                         <input
                           type="number"
                           value={indicatorParams.stochRsiRsiPeriod}
@@ -244,7 +244,7 @@ const AnalysisResultsPanel: React.FC<AnalysisResultsPanelProps> = ({
                         />
                       </div>
                       <div className="param-row">
-                        <label>Stoch {t("analysis.period")}</label>
+                        <label>{t("settings.stochPeriod")}</label>
                         <input
                           type="number"
                           value={indicatorParams.stochRsiStochPeriod}
@@ -258,7 +258,7 @@ const AnalysisResultsPanel: React.FC<AnalysisResultsPanelProps> = ({
                   )}
                   {oscillatorType === "bbpercent" && (
                     <div className="param-row">
-                      <label>BB {t("analysis.period")}</label>
+                      <label>{t("settings.bbPeriod")}</label>
                       <input
                         type="number"
                         value={indicatorParams.bbPercentPeriod}

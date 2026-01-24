@@ -77,7 +77,7 @@ const SetInitialBalanceDialog: React.FC<SetInitialBalanceDialogProps> = ({
             />
             {currentBalance !== null && (
               <div style={{ marginTop: "8px", fontSize: "12px", color: "#888" }}>
-                {t("portfolio.currentInitialBalance") || "Current"}: ¥{currentBalance.toFixed(2)}
+                {t("portfolio.currentInitialBalance") || "Current"}: {t("common.currencySymbol")}{currentBalance.toFixed(2)}
               </div>
             )}
           </div>

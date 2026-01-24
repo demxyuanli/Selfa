@@ -669,7 +669,7 @@ const PortfolioTimeseriesCard: React.FC<PortfolioTimeseriesCardProps> = ({ onSto
                 ${param.seriesName}: `;
               
               if (originalPrice !== null && originalPrice !== undefined) {
-                result += `<span style="font-weight: 600;">¥${originalPrice.toFixed(2)}</span> `;
+                result += `<span style="font-weight: 600;">${t("common.currencySymbol")}${originalPrice.toFixed(2)}</span> `;
                 result += `<span style="font-size: 11px; color: #999;">(${value >= 0 ? "+" : ""}${value.toFixed(2)}%)</span>`;
               } else {
                 result += `<span style="font-weight: 600;">${value >= 0 ? "+" : ""}${value.toFixed(2)}%</span>`;

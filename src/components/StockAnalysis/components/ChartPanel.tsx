@@ -44,19 +44,17 @@ const ChartPanel: React.FC<ChartPanelProps> = ({ chartOption, onZoom }) => {
     <div className="analysis-column chart-column">
       <div className="column-header">
         <span>{t("analysis.chart")}</span>
+        <button
+          className="chart-zoom-button"
+          onClick={onZoom}
+          title={t("chart.zoom")}
+        >
+          {t("chart.zoomAbbr")}
+        </button>
       </div>
       <div className="chart-content">
         {Object.keys(chartOption).length > 0 ? (
-          <>
-            <button
-              className="chart-zoom-button-overlay"
-              onClick={onZoom}
-              title={t("chart.zoom")}
-            >
-              ZO
-            </button>
-            <ReactECharts ref={chartRef} option={chartOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "canvas" }} />
-          </>
+          <ReactECharts ref={chartRef} option={chartOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "canvas" }} />
         ) : (
           <div className="no-data">{t("analysis.noData")}</div>
         )}

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import "./TimeSeriesTable.css";
 
 interface StockData {
@@ -16,6 +17,7 @@ interface TimeSeriesTableProps {
 }
 
 const TimeSeriesTable: React.FC<TimeSeriesTableProps> = ({ data, quote }) => {
+  const { t } = useTranslation();
   const [columnWidths, setColumnWidths] = useState({
     time: 42,
     price: 52,
@@ -82,9 +84,9 @@ const TimeSeriesTable: React.FC<TimeSeriesTableProps> = ({ data, quote }) => {
   const previousClose = quote?.previous_close || null;
 
   const columns = [
-    { key: "time", label: "Time" },
-    { key: "price", label: "Price" },
-    { key: "volume", label: "Vol" },
+    { key: "time", label: t("analysis.time") },
+    { key: "price", label: t("analysis.price") },
+    { key: "volume", label: t("analysis.vol") },
   ];
 
   return (

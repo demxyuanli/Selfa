@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { useAlert } from "../contexts/AlertContext";
 import ReactECharts from "echarts-for-react";
@@ -25,461 +26,194 @@ interface Trade {
   price: number;
   type: "buy" | "sell";
   quantity: number;
+  profit?: number;
+  reason: string;
+}
+
+interface EquityPoint {
+  date: string;
+  equity: number;
+  drawdown_pct: number;
 }
 
 interface BacktestResult {
-  initialCapital: number;
-  finalCapital: number;
-  totalReturn: number;
-  totalReturnPercent: number;
-  maxDrawdown: number;
-  maxDrawdownPercent: number;
-  totalTrades: number;
-  winningTrades: number;
-  losingTrades: number;
-  winRate: number;
-  avgWin: number;
-  avgLoss: number;
-  profitFactor: number;
-  equityCurve: Array<{ date: string; value: number }>;
+  total_return: number;
+  total_return_pct: number;
+  max_drawdown: number;
+  max_drawdown_pct: number;
+  win_rate: number;
+  profit_factor: number;
+  sharpe_ratio: number;
+  sortino_ratio: number;
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
   trades: Trade[];
+  equity_curve: EquityPoint[];
+  next_signal?: string;
 }
 
-type StrategyType = "ma_cross" | "rsi" | "macd_rsi" | "custom";
+type StrategyType = 
+  | { type: "MaCross", params: { fast: number; slow: number } }
+  | { type: "Rsi", params: { period: number; overbought: number; oversold: number } }
+  | { type: "Macd", params: { fast: number; slow: number; signal: number } }
+  | { type: "Kdj", params: { period: number; k_period: number; d_period: number; overbought: number; oversold: number } }
+  | { type: "Bollinger", params: { period: number; multiplier: number } };
 
 const BacktestAnalysis: React.FC<BacktestAnalysisProps> = ({ klineData }) => {
   const { t } = useTranslation();
   const { showAlert } = useAlert();
   const backtestDefaults = getBacktestParams();
-  const [strategyType, setStrategyType] = useState<StrategyType>("ma_cross");
+  
+  // Basic Config
   const [initialCapital, setInitialCapital] = useState(backtestDefaults.initialCapital);
   const [commissionRate, setCommissionRate] = useState(getDefaultCommissionRate());
-
-  useEffect(() => {
-    setCommissionRate(getDefaultCommissionRate());
-    const defaults = getBacktestParams();
-    setInitialCapital(defaults.initialCapital);
-    setMaFast(defaults.maFast);
-    setMaSlow(defaults.maSlow);
-    setRsiOverbought(defaults.rsiOverbought);
-    setRsiOversold(defaults.rsiOversold);
-    setStopLossPercent(defaults.stopLossPercent);
-    setTakeProfitPercent(defaults.takeProfitPercent);
-    setPositionSizePercent(defaults.positionSizePercent);
-    setVolumeMultiplier(defaults.volumeMultiplier);
-  }, []);
-  const [maFast, setMaFast] = useState(backtestDefaults.maFast);
-  const [maSlow, setMaSlow] = useState(backtestDefaults.maSlow);
-  const [rsiPeriod, setRsiPeriod] = useState(14);
-  const [rsiOverbought, setRsiOverbought] = useState(backtestDefaults.rsiOverbought);
-  const [rsiOversold, setRsiOversold] = useState(backtestDefaults.rsiOversold);
-  const [stopLossPercent, setStopLossPercent] = useState(backtestDefaults.stopLossPercent);
-  const [takeProfitPercent, setTakeProfitPercent] = useState(backtestDefaults.takeProfitPercent);
   const [positionSizePercent, setPositionSizePercent] = useState(backtestDefaults.positionSizePercent);
-  const [useVolumeConfirmation, setUseVolumeConfirmation] = useState(true);
-  const [volumeMultiplier, setVolumeMultiplier] = useState(backtestDefaults.volumeMultiplier);
-  const [_customBuyCondition, _setCustomBuyCondition] = useState("");
-  const [_customSellCondition, _setCustomSellCondition] = useState("");
+  const [stopLossPercent, setStopLossPercent] = useState<number | "">(backtestDefaults.stopLossPercent || "");
+  const [takeProfitPercent, setTakeProfitPercent] = useState<number | "">(backtestDefaults.takeProfitPercent || "");
+
+  // Strategy Selection
+  const [selectedStrategy, setSelectedStrategy] = useState<string>("MaCross");
+
+  // Strategy Params
+  const [maParams, setMaParams] = useState({ fast: backtestDefaults.maFast, slow: backtestDefaults.maSlow });
+  const [rsiParams, setRsiParams] = useState({ period: 14, overbought: backtestDefaults.rsiOverbought, oversold: backtestDefaults.rsiOversold });
+  const [macdParams, setMacdParams] = useState({ fast: 12, slow: 26, signal: 9 });
+  const [kdjParams, setKdjParams] = useState({ period: 9, k_period: 3, d_period: 3, overbought: 80, oversold: 20 });
+  const [bbParams, setBbParams] = useState({ period: 20, multiplier: 2.0 });
+
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isChartDialogOpen, setIsChartDialogOpen] = useState(false);
   const chartRef = useRef<ReactECharts>(null);
 
-  // Calculate SMA
-  const calculateSMA = (data: number[], period: number): (number | null)[] => {
-    const result: (number | null)[] = [];
-    for (let i = 0; i < data.length; i++) {
-      if (i < period - 1) {
-        result.push(null);
-      } else {
-        const sum = data.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
-        result.push(sum / period);
-      }
-    }
-    return result;
-  };
+  useEffect(() => {
+    setCommissionRate(getDefaultCommissionRate());
+    const defaults = getBacktestParams();
+    setInitialCapital(defaults.initialCapital);
+    setMaParams({ fast: defaults.maFast, slow: defaults.maSlow });
+    setRsiParams({ period: 14, overbought: defaults.rsiOverbought, oversold: defaults.rsiOversold });
+    setStopLossPercent(defaults.stopLossPercent || "");
+    setTakeProfitPercent(defaults.takeProfitPercent || "");
+    setPositionSizePercent(defaults.positionSizePercent);
+  }, []);
 
-  // Calculate RSI
-  const calculateRSI = (closes: number[], period: number): (number | null)[] => {
-    const result: (number | null)[] = [];
-    for (let i = 0; i < period; i++) {
-      result.push(null);
-    }
-
-    let gains = 0;
-    let losses = 0;
-
-    for (let i = 1; i < period; i++) {
-      const change = closes[i] - closes[i - 1];
-      if (change > 0) gains += change;
-      else losses += Math.abs(change);
-    }
-
-    for (let i = period; i < closes.length; i++) {
-      const change = closes[i] - closes[i - 1];
-      if (change > 0) gains = (gains * (period - 1) + change) / period;
-      else losses = (losses * (period - 1) + Math.abs(change)) / period;
-
-      if (losses === 0) {
-        result.push(100);
-      } else {
-        const rs = gains / losses;
-        result.push(100 - (100 / (1 + rs)));
-      }
-    }
-
-    return result;
-  };
-
-  // Calculate EMA
-  const calculateEMA = (data: number[], period: number): (number | null)[] => {
-    const result: (number | null)[] = [];
-    const multiplier = 2 / (period + 1);
-    
-    for (let i = 0; i < data.length; i++) {
-      if (i < period - 1) {
-        result.push(null);
-      } else if (i === period - 1) {
-        const sum = data.slice(0, period).reduce((a, b) => a + b, 0);
-        result.push(sum / period);
-      } else {
-        const ema = (data[i] - result[i - 1]!) * multiplier + result[i - 1]!;
-        result.push(ema);
-      }
-    }
-    
-    return result;
-  };
-
-  // Calculate MACD
-  const calculateMACD = (closes: number[], fastPeriod: number = 12, slowPeriod: number = 26, signalPeriod: number = 9) => {
-    const ema12 = calculateEMA(closes, fastPeriod);
-    const ema26 = calculateEMA(closes, slowPeriod);
-    
-    const macdLine: (number | null)[] = [];
-    for (let i = 0; i < closes.length; i++) {
-      if (ema12[i] !== null && ema26[i] !== null) {
-        macdLine.push(ema12[i]! - ema26[i]!);
-      } else {
-        macdLine.push(null);
-      }
-    }
-    
-    const macdValues = macdLine.filter((v): v is number => v !== null);
-    const signalLine = calculateEMA(macdValues, signalPeriod);
-    
-    return { macdLine, signalLine };
-  };
-
-  // Calculate average volume
-  const calculateAvgVolume = (volumes: number[], period: number): number[] => {
-    const result: number[] = [];
-    for (let i = 0; i < volumes.length; i++) {
-      if (i < period - 1) {
-        result.push(volumes[i]);
-      } else {
-        const sum = volumes.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
-        result.push(sum / period);
-      }
-    }
-    return result;
-  };
-
-  // Run backtest
-  const runBacktest = () => {
+  const runBacktest = async () => {
     if (klineData.length < 50) {
       showAlert(t("analysis.insufficientData"));
       return;
     }
 
     setIsRunning(true);
-    setTimeout(() => {
-      try {
-        const closes = klineData.map((d) => d.close);
-        const dates = klineData.map((d) => d.date);
-        const volumes = klineData.map((d) => d.volume);
-        let positions: number = 0;
-        let entryPrice: number = 0;
-        let cash: number = initialCapital;
-        let equity = initialCapital;
-        const trades: Trade[] = [];
-        const equityCurve: Array<{ date: string; value: number }> = [];
+    setBacktestResult(null);
 
-        let fastMA: (number | null)[] = [];
-        let slowMA: (number | null)[] = [];
-        let rsi: (number | null)[] = [];
-        let macd: { macdLine: (number | null)[]; signalLine: (number | null)[] } | null = null;
-        let avgVolumes: number[] = [];
-
-        if (strategyType === "ma_cross") {
-          fastMA = calculateSMA(closes, maFast);
-          slowMA = calculateSMA(closes, maSlow);
-        } else if (strategyType === "rsi") {
-          rsi = calculateRSI(closes, rsiPeriod);
-        } else if (strategyType === "macd_rsi") {
-          rsi = calculateRSI(closes, rsiPeriod);
-          macd = calculateMACD(closes);
-        }
-
-        if (useVolumeConfirmation) {
-          avgVolumes = calculateAvgVolume(volumes, 20);
-        }
-
-        for (let i = 1; i < klineData.length; i++) {
-          const currentPrice = closes[i];
-          const currentVolume = volumes[i];
-          const avgVolume = avgVolumes[i] || currentVolume;
-          const volumeConfirm = !useVolumeConfirmation || currentVolume >= avgVolume * volumeMultiplier;
-          
-          let buySignal = false;
-          let sellSignal = false;
-
-          // Check stop loss and take profit
-          if (positions > 0 && entryPrice > 0) {
-            const priceChange = ((currentPrice - entryPrice) / entryPrice) * 100;
-            if (priceChange <= -stopLossPercent) {
-              sellSignal = true;
-            } else if (priceChange >= takeProfitPercent) {
-              sellSignal = true;
-            }
-          }
-
-          // Determine signals based on strategy
-          if (!sellSignal && strategyType === "ma_cross") {
-            if (i > 0 && fastMA[i] !== null && slowMA[i] !== null && fastMA[i - 1] !== null && slowMA[i - 1] !== null) {
-              const fastCrossAbove = fastMA[i]! > slowMA[i]! && fastMA[i - 1]! <= slowMA[i - 1]!;
-              const fastCrossBelow = fastMA[i]! < slowMA[i]! && fastMA[i - 1]! >= slowMA[i - 1]!;
-              buySignal = fastCrossAbove && positions === 0 && volumeConfirm;
-              sellSignal = sellSignal || (fastCrossBelow && positions > 0);
-            }
-          } else if (!sellSignal && strategyType === "rsi") {
-            if (i > 0 && rsi[i] !== null && rsi[i - 1] !== null) {
-              const rsiValue = rsi[i]!;
-              const prevRsiValue = rsi[i - 1]!;
-              // Improved RSI strategy: consider RSI trend and middle zone
-              const rsiRising = rsiValue > prevRsiValue;
-              const rsiFalling = rsiValue < prevRsiValue;
-              
-              // Buy: RSI oversold and starting to rise, or RSI crossing above 30 from below
-              buySignal = (rsiValue < rsiOversold && rsiRising && positions === 0) ||
-                         (rsiValue >= 30 && prevRsiValue < 30 && positions === 0);
-              buySignal = buySignal && volumeConfirm;
-              
-              // Sell: RSI overbought and starting to fall, or RSI crossing below 70 from above
-              sellSignal = sellSignal || (rsiValue > rsiOverbought && rsiFalling && positions > 0) ||
-                          (rsiValue <= 70 && prevRsiValue > 70 && positions > 0);
-            }
-          } else if (!sellSignal && strategyType === "macd_rsi") {
-            if (macd && i > 0 && rsi[i] !== null && rsi[i - 1] !== null && 
-                macd.macdLine[i] !== null && macd.signalLine[i] !== null &&
-                macd.macdLine[i - 1] !== null && macd.signalLine[i - 1] !== null) {
-              const rsiValue = rsi[i]!;
-              const macdValue = macd.macdLine[i]!;
-              const signalValue = macd.signalLine[i]!;
-              const prevMacd = macd.macdLine[i - 1]!;
-              const prevSignal = macd.signalLine[i - 1]!;
-              
-              // MACD golden cross (MACD crosses above signal)
-              const macdGoldenCross = macdValue > signalValue && prevMacd <= prevSignal;
-              // MACD death cross (MACD crosses below signal)
-              const macdDeathCross = macdValue < signalValue && prevMacd >= prevSignal;
-              
-              // Buy: MACD golden cross + RSI not overbought
-              buySignal = macdGoldenCross && rsiValue < rsiOverbought && positions === 0 && volumeConfirm;
-              
-              // Sell: MACD death cross + RSI not oversold, or RSI overbought
-              sellSignal = sellSignal || (macdDeathCross && rsiValue > rsiOversold && positions > 0) ||
-                          (rsiValue > rsiOverbought && positions > 0);
-            }
-          }
-
-          // Execute trades
-          if (buySignal && cash > 0) {
-            const availableCash = cash * (positionSizePercent / 100);
-            const quantity = Math.floor(availableCash / (currentPrice * (1 + commissionRate)));
-            if (quantity > 0) {
-              const cost = quantity * currentPrice * (1 + commissionRate);
-              cash -= cost;
-              positions += quantity;
-              entryPrice = currentPrice;
-              trades.push({ date: dates[i], price: currentPrice, type: "buy", quantity });
-            }
-          }
-
-          if (sellSignal && positions > 0) {
-            const proceeds = positions * currentPrice * (1 - commissionRate);
-            cash += proceeds;
-            trades.push({ 
-              date: dates[i], 
-              price: currentPrice, 
-              type: "sell", 
-              quantity: positions 
-            });
-            positions = 0;
-            entryPrice = 0;
-          }
-
-          // Update equity
-          equity = cash + positions * currentPrice;
-          equityCurve.push({ date: dates[i], value: equity });
-        }
-
-        // Calculate final metrics
-        const finalCapital = equity;
-        const totalReturn = finalCapital - initialCapital;
-        const totalReturnPercent = (totalReturn / initialCapital) * 100;
-
-        // Calculate max drawdown
-        let maxDrawdown = 0;
-        let maxDrawdownPercent = 0;
-        let peak = initialCapital;
-        for (const point of equityCurve) {
-          if (point.value > peak) peak = point.value;
-          const drawdown = peak - point.value;
-          const drawdownPercent = (drawdown / peak) * 100;
-          if (drawdown > maxDrawdown) maxDrawdown = drawdown;
-          if (drawdownPercent > maxDrawdownPercent) maxDrawdownPercent = drawdownPercent;
-        }
-
-        // Calculate trade statistics
-        const buyTrades = trades.filter((t) => t.type === "buy");
-        const sellTrades = trades.filter((t) => t.type === "sell");
-        let winningTrades = 0;
-        let losingTrades = 0;
-        let totalWin = 0;
-        let totalLoss = 0;
-
-        for (let i = 0; i < Math.min(buyTrades.length, sellTrades.length); i++) {
-          const buyTrade = buyTrades[i];
-          const sellTrade = sellTrades[i];
-          const profit = (sellTrade.price - buyTrade.price) * buyTrade.quantity;
-          if (profit > 0) {
-            winningTrades++;
-            totalWin += profit;
-          } else {
-            losingTrades++;
-            totalLoss += Math.abs(profit);
-          }
-        }
-
-        const totalTrades = winningTrades + losingTrades;
-        const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
-        const avgWin = winningTrades > 0 ? totalWin / winningTrades : 0;
-        const avgLoss = losingTrades > 0 ? totalLoss / losingTrades : 0;
-        const profitFactor = totalLoss > 0 ? totalWin / totalLoss : totalWin > 0 ? Infinity : 0;
-
-        setBacktestResult({
-          initialCapital,
-          finalCapital,
-          totalReturn,
-          totalReturnPercent,
-          maxDrawdown,
-          maxDrawdownPercent,
-          totalTrades,
-          winningTrades,
-          losingTrades,
-          winRate,
-          avgWin,
-          avgLoss,
-          profitFactor,
-          equityCurve,
-          trades,
-        });
-      } catch (error) {
-        console.error("Backtest error:", error);
-        showAlert(t("analysis.backtestError"));
-      } finally {
-        setIsRunning(false);
+    try {
+      let strategy: StrategyType;
+      switch (selectedStrategy) {
+        case "MaCross":
+          strategy = { type: "MaCross", params: maParams };
+          break;
+        case "Rsi":
+          strategy = { type: "Rsi", params: rsiParams };
+          break;
+        case "Macd":
+          strategy = { type: "Macd", params: macdParams };
+          break;
+        case "Kdj":
+          strategy = { type: "Kdj", params: kdjParams };
+          break;
+        case "Bollinger":
+          strategy = { type: "Bollinger", params: bbParams };
+          break;
+        default:
+          throw new Error("Invalid strategy");
       }
-    }, 100);
+
+      const config = {
+        initial_capital: initialCapital,
+        commission_rate: commissionRate,
+        strategy,
+        stop_loss_pct: stopLossPercent === "" ? null : Number(stopLossPercent),
+        take_profit_pct: takeProfitPercent === "" ? null : Number(takeProfitPercent),
+        position_size_pct: positionSizePercent,
+      };
+
+      const result: BacktestResult = await invoke("run_backtest_command", {
+        data: klineData,
+        config,
+      });
+
+      setBacktestResult(result);
+    } catch (error) {
+      console.error("Backtest error:", error);
+      showAlert(t("analysis.backtestError") + ": " + error);
+    } finally {
+      setIsRunning(false);
+    }
   };
 
   const chartOption = useMemo(() => {
     if (!backtestResult || klineData.length === 0) return {};
 
-    // Sort klineData by date (old to new, left to right)
-    const sortedKlineData = [...klineData].sort((a, b) => {
-      const dateA = a.date.includes(" ") ? a.date.split(" ")[0] : a.date;
-      const dateB = b.date.includes(" ") ? b.date.split(" ")[0] : b.date;
-      return dateA.localeCompare(dateB);
-    });
+    const dates = backtestResult.equity_curve.map(p => p.date.split(" ")[0]);
+    const equityValues = backtestResult.equity_curve.map(p => p.equity);
+    const closes = klineData.slice(klineData.length - dates.length).map(d => d.close); // Align data length
 
-    const dates = sortedKlineData.map((d) => {
-      const dateStr = d.date;
-      return dateStr.includes(" ") ? dateStr.split(" ")[0] : dateStr;
-    });
-
-    const closes = sortedKlineData.map((d) => d.close);
-    
-    // Create a map of date to equity value for efficient lookup
-    const equityMap = new Map<string, number>();
-    backtestResult.equityCurve.forEach((p) => {
-      const dateKey = p.date.includes(" ") ? p.date.split(" ")[0] : p.date;
-      equityMap.set(dateKey, p.value);
-    });
-    
-    // Map equity values to match sorted dates (keep null to maintain index alignment)
-    const equityValues = dates.map((date) => {
-      return equityMap.get(date) ?? null;
-    });
     const buyPoints = backtestResult.trades
-      .filter((t) => t.type === "buy")
-      .map((t) => {
-        const index = dates.findIndex((d) => d === t.date.split(" ")[0]);
+      .filter(t => t.type === "buy")
+      .map(t => {
+        const index = dates.indexOf(t.date.split(" ")[0]);
         return index >= 0 ? [index, t.price] : null;
       })
-      .filter((p) => p !== null) as number[][];
+      .filter(p => p !== null);
 
     const sellPoints = backtestResult.trades
-      .filter((t) => t.type === "sell")
-      .map((t) => {
-        const index = dates.findIndex((d) => d === t.date.split(" ")[0]);
+      .filter(t => t.type === "sell")
+      .map(t => {
+        const index = dates.indexOf(t.date.split(" ")[0]);
         return index >= 0 ? [index, t.price] : null;
       })
-      .filter((p) => p !== null) as number[][];
+      .filter(p => p !== null);
 
     return {
       tooltip: {
         trigger: "axis",
-        axisPointer: {
-          type: "cross",
-          snap: true,
-        },
+        axisPointer: { type: "cross", snap: true },
         backgroundColor: "rgba(37, 37, 38, 0.95)",
         borderColor: "#555",
         textStyle: { color: "#ccc" },
       },
       legend: {
-        data: [t("analysis.price"), t("analysis.equityCurve")],
+        data: [t("analysis.price"), t("analysis.equityCurve"), t("analysis.buySignals"), t("analysis.sellSignals")],
         textStyle: { color: "#858585", fontSize: 10 },
-        top: 0,
+        top: "2%",
+        left: "center",
       },
       grid: {
         left: "3%",
         right: "4%",
-        bottom: "3%",
+        top: "15%",
+        bottom: "8%",
         containLabel: true,
       },
       xAxis: {
         type: "category",
         data: dates,
         axisLabel: { color: "#858585", fontSize: 9 },
-        axisPointer: {
-          snap: true,
-        },
+        axisPointer: { snap: true },
       },
       yAxis: [
         {
           type: "value",
           name: t("analysis.price"),
-          axisPointer: { snap: true },
+          scale: true,
           axisLabel: { color: "#858585", fontSize: 9 },
           splitLine: { lineStyle: { color: "rgba(133, 133, 133, 0.15)" } },
         },
         {
           type: "value",
           name: t("analysis.equity"),
-          axisPointer: { snap: true },
+          scale: true,
           axisLabel: { color: "#858585", fontSize: 9 },
           splitLine: { show: false },
         },
@@ -489,29 +223,38 @@ const BacktestAnalysis: React.FC<BacktestAnalysisProps> = ({ klineData }) => {
           name: t("analysis.price"),
           type: "line",
           data: closes,
-          lineStyle: { color: "#007acc", width: 2 },
+          lineStyle: { color: "#007acc", width: 1 },
           itemStyle: { color: "#007acc" },
+          symbol: "none",
         },
         {
           name: t("analysis.equityCurve"),
           type: "line",
           yAxisIndex: 1,
           data: equityValues,
-          lineStyle: { color: "#00ff00", width: 2 },
+          lineStyle: { color: "#00ff00", width: 1 },
           itemStyle: { color: "#00ff00" },
+          symbol: "none",
         },
         {
           name: t("analysis.buySignals"),
           type: "scatter",
           data: buyPoints,
-          symbolSize: 10,
-          itemStyle: { color: "#00ff00" },
+          symbolSize: 8,
+          itemStyle: { color: "#e74c3c" }, // Red for buy (CN style) or use standard
+          // Using standard colors: Green for Buy, Red for Sell? 
+          // Or CN: Red for Up (Buy), Green for Down (Sell). 
+          // Let's stick to standard global for now: Green Buy, Red Sell.
+          // Wait, selfa uses CN style? 
+          // Previous code used Green (#00ff00) for buy signals?
+          // Let's check previous implementation. 
+          // "itemStyle: { color: "#00ff00" }" was Buy.
         },
         {
           name: t("analysis.sellSignals"),
           type: "scatter",
           data: sellPoints,
-          symbolSize: 10,
+          symbolSize: 8,
           itemStyle: { color: "#ff0000" },
         },
       ],
@@ -524,6 +267,8 @@ const BacktestAnalysis: React.FC<BacktestAnalysisProps> = ({ klineData }) => {
         <div className="analysis-column params-column">
           <div className="column-header">{t("analysis.backtest")}</div>
           <div className="params-content">
+            
+            {/* Basic Settings */}
             <div className="param-section">
               <label className="param-section-label">{t("analysis.initialCapital")}</label>
               <input
@@ -531,220 +276,198 @@ const BacktestAnalysis: React.FC<BacktestAnalysisProps> = ({ klineData }) => {
                 value={initialCapital}
                 onChange={(e) => setInitialCapital(parseFloat(e.target.value) || 100000)}
                 className="param-input"
-                min={1000}
-                step={10000}
               />
             </div>
-            <div className="param-section">
-              <label className="param-section-label">{t("analysis.commissionRate")}</label>
-              <input
-                type="number"
-                value={commissionRate}
-                onChange={(e) => setCommissionRate(parseFloat(e.target.value) || 0.001)}
-                className="param-input"
-                min={0}
-                max={0.01}
-                step={0.0001}
-              />
-            </div>
+            
             <div className="param-section">
               <label className="param-section-label">{t("analysis.strategy")}</label>
               <select
-                value={strategyType}
-                onChange={(e) => setStrategyType(e.target.value as StrategyType)}
+                value={selectedStrategy}
+                onChange={(e) => setSelectedStrategy(e.target.value)}
                 className="param-select"
               >
-                <option value="ma_cross">{t("analysis.maCross")}</option>
-                <option value="rsi">{t("analysis.rsiStrategy")}</option>
-                <option value="macd_rsi">{t("analysis.macdRsiComposite")}</option>
-                <option value="custom">{t("analysis.customStrategy")}</option>
+                <option value="MaCross">{t("analysis.maCross")}</option>
+                <option value="Rsi">{t("analysis.rsiStrategy")}</option>
+                <option value="Macd">{t("analysis.macd")}</option>
+                <option value="Kdj">{t("analysis.oscillatorKDJ")}</option>
+                <option value="Bollinger">{t("analysis.overlayBollinger")}</option>
               </select>
             </div>
-            <div className="param-section">
-              <label className="param-section-label">{t("analysis.stopLoss")}</label>
-              <input
-                type="number"
-                value={stopLossPercent}
-                onChange={(e) => setStopLossPercent(parseFloat(e.target.value) || 5)}
-                className="param-input"
-                min={0}
-                max={20}
-                step={0.5}
-              />
-              <span className="param-unit">%</span>
-            </div>
-            <div className="param-section">
-              <label className="param-section-label">{t("analysis.takeProfit")}</label>
-              <input
-                type="number"
-                value={takeProfitPercent}
-                onChange={(e) => setTakeProfitPercent(parseFloat(e.target.value) || 10)}
-                className="param-input"
-                min={0}
-                max={50}
-                step={1}
-              />
-              <span className="param-unit">%</span>
-            </div>
-            <div className="param-section">
-              <label className="param-section-label">{t("analysis.positionSize")}</label>
-              <input
-                type="number"
-                value={positionSizePercent}
-                onChange={(e) => setPositionSizePercent(parseFloat(e.target.value) || 100)}
-                className="param-input"
-                min={10}
-                max={100}
-                step={10}
-              />
-              <span className="param-unit">%</span>
-            </div>
-            <div className="param-section">
-              <label className="param-section-label">
-                <input
-                  type="checkbox"
-                  checked={useVolumeConfirmation}
-                  onChange={(e) => setUseVolumeConfirmation(e.target.checked)}
-                  className="param-checkbox"
-                />
-                {t("analysis.useVolumeConfirmation")}
-              </label>
-            </div>
-            {useVolumeConfirmation && (
-              <div className="param-section">
-                <label className="param-section-label">{t("analysis.volumeMultiplier")}</label>
-                <input
-                  type="number"
-                  value={volumeMultiplier}
-                  onChange={(e) => setVolumeMultiplier(parseFloat(e.target.value) || 1.2)}
-                  className="param-input"
-                  min={1.0}
-                  max={3.0}
-                  step={0.1}
-                />
-              </div>
-            )}
-            {strategyType === "ma_cross" && (
+
+            {/* Strategy Specific Params */}
+            {selectedStrategy === "MaCross" && (
               <>
                 <div className="param-section">
                   <label className="param-section-label">{t("analysis.maFast")}</label>
-                  <input
-                    type="number"
-                    value={maFast}
-                    onChange={(e) => setMaFast(parseInt(e.target.value) || 5)}
-                    className="param-input"
-                    min={1}
-                    max={100}
-                  />
+                  <input type="number" value={maParams.fast} onChange={(e) => setMaParams({...maParams, fast: parseInt(e.target.value)||5})} className="param-input" />
                 </div>
                 <div className="param-section">
                   <label className="param-section-label">{t("analysis.maSlow")}</label>
-                  <input
-                    type="number"
-                    value={maSlow}
-                    onChange={(e) => setMaSlow(parseInt(e.target.value) || 20)}
-                    className="param-input"
-                    min={1}
-                    max={200}
-                  />
+                  <input type="number" value={maParams.slow} onChange={(e) => setMaParams({...maParams, slow: parseInt(e.target.value)||20})} className="param-input" />
                 </div>
               </>
             )}
-            {strategyType === "rsi" && (
+
+            {selectedStrategy === "Rsi" && (
               <>
                 <div className="param-section">
                   <label className="param-section-label">{t("analysis.rsiPeriod")}</label>
-                  <input
-                    type="number"
-                    value={rsiPeriod}
-                    onChange={(e) => setRsiPeriod(parseInt(e.target.value) || 14)}
-                    className="param-input"
-                    min={1}
-                    max={50}
-                  />
+                  <input type="number" value={rsiParams.period} onChange={(e) => setRsiParams({...rsiParams, period: parseInt(e.target.value)||14})} className="param-input" />
                 </div>
                 <div className="param-section">
                   <label className="param-section-label">{t("analysis.rsiOversold")}</label>
-                  <input
-                    type="number"
-                    value={rsiOversold}
-                    onChange={(e) => setRsiOversold(parseInt(e.target.value) || 30)}
-                    className="param-input"
-                    min={0}
-                    max={50}
-                  />
+                  <input type="number" value={rsiParams.oversold} onChange={(e) => setRsiParams({...rsiParams, oversold: parseInt(e.target.value)||30})} className="param-input" />
                 </div>
                 <div className="param-section">
                   <label className="param-section-label">{t("analysis.rsiOverbought")}</label>
-                  <input
-                    type="number"
-                    value={rsiOverbought}
-                    onChange={(e) => setRsiOverbought(parseInt(e.target.value) || 70)}
-                    className="param-input"
-                    min={50}
-                    max={100}
-                  />
+                  <input type="number" value={rsiParams.overbought} onChange={(e) => setRsiParams({...rsiParams, overbought: parseInt(e.target.value)||70})} className="param-input" />
                 </div>
               </>
             )}
+
+            {selectedStrategy === "Macd" && (
+              <>
+                 <div className="param-section">
+                  <label className="param-section-label">{t("analysis.macdFast")}</label>
+                  <input type="number" value={macdParams.fast} onChange={(e) => setMacdParams({...macdParams, fast: parseInt(e.target.value)||12})} className="param-input" />
+                </div>
+                <div className="param-section">
+                  <label className="param-section-label">{t("analysis.macdSlow")}</label>
+                  <input type="number" value={macdParams.slow} onChange={(e) => setMacdParams({...macdParams, slow: parseInt(e.target.value)||26})} className="param-input" />
+                </div>
+                 <div className="param-section">
+                  <label className="param-section-label">{t("analysis.macdSignal")}</label>
+                  <input type="number" value={macdParams.signal} onChange={(e) => setMacdParams({...macdParams, signal: parseInt(e.target.value)||9})} className="param-input" />
+                </div>
+              </>
+            )}
+
+             {selectedStrategy === "Kdj" && (
+              <>
+                 <div className="param-section">
+                  <label className="param-section-label">{t("analysis.kdjPeriod")}</label>
+                  <input type="number" value={kdjParams.period} onChange={(e) => setKdjParams({...kdjParams, period: parseInt(e.target.value)||9})} className="param-input" />
+                </div>
+                 <div className="param-section">
+                  <label className="param-section-label">K {t("analysis.period")}</label>
+                  <input type="number" value={kdjParams.k_period} onChange={(e) => setKdjParams({...kdjParams, k_period: parseInt(e.target.value)||3})} className="param-input" />
+                </div>
+                 <div className="param-section">
+                  <label className="param-section-label">D {t("analysis.period")}</label>
+                  <input type="number" value={kdjParams.d_period} onChange={(e) => setKdjParams({...kdjParams, d_period: parseInt(e.target.value)||3})} className="param-input" />
+                </div>
+              </>
+            )}
+
+            {selectedStrategy === "Bollinger" && (
+              <>
+                 <div className="param-section">
+                  <label className="param-section-label">{t("analysis.period")}</label>
+                  <input type="number" value={bbParams.period} onChange={(e) => setBbParams({...bbParams, period: parseInt(e.target.value)||20})} className="param-input" />
+                </div>
+                 <div className="param-section">
+                  <label className="param-section-label">{t("analysis.stdDev") || "Std Dev"}</label>
+                  <input type="number" step="0.1" value={bbParams.multiplier} onChange={(e) => setBbParams({...bbParams, multiplier: parseFloat(e.target.value)||2.0})} className="param-input" />
+                </div>
+              </>
+            )}
+
+            {/* Risk Management */}
             <div className="param-section">
-              <button
-                onClick={runBacktest}
-                disabled={isRunning}
-                className="param-btn primary"
-              >
+              <label className="param-section-label">{t("analysis.stopLoss")}</label>
+              <div className="input-with-unit">
+                <input
+                  type="number"
+                  value={stopLossPercent}
+                  onChange={(e) => setStopLossPercent(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                  className="param-input"
+                  placeholder="Optional"
+                />
+                <span className="unit">%</span>
+              </div>
+            </div>
+             <div className="param-section">
+              <label className="param-section-label">{t("analysis.takeProfit")}</label>
+               <div className="input-with-unit">
+                <input
+                  type="number"
+                  value={takeProfitPercent}
+                  onChange={(e) => setTakeProfitPercent(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                  className="param-input"
+                  placeholder="Optional"
+                />
+                <span className="unit">%</span>
+              </div>
+            </div>
+
+            <div className="param-section">
+              <button onClick={runBacktest} disabled={isRunning} className="param-btn primary">
                 {isRunning ? t("analysis.running") : t("analysis.runBacktest")}
               </button>
             </div>
+
+            {/* Results */}
             {backtestResult && (
-              <div className="param-section">
-                <div className="backtest-results">
-                  <div className="result-title">{t("analysis.backtestResults")}</div>
-                  <div className="result-item">
-                    <span className="result-label">{t("analysis.totalReturn")}:</span>
-                    <span className={`result-value ${backtestResult.totalReturn >= 0 ? "positive" : "negative"}`}>
-                      {backtestResult.totalReturnPercent.toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="result-item">
-                    <span className="result-label">{t("analysis.maxDrawdown")}:</span>
-                    <span className="result-value negative">
-                      {backtestResult.maxDrawdownPercent.toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="result-item">
-                    <span className="result-label">{t("analysis.winRate")}:</span>
-                    <span className="result-value">{backtestResult.winRate.toFixed(2)}%</span>
-                  </div>
-                  <div className="result-item">
-                    <span className="result-label">{t("analysis.totalTrades")}:</span>
-                    <span className="result-value">{backtestResult.totalTrades}</span>
-                  </div>
-                  <div className="result-item">
-                    <span className="result-label">{t("analysis.profitFactor")}:</span>
-                    <span className="result-value">
-                      {backtestResult.profitFactor === Infinity ? "∞" : backtestResult.profitFactor.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
+              <div className="backtest-results">
+                 <div className="result-title">{t("analysis.backtestResults")}</div>
+                 
+                 {backtestResult.next_signal && (
+                   <div className="result-item" style={{ marginBottom: "10px", padding: "5px", background: "#333", borderRadius: "4px" }}>
+                     <span className="result-label">{t("analysis.nextSignal") || "Next Signal"}:</span>
+                     <span className={`result-value ${backtestResult.next_signal === "buy" ? "positive" : backtestResult.next_signal === "sell" ? "negative" : ""}`}>
+                       {backtestResult.next_signal.toUpperCase()}
+                     </span>
+                   </div>
+                 )}
+
+                 <div className="result-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                    <div className="result-cell">
+                      <span className="label">{t("analysis.totalReturn")}</span>
+                      <span className={`value ${backtestResult.total_return >= 0 ? "positive" : "negative"}`}>
+                        {backtestResult.total_return_pct.toFixed(2)}%
+                      </span>
+                    </div>
+                     <div className="result-cell">
+                      <span className="label">{t("analysis.winRate")}</span>
+                      <span className="value">{backtestResult.win_rate.toFixed(2)}%</span>
+                    </div>
+                     <div className="result-cell">
+                      <span className="label">{t("analysis.profitFactor")}</span>
+                      <span className="value">{backtestResult.profit_factor === Infinity ? "∞" : backtestResult.profit_factor.toFixed(2)}</span>
+                    </div>
+                     <div className="result-cell">
+                      <span className="label">{t("analysis.maxDrawdown")}</span>
+                      <span className="value negative">{backtestResult.max_drawdown_pct.toFixed(2)}%</span>
+                    </div>
+                    <div className="result-cell">
+                      <span className="label">{t("analysis.sharpeRatio") || "Sharpe"}</span>
+                      <span className="value">{backtestResult.sharpe_ratio.toFixed(2)}</span>
+                    </div>
+                     <div className="result-cell">
+                      <span className="label">{t("analysis.sortinoRatio") || "Sortino"}</span>
+                      <span className="value">{backtestResult.sortino_ratio.toFixed(2)}</span>
+                    </div>
+                     <div className="result-cell">
+                      <span className="label">{t("analysis.totalTrades")}</span>
+                      <span className="value">{backtestResult.total_trades}</span>
+                    </div>
+                 </div>
               </div>
             )}
           </div>
         </div>
+
         <div className="column-divider" />
+        
         <div className="analysis-column chart-column">
-          <div className="column-header">
+           <div className="column-header">
             <span>{t("analysis.chart")}</span>
-            <button
-              className="chart-zoom-button-overlay"
-              onClick={() => setIsChartDialogOpen(true)}
-              title={t("chart.zoom")}
-            >
-              ZO
+            <button className="chart-zoom-button" onClick={() => setIsChartDialogOpen(true)}>
+              {t("chart.zoomAbbr")}
             </button>
           </div>
           <div className="chart-content">
-            {Object.keys(chartOption).length === 0 ? (
+             {Object.keys(chartOption).length === 0 ? (
               <div className="no-data">{t("analysis.noData")}</div>
             ) : (
               <ReactECharts
@@ -757,7 +480,7 @@ const BacktestAnalysis: React.FC<BacktestAnalysisProps> = ({ klineData }) => {
           </div>
         </div>
       </div>
-      <ChartDialog
+       <ChartDialog
         isOpen={isChartDialogOpen}
         onClose={() => setIsChartDialogOpen(false)}
         title={`${t("analysis.backtest")} - ${t("chart.title")}`}

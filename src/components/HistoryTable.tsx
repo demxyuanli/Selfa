@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import "./HistoryTable.css";
 
 interface StockData {
@@ -15,6 +16,7 @@ interface HistoryTableProps {
 }
 
 const HistoryTable: React.FC<HistoryTableProps> = ({ data }) => {
+  const { t } = useTranslation();
   const [columnWidths, setColumnWidths] = useState({
     date: 38,
     open: 48,
@@ -80,12 +82,12 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ data }) => {
   }, [resizingColumn, handleMouseMove, handleMouseUp]);
 
   const columns = [
-    { key: "date", label: "Date" },
-    { key: "open", label: "O" },
-    { key: "high", label: "H" },
-    { key: "low", label: "L" },
-    { key: "close", label: "C" },
-    { key: "volume", label: "Vol" },
+    { key: "date", label: t("analysis.date") },
+    { key: "open", label: t("analysis.open") },
+    { key: "high", label: t("analysis.high") },
+    { key: "low", label: t("analysis.low") },
+    { key: "close", label: t("analysis.close") },
+    { key: "volume", label: t("analysis.vol") },
   ];
 
   return (

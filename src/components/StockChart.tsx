@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -40,6 +41,7 @@ interface StockChartProps {
 }
 
 const StockChart: React.FC<StockChartProps> = ({ data }) => {
+  const { t } = useTranslation();
   const chartData = useMemo(() => {
     const labels = data.map((d) => d.date);
     const closes = data.map((d) => d.close);
@@ -50,7 +52,7 @@ const StockChart: React.FC<StockChartProps> = ({ data }) => {
       labels,
       datasets: [
         {
-          label: "Close",
+          label: t("analysis.close"),
           data: closes,
           borderColor: "rgb(44, 62, 80)",
           backgroundColor: "rgba(44, 62, 80, 0.1)",
@@ -58,7 +60,7 @@ const StockChart: React.FC<StockChartProps> = ({ data }) => {
           tension: 0.4,
         },
         {
-          label: "High",
+          label: t("analysis.high"),
           data: highs,
           borderColor: "rgb(76, 175, 80)",
           backgroundColor: "rgba(0, 255, 0, 0.1)",
@@ -66,7 +68,7 @@ const StockChart: React.FC<StockChartProps> = ({ data }) => {
           tension: 0.4,
         },
         {
-          label: "Low",
+          label: t("analysis.low"),
           data: lows,
           borderColor: "rgb(244, 67, 54)",
           backgroundColor: "rgba(255, 0, 0, 0.1)",
@@ -75,7 +77,7 @@ const StockChart: React.FC<StockChartProps> = ({ data }) => {
         },
       ],
     };
-  }, [data]);
+  }, [data, t]);
 
   const options = {
     responsive: true,
@@ -86,7 +88,7 @@ const StockChart: React.FC<StockChartProps> = ({ data }) => {
       },
       title: {
         display: true,
-        text: "Stock Price Chart",
+        text: t("analysis.stockPriceChart"),
       },
       tooltip: {
         mode: "index" as const,

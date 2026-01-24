@@ -201,7 +201,10 @@ type PredictionMethod =
   | "fibonacci"
   | "fibonacci_extension"
   | "monte_carlo"
-  | "monte_carlo_advanced";
+  | "monte_carlo_advanced"
+  | "intraday_ma"
+  | "intraday_volatility"
+  | "intraday_regime";
 
 const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) => {
   const { t } = useTranslation();
@@ -229,6 +232,9 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
       fibonacci_extension: t("analysis.methodFibonacciExtension"),
       monte_carlo: t("analysis.methodMonteCarlo"),
       monte_carlo_advanced: t("analysis.methodMonteCarloAdvanced"),
+      intraday_ma: t("analysis.methodIntradayMA"),
+      intraday_volatility: t("analysis.methodIntradayVolatility"),
+      intraday_regime: t("analysis.methodIntradayRegime"),
     };
     return labels[m] || m;
   };
@@ -317,9 +323,9 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
       backgroundColor: "transparent",
       grid: {
         left: "10%",
-        right: "6%",
-        top: "15%",
-        bottom: "22%",
+        right: "8%",
+        top: "25%",
+        bottom: "25%",
       },
       xAxis: {
         type: "category",
@@ -367,12 +373,12 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
         {
           type: "group",
           left: "2%",
-          top: "2%",
+          top: "12%",
           children: [
             {
               type: "text",
               style: {
-                text: `${t("analysis.method")}: ${getMethodLabel(method)} | ${t("analysis.period")}: ${period}${t("stock.periods.1d")} | ${t("chart.trend")}: ${trendDirection === "up" ? "↑ " + t("chart.trendUp") : trendDirection === "down" ? "↓ " + t("chart.trendDown") : "→ " + t("chart.trendSideways")} ${Math.abs(trendPercent).toFixed(2)}% | ${t("chart.confidence")}: ${avgConfidence.toFixed(1)}%`,
+                text: `${t("analysis.method")}: ${getMethodLabel(method)} | ${t("analysis.period")}: ${period}${t("analysis.days")} | ${t("analysis.trend")}: ${trendDirection === "up" ? "↑ " + t("chart.trendUp") : trendDirection === "down" ? "↓ " + t("chart.trendDown") : "→ " + t("chart.trendSideways")} ${Math.abs(trendPercent).toFixed(2)}% | ${t("analysis.confidence")}: ${avgConfidence.toFixed(1)}%`,
                 fontSize: 10,
                 fill: "#666",
                 fontWeight: "normal",
@@ -424,7 +430,7 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
                 label: {
                   show: true,
                   position: "top",
-                  formatter: `${t("analysis.currentPrice")}\n¥${lastPrice.toFixed(2)}`,
+                  formatter: `${t("analysis.currentPrice")}\n${t("common.currencySymbol")}${lastPrice.toFixed(2)}`,
                   fontSize: 11,
                   color: "#007acc",
                   fontWeight: "bold",
@@ -443,7 +449,14 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
           data: [...new Array(dates.length).fill(null), ...predData],
           smooth: true,
           symbol: "circle",
-          symbolSize: 6,
+          symbolSize: (_value: any, params: any) => {
+            // Larger symbols for prediction points
+            if (params.dataIndex >= dates.length) {
+              return 8;
+            }
+            return 0;
+          },
+          showSymbol: true,
           lineStyle: {
             color: trendDirection === "up" ? "#00ff00" : trendDirection === "down" ? "#ff0000" : "#ff9800",
             width: 3,
@@ -453,38 +466,78 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
             shadowBlur: 6,
           },
           itemStyle: {
-            color: trendDirection === "up" ? "#00ff00" : trendDirection === "down" ? "#ff0000" : "#ff9800",
+            color: (params: any) => {
+              if (params.dataIndex >= dates.length) {
+                const predIdx = params.dataIndex - dates.length;
+                const pred = predictions[predIdx];
+                if (pred) {
+                  return pred.signal === "buy" ? "#00ff00" : pred.signal === "sell" ? "#ff0000" : "#ff9800";
+                }
+              }
+              return trendDirection === "up" ? "#00ff00" : trendDirection === "down" ? "#ff0000" : "#ff9800";
+            },
             borderColor: "#fff",
             borderWidth: 2,
           },
-          markPoint: {
-            data: predictions.map((pred, idx) => {
-              const signalIconName = pred.signal === "buy" ? "buy" : pred.signal === "sell" ? "sell" : "neutral";
-              const signalIconText = getIconText(signalIconName);
-              return {
-                name: t("analysis.predictedPrice"),
-                coord: [dates.length + idx, pred.predicted_price],
-                symbol: "circle",
-                symbolSize: 8,
-                itemStyle: {
-                  color: pred.signal === "buy" ? "#00ff00" : pred.signal === "sell" ? "#ff0000" : "#ff9800",
-                  borderColor: "#fff",
-                  borderWidth: 2,
-                  shadowBlur: 4,
-                },
-                label: {
-                  show: idx === 0 || idx === predictions.length - 1,
-                  position: idx === 0 ? "top" : "bottom",
-                  formatter: `${signalIconText} ${pred.date}\n¥${pred.predicted_price.toFixed(2)}`,
-                  fontSize: 9,
-                  color: pred.signal === "buy" ? "#00ff00" : pred.signal === "sell" ? "#ff0000" : "#ff9800",
-                  fontWeight: "bold",
-                  distance: 8,
-                  textBorderColor: "#fff",
-                  textBorderWidth: 2,
-                },
-              };
-            }),
+          label: {
+            show: true,
+            position: (params: any) => {
+              // Alternate label positions to avoid overlap
+              if (params.dataIndex >= dates.length) {
+                const predIdx = params.dataIndex - dates.length;
+                // Alternate between top and bottom, with some offset
+                const isEven = predIdx % 2 === 0;
+                const isFirst = predIdx === 0;
+                const isLast = predIdx === predictions.length - 1;
+                
+                if (isFirst) return "top";
+                if (isLast) return "bottom";
+                return isEven ? "top" : "bottom";
+              }
+              return "top";
+            },
+            formatter: (params: any) => {
+              if (params.dataIndex >= dates.length) {
+                const predIdx = params.dataIndex - dates.length;
+                const pred = predictions[predIdx];
+                if (pred) {
+                  const signalIconName = pred.signal === "buy" ? "buy" : pred.signal === "sell" ? "sell" : "neutral";
+                  const signalIconText = getIconText(signalIconName);
+                  // Show date and price, with confidence on next line
+                  return `${signalIconText} ${pred.date.split(' ')[0]}\n${t("common.currencySymbol")}${pred.predicted_price.toFixed(2)}\n${pred.confidence.toFixed(0)}%`;
+                }
+              }
+              return "";
+            },
+            fontSize: 8,
+            color: (params: any) => {
+              if (params.dataIndex >= dates.length) {
+                const predIdx = params.dataIndex - dates.length;
+                const pred = predictions[predIdx];
+                if (pred) {
+                  return pred.signal === "buy" ? "#00ff00" : pred.signal === "sell" ? "#ff0000" : "#ff9800";
+                }
+              }
+              return "#333";
+            },
+            fontWeight: "bold",
+            distance: 12,
+            textBorderColor: "#fff",
+            textBorderWidth: 2,
+            backgroundColor: "rgba(255, 255, 255, 0.8)",
+            padding: [2, 4],
+            borderRadius: 3,
+          },
+          emphasis: {
+            focus: "series",
+            itemStyle: {
+              borderWidth: 3,
+              shadowBlur: 10,
+            },
+            label: {
+              fontSize: 10,
+              show: true,
+            },
           },
         },
         // Upper bound line (subtle)
@@ -539,7 +592,7 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
 
           params.forEach((p: any) => {
             if (p.value !== null && p.value !== undefined) {
-              const value = typeof p.value === "number" ? `¥${p.value.toFixed(2)}` : p.value;
+              const value = typeof p.value === "number" ? `${t("common.currencySymbol")}${p.value.toFixed(2)}` : p.value;
               const iconName = p.seriesName === t("stock.price") ? "trendUp" :
                           p.seriesName === t("analysis.prediction") ? "prediction" :
                           p.seriesName === t("analysis.upperBound") ? "arrowUp" :
@@ -562,7 +615,7 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
             result += `<div style="margin-top: 8px;padding-top: 8px;border-top: 2px solid #eee;">
               <div style="margin: 4px 0;"><strong><span style="font-size: 16px; margin-right: 4px;">${signalIconText}</span>${t("analysis.signal")}: ${signalText}</strong></div>
               <div style="margin: 4px 0;">${t("analysis.confidence")}: <strong style="color: ${pred.confidence > 70 ? '#00ff00' : pred.confidence > 50 ? '#ff9800' : '#ff0000'}">${pred.confidence.toFixed(1)}%</strong></div>
-              <div style="margin: 4px 0;">${t("analysis.priceRange")}: ¥${pred.lower_bound.toFixed(2)} - ¥${pred.upper_bound.toFixed(2)}</div>
+              <div style="margin: 4px 0;">${t("analysis.priceRange")}: ${t("common.currencySymbol")}${pred.lower_bound.toFixed(2)} - ${t("common.currencySymbol")}${pred.upper_bound.toFixed(2)}</div>
               <div style="margin: 4px 0; font-size: 11px; color: #666;">${t("analysis.method")}: ${pred.method}</div>
             </div>`;
           }
@@ -646,6 +699,11 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
                       <option value="monte_carlo">{t("analysis.methodMonteCarlo")}</option>
                       <option value="monte_carlo_advanced">{t("analysis.methodMonteCarloAdvanced")}</option>
                     </optgroup>
+                    <optgroup label={t("analysis.groupIntraday")}>
+                      <option value="intraday_ma">{t("analysis.methodIntradayMA")}</option>
+                      <option value="intraday_volatility">{t("analysis.methodIntradayVolatility")}</option>
+                      <option value="intraday_regime">{t("analysis.methodIntradayRegime")}</option>
+                    </optgroup>
                   </select>
                 </div>
                 <div className="param-item">
@@ -724,6 +782,13 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
         <div className="analysis-column chart-column">
           <div className="column-header">
             <span>{t("analysis.chart")}</span>
+            <button
+              className="chart-zoom-button"
+              onClick={() => setIsChartDialogOpen(true)}
+              title={t("chart.zoom")}
+            >
+              {t("chart.zoomAbbr")}
+            </button>
           </div>
           <div className="chart-content">
             {loading ? (
@@ -747,13 +812,6 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
                 }}
               >
                 <div style={{ position: "relative", height: "100%", width: "100%" }}>
-                  <button
-                    className="chart-zoom-button-overlay"
-                    onClick={() => setIsChartDialogOpen(true)}
-                    title={t("chart.zoom")}
-                  >
-                    ZO
-                  </button>
                   <CustomECharts
                     key={chartResetKey}
                     option={chartOption}

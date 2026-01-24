@@ -784,7 +784,7 @@ const StockComparisonChart: React.FC<StockComparisonChartProps> = ({
             const originalPrice = originalPricesMap.get(dataIndex);
             if (originalPrice !== undefined) {
               const changePercent = typeof value === "number" ? value : 0;
-              return `¥${originalPrice.toFixed(2)}\n${changePercent >= 0 ? "+" : ""}${changePercent.toFixed(2)}%`;
+              return `${t("common.currencySymbol")}${originalPrice.toFixed(2)}\n${changePercent >= 0 ? "+" : ""}${changePercent.toFixed(2)}%`;
             }
             return "";
           },
@@ -878,7 +878,7 @@ const StockComparisonChart: React.FC<StockComparisonChartProps> = ({
                 ${param.seriesName}: `;
               
               if (originalPrice !== null && originalPrice !== undefined) {
-                result += `<span style="font-weight: 600;">¥${originalPrice.toFixed(2)}</span> `;
+                result += `<span style="font-weight: 600;">${t("common.currencySymbol")}${originalPrice.toFixed(2)}</span> `;
                 result += `<span style="font-size: 11px; color: #999;">(${value >= 0 ? "+" : ""}${value.toFixed(2)}%)</span>`;
               } else {
                 result += `<span style="font-weight: 600;">${value >= 0 ? "+" : ""}${value.toFixed(2)}%</span>`;
@@ -1153,7 +1153,7 @@ const StockComparisonChart: React.FC<StockComparisonChartProps> = ({
                   {currentPrice && (
                     <div className="chart-stock-price-info">
                       <div className={`chart-stock-price ${changePercent >= 0 ? "up" : "down"}`}>
-                        ¥{currentPrice.toFixed(2)}
+                        {t("common.currencySymbol")}{currentPrice.toFixed(2)}
                       </div>
                       <div className={`chart-stock-change ${changePercent >= 0 ? "up" : "down"}`}>
                         {changePercent >= 0 ? "+" : ""}{changePercent.toFixed(2)}%

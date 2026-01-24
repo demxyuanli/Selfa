@@ -37,16 +37,16 @@ const TransfersTable: React.FC<TransfersTableProps> = ({ transfers, onReload }) 
         <div className="transfer-summary">
           <span className="summary-item">
             <span className="summary-label">{t("portfolio.totalDeposits") || "Total Deposits"}:</span>
-            <span className="summary-value positive">¥{totalDeposits.toFixed(2)}</span>
+            <span className="summary-value positive">{t("common.currencySymbol")}{totalDeposits.toFixed(2)}</span>
           </span>
           <span className="summary-item">
             <span className="summary-label">{t("portfolio.totalWithdraws") || "Total Withdraws"}:</span>
-            <span className="summary-value negative">¥{totalWithdraws.toFixed(2)}</span>
+            <span className="summary-value negative">{t("common.currencySymbol")}{totalWithdraws.toFixed(2)}</span>
           </span>
           <span className="summary-item">
             <span className="summary-label">{t("portfolio.netCapital") || "Net Capital"}:</span>
             <span className={`summary-value ${netCapital >= 0 ? "positive" : "negative"}`}>
-              ¥{netCapital.toFixed(2)}
+              {t("common.currencySymbol")}{netCapital.toFixed(2)}
             </span>
           </span>
         </div>
@@ -78,7 +78,7 @@ const TransfersTable: React.FC<TransfersTableProps> = ({ transfers, onReload }) 
                       : (t("portfolio.withdraw") || "Withdraw")}
                   </td>
                   <td className={transfer.transferType === "deposit" ? "positive" : "negative"}>
-                    {transfer.transferType === "deposit" ? "+" : "-"}¥{transfer.amount.toFixed(2)}
+                    {transfer.transferType === "deposit" ? "+" : "-"}{t("common.currencySymbol")}{transfer.amount.toFixed(2)}
                   </td>
                   <td>{transfer.transferDate}</td>
                   <td>{transfer.notes || "-"}</td>

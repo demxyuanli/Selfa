@@ -297,7 +297,7 @@ export function calculateKLineResults(klineData: StockData[], klParams: KLinePar
     
     const peakInfo = chipData.mainPeaks.length > 0 
       ? chipData.mainPeaks.map(p => `${p.price.toFixed(2)}`).join(", ")
-      : "N/A";
+      : t("analysis.notAvailable");
     
     results.push({
       key: "chipDistribution",

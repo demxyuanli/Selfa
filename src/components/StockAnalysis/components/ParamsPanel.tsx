@@ -26,10 +26,10 @@ const ParamsPanel: React.FC<ParamsPanelProps> = ({
         {analysisType === "timeseries" ? (
           <>
             <div className="param-section">
-              <label className="param-section-label">MA</label>
+              <label className="param-section-label">{t("analysis.ma")}</label>
               <div className="param-inputs">
                 <div className="param-item">
-                  <span className="param-item-label">Period</span>
+                  <span className="param-item-label">{t("analysis.period")}</span>
                   <input
                     type="number"
                     value={tsParams.maPeriod}
@@ -44,7 +44,7 @@ const ParamsPanel: React.FC<ParamsPanelProps> = ({
               <label className="param-section-label">{t("stock.volume")}</label>
               <div className="param-inputs">
                 <div className="param-item">
-                  <span className="param-item-label">Multiplier</span>
+                  <span className="param-item-label">{t("analysis.multiplier")}</span>
                   <input
                     type="number"
                     value={tsParams.volumeMultiplier}
@@ -60,10 +60,10 @@ const ParamsPanel: React.FC<ParamsPanelProps> = ({
         ) : (
           <>
             <div className="param-section">
-              <label className="param-section-label">MACD</label>
+              <label className="param-section-label">{t("analysis.macd")}</label>
               <div className="param-inputs">
                 <div className="param-item">
-                  <span className="param-item-label">Fast</span>
+                  <span className="param-item-label">{t("analysis.fast")}</span>
                   <input
                     type="number"
                     value={klParams.macdFast}
@@ -73,7 +73,7 @@ const ParamsPanel: React.FC<ParamsPanelProps> = ({
                   />
                 </div>
                 <div className="param-item">
-                  <span className="param-item-label">Slow</span>
+                  <span className="param-item-label">{t("analysis.slow")}</span>
                   <input
                     type="number"
                     value={klParams.macdSlow}
@@ -83,7 +83,7 @@ const ParamsPanel: React.FC<ParamsPanelProps> = ({
                   />
                 </div>
                 <div className="param-item">
-                  <span className="param-item-label">Signal</span>
+                  <span className="param-item-label">{t("analysis.macdSignal")}</span>
                   <input
                     type="number"
                     value={klParams.macdSignal}
@@ -95,10 +95,10 @@ const ParamsPanel: React.FC<ParamsPanelProps> = ({
               </div>
             </div>
             <div className="param-section">
-              <label className="param-section-label">RSI</label>
+              <label className="param-section-label">{t("analysis.rsi")}</label>
               <div className="param-inputs">
                 <div className="param-item">
-                  <span className="param-item-label">Period</span>
+                  <span className="param-item-label">{t("analysis.period")}</span>
                   <input
                     type="number"
                     value={klParams.rsiPeriod}
@@ -110,10 +110,10 @@ const ParamsPanel: React.FC<ParamsPanelProps> = ({
               </div>
             </div>
             <div className="param-section">
-              <label className="param-section-label">KDJ</label>
+              <label className="param-section-label">{t("analysis.kdj")}</label>
               <div className="param-inputs">
                 <div className="param-item">
-                  <span className="param-item-label">Period</span>
+                  <span className="param-item-label">{t("analysis.period")}</span>
                   <input
                     type="number"
                     value={klParams.kdjPeriod}
@@ -128,7 +128,7 @@ const ParamsPanel: React.FC<ParamsPanelProps> = ({
               <label className="param-section-label">{t("analysis.bollingerBands")}</label>
               <div className="param-inputs">
                 <div className="param-item">
-                  <span className="param-item-label">Period</span>
+                  <span className="param-item-label">{t("analysis.period")}</span>
                   <input
                     type="number"
                     value={klParams.bbPeriod}
@@ -140,10 +140,10 @@ const ParamsPanel: React.FC<ParamsPanelProps> = ({
               </div>
             </div>
             <div className="param-section">
-              <label className="param-section-label">ATR</label>
+              <label className="param-section-label">{t("analysis.atr")}</label>
               <div className="param-inputs">
                 <div className="param-item">
-                  <span className="param-item-label">Period</span>
+                  <span className="param-item-label">{t("analysis.period")}</span>
                   <input
                     type="number"
                     value={klParams.atrPeriod}
@@ -158,7 +158,7 @@ const ParamsPanel: React.FC<ParamsPanelProps> = ({
               <label className="param-section-label">{t("analysis.trend")}</label>
               <div className="param-inputs">
                 <div className="param-item">
-                  <span className="param-item-label">Days</span>
+                  <span className="param-item-label">{t("analysis.days")}</span>
                   <input
                     type="number"
                     value={klParams.trendDays}

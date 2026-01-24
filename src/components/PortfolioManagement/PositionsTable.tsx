@@ -50,11 +50,11 @@ const PositionsTable: React.FC<PositionsTableProps> = ({ positions }) => {
                     {position.name}
                   </td>
                   <td>{position.quantity}</td>
-                  <td>¥{position.avgCost.toFixed(2)}</td>
-                  <td>¥{position.currentPrice.toFixed(2)}</td>
-                  <td>¥{position.marketValue.toFixed(2)}</td>
+                  <td>{t("common.currencySymbol")}{position.avgCost.toFixed(2)}</td>
+                  <td>{t("common.currencySymbol")}{position.currentPrice.toFixed(2)}</td>
+                  <td>{t("common.currencySymbol")}{position.marketValue.toFixed(2)}</td>
                   <td className={position.profit >= 0 ? "positive" : "negative"}>
-                    {position.profit >= 0 ? "+" : ""}¥{position.profit.toFixed(2)} ({position.profitPercent.toFixed(2)}%)
+                    {position.profit >= 0 ? "+" : ""}{t("common.currencySymbol")}{position.profit.toFixed(2)} ({position.profitPercent.toFixed(2)}%)
                   </td>
                 </tr>
               ))

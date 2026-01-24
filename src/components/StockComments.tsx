@@ -146,7 +146,7 @@ const StockComments: React.FC<StockCommentsProps> = ({ symbol, quote }) => {
                     <span className="comment-time">{formatDate(comment.timestamp)}</span>
                     {comment.price !== undefined && (
                       <span className="comment-price">
-                        ¥{comment.price.toFixed(2)}
+                        {t("common.currencySymbol")}{comment.price.toFixed(2)}
                         {comment.changePercent !== undefined && (
                           <span className={comment.changePercent >= 0 ? "up" : "down"}>
                             {comment.changePercent >= 0 ? "+" : ""}

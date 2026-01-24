@@ -15,6 +15,8 @@ import AIAgentAnalysis from "./AIAgentAnalysis";
 import CustomIndicatorAnalysis from "./CustomIndicatorAnalysis";
 import BacktestAnalysis from "./BacktestAnalysis";
 import LSTMPredictionAnalysis from "./LSTMPredictionAnalysis";
+import IntradayPredictionAnalysis from "./IntradayPredictionAnalysis";
+import SimilarityPrediction from "./SimilarityPrediction";
 import StockComments from "./StockComments";
 import Icon from "./Icon";
 import "./StockTab.css";
@@ -31,7 +33,7 @@ interface StockTabProps {
 }
 
 type KLinePeriod = "1d" | "1w" | "1mo" | "1y";
-type AnalysisTab = "timeseries" | "kline" | "klinechip" | "prediction" | "compare" | "aiagent" | "customIndicator" | "backtest" | "lstm" | "comments";
+type AnalysisTab = "timeseries" | "kline" | "klinechip" | "prediction" | "compare" | "aiagent" | "customIndicator" | "backtest" | "lstm" | "comments" | "similarity" | "intradayPrediction";
 
 interface StockData {
   date: string;
@@ -221,6 +223,8 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
     switch (activeAnalysisTab) {
       case "timeseries":
         return timeSeriesData.length > 0;
+      case "intradayPrediction":
+        return timeSeriesData.length > 0;
       case "kline":
       case "klinechip":
       case "prediction":
@@ -235,6 +239,8 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
   const isTabLoading = () => {
     switch (activeAnalysisTab) {
       case "timeseries":
+        return timeSeriesLoading;
+      case "intradayPrediction":
         return timeSeriesLoading;
       case "kline":
       case "klinechip":
@@ -277,6 +283,10 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
             analysisType="timeseries"
           />
         );
+      case "intradayPrediction":
+        return (
+          <IntradayPredictionAnalysis klineData={timeSeriesData} />
+        );
       case "kline":
         return (
           <KLineTechnicalAnalysis klineData={klineData} />
@@ -308,6 +318,10 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
       case "lstm":
         return (
           <LSTMPredictionAnalysis klineData={klineData} />
+        );
+      case "similarity":
+        return (
+          <SimilarityPrediction symbol={tab.symbol} currentData={klineData} />
         );
       case "comments":
         return (
@@ -411,6 +425,13 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
             <span className="tab-label">{t("analysis.timeSeries")}</span>
           </button>
           <button
+            className={`analysis-tab ${activeAnalysisTab === "intradayPrediction" ? "active" : ""}`}
+            onClick={() => handleAnalysisTabChange("intradayPrediction")}
+          >
+            <Icon name="prediction" size={14} />
+            <span className="tab-label">{t("analysis.intradayPrediction")}</span>
+          </button>
+          <button
             className={`analysis-tab ${activeAnalysisTab === "kline" ? "active" : ""}`}
             onClick={() => handleAnalysisTabChange("kline")}
           >
@@ -465,6 +486,13 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
           >
             <Icon name="prediction" size={14} />
             <span className="tab-label">{t("analysis.lstm")}</span>
+          </button>
+          <button
+            className={`analysis-tab ${activeAnalysisTab === "similarity" ? "active" : ""}`}
+            onClick={() => handleAnalysisTabChange("similarity")}
+          >
+            <Icon name="history" size={14} />
+            <span className="tab-label">{t("analysis.similarity")}</span>
           </button>
           <button
             className={`analysis-tab ${activeAnalysisTab === "comments" ? "active" : ""}`}

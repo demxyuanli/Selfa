@@ -253,14 +253,14 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
       grid: {
         left: "8%",
         right: "3%",
-        top: "16%",
+        top: "20%",
         bottom: "10%",
       },
       graphic: [
         {
           type: "text",
           left: "center",
-          top: "1%",
+          top: "5%",
           style: {
             text: `${t("analysis.comparisonMode")}: ${normalizeMode === "percent" ? t("analysis.normalizePercent") : t("analysis.normalizePrice")} | ${t("analysis.comparedStocks")}: ${compareStocks.length}`,
             fontSize: 10,
@@ -387,7 +387,8 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
         },
         itemWidth: 8,
         itemHeight: 8,
-        top: 0,
+        top: "2%",
+        left: "center",
       },
     };
   }, [compareStocks, normalizeMode, t]);
@@ -544,26 +545,24 @@ const CompareAnalysis: React.FC<CompareAnalysisProps> = ({ currentSymbol, curren
         <div className="analysis-column chart-column">
           <div className="column-header">
             <span>{t("analysis.chart")}</span>
+            <button
+              className="chart-zoom-button"
+              onClick={() => setIsChartDialogOpen(true)}
+              title={t("chart.zoom")}
+            >
+              {t("chart.zoomAbbr")}
+            </button>
           </div>
           <div className="chart-content">
             {Object.keys(chartOption).length === 0 ? (
               <div className="no-data">{t("analysis.noData")}</div>
             ) : (
-              <>
-                <button
-                  className="chart-zoom-button-overlay"
-                  onClick={() => setIsChartDialogOpen(true)}
-                  title={t("chart.zoom")}
-                >
-                  ZO
-                </button>
-                <ReactECharts
-                  ref={chartRef}
-                  option={chartOption}
-                  style={{ height: "100%", width: "100%" }}
-                  opts={{ renderer: "canvas" }}
-                />
-              </>
+              <ReactECharts
+                ref={chartRef}
+                option={chartOption}
+                style={{ height: "100%", width: "100%" }}
+                opts={{ renderer: "canvas" }}
+              />
             )}
           </div>
         </div>

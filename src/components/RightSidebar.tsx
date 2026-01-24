@@ -128,7 +128,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
                 <div className="index-chart-item">
                   <div className="index-chart-label">{t("index.shanghai")}</div>
                   {loading ? (
-                    <div className="index-loading">Loading...</div>
+                    <div className="index-loading">{t("app.loading")}</div>
                   ) : (
                     <TimeSeriesChart key="sh" data={shTimeSeries} quote={shQuote} compact={true} />
                   )}
@@ -190,9 +190,9 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
                 <div className="index-chart-item">
                   <div className="index-chart-label">{t("index.shanghai")}</div>
                   {loading ? (
-                    <div className="index-loading">Loading...</div>
+                    <div className="index-loading">{t("app.loading")}</div>
                   ) : shKLine.length === 0 ? (
-                    <div className="index-loading">No data</div>
+                    <div className="index-loading">{t("app.noData")}</div>
                   ) : (
                     <KLineChart data={shKLine} compact={true} />
                   )}
@@ -200,9 +200,9 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
                 <div className="index-chart-item">
                   <div className="index-chart-label">{t("index.shenzhen")}</div>
                   {loading ? (
-                    <div className="index-loading">Loading...</div>
+                    <div className="index-loading">{t("app.loading")}</div>
                   ) : szKLine.length === 0 ? (
-                    <div className="index-loading">No data</div>
+                    <div className="index-loading">{t("app.noData")}</div>
                   ) : (
                     <KLineChart data={szKLine} compact={true} />
                   )}
@@ -210,9 +210,9 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ visible, onToggle }) => {
                 <div className="index-chart-item">
                   <div className="index-chart-label">{t("index.chuangye")}</div>
                   {loading ? (
-                    <div className="index-loading">Loading...</div>
+                    <div className="index-loading">{t("app.loading")}</div>
                   ) : cyKLine.length === 0 ? (
-                    <div className="index-loading">No data</div>
+                    <div className="index-loading">{t("app.noData")}</div>
                   ) : (
                     <KLineChart data={cyKLine} compact={true} />
                   )}

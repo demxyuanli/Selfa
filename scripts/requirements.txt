@@ -1,0 +1,8 @@
+torch
+transformers
+accelerate
+pandas
+numpy
+huggingface_hub
+tensorflow
+git+https://github.com/amazon-science/chronos-forecasting.git

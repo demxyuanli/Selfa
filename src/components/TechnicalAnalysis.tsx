@@ -52,6 +52,9 @@ interface TechnicalIndicators {
   kdj_d?: number[];
   kdj_j?: number[];
   williams_r?: number[];
+  dkx?: number[];
+  madkx?: number[];
+  patterns?: (string | null)[];
 }
 
 interface TechnicalAnalysisProps {
@@ -93,7 +96,7 @@ const TechnicalAnalysis: React.FC<TechnicalAnalysisProps> = ({ data }) => {
 
     const datasets: any[] = [
       {
-        label: "Close Price",
+        label: t("analysis.closePrice"),
         data: closes,
         borderColor: "rgb(44, 62, 80)",
         backgroundColor: "rgba(44, 62, 80, 0.1)",
@@ -166,6 +169,27 @@ const TechnicalAnalysis: React.FC<TechnicalAnalysisProps> = ({ data }) => {
           }
         );
         break;
+      case "dkx":
+        if (indicators.dkx && indicators.madkx) {
+          datasets.push(
+            {
+              label: t("analysis.dkx"),
+              data: indicators.dkx,
+              borderColor: "rgb(255, 193, 7)", // Amber
+              fill: false,
+              borderWidth: 2,
+            },
+            {
+              label: t("analysis.madkx"),
+              data: indicators.madkx,
+              borderColor: "rgb(255, 87, 34)", // Deep Orange
+              fill: false,
+              borderWidth: 1,
+              borderDash: [5, 5],
+            }
+          );
+        }
+        break;
     }
 
     return { labels, datasets };
@@ -219,33 +243,64 @@ const TechnicalAnalysis: React.FC<TechnicalAnalysisProps> = ({ data }) => {
           className={selectedIndicator === "sma" ? "active" : ""}
           onClick={() => setSelectedIndicator("sma")}
         >
-          SMA
+          {t("analysis.sma")}
         </button>
         <button
           className={selectedIndicator === "ema" ? "active" : ""}
           onClick={() => setSelectedIndicator("ema")}
         >
-          EMA
+          {t("analysis.ema")}
         </button>
         <button
           className={selectedIndicator === "rsi" ? "active" : ""}
           onClick={() => setSelectedIndicator("rsi")}
         >
-          RSI
+          {t("analysis.rsi")}
         </button>
         <button
           className={selectedIndicator === "macd" ? "active" : ""}
           onClick={() => setSelectedIndicator("macd")}
         >
-          MACD
+          {t("analysis.macd")}
+        </button>
+        <button
+          className={selectedIndicator === "dkx" ? "active" : ""}
+          onClick={() => setSelectedIndicator("dkx")}
+        >
+          {t("analysis.dkx")} ({t("analysis.trend")})
         </button>
       </div>
       <div className="chart-container">
         <Line data={chartData} options={options} />
       </div>
+      
+      {indicators.patterns && (
+        <div className="patterns-list" style={{ marginTop: '20px', padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
+          <h4 style={{ margin: '0 0 10px 0', color: '#ccc' }}>{t("analysis.detectedPatterns")}</h4>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+            {indicators.patterns.map((p, i) => {
+              if (!p) return null;
+              // Only show last 30 days
+              if (i < indicators.patterns!.length - 30) return null;
+              
+              return (
+                <div key={i} style={{ 
+                  background: '#333', 
+                  padding: '4px 8px', 
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  borderLeft: '3px solid #2196f3'
+                }}>
+                  <span style={{ color: '#888', marginRight: '5px' }}>{data[i].date}:</span>
+                  <span style={{ color: '#fff', fontWeight: 'bold' }}>{p}</span>
+                </div>
+              );
+            }).filter(Boolean).reverse()}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default TechnicalAnalysis;
-

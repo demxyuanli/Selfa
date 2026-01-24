@@ -43,7 +43,7 @@ const ChipParamsPanel: React.FC<ChipParamsPanelProps> = ({ params, onChange }) =
                 className={`period-btn ${params.lookbackPeriod === p ? "active" : ""}`}
                 onClick={() => handlePeriodChange(p)}
               >
-                {t(`period.${p}`) || p}
+                {t(`period.${p}`)}
               </button>
             ))}
           </div>

@@ -60,6 +60,11 @@
   cursor: not-allowed;
 }
 
+.prediction-analysis .generate-btn.reset {
+    background-color: #666;
+    margin-top: 4px;
+}
+
 .prediction-results-list {
   display: flex;
   flex-direction: column;
@@ -170,4 +175,104 @@
 
 .retry-button:hover {
   background-color: #0066aa;
+}
+
+/* Intraday Specific Styles */
+
+.intraday-tabs {
+    display: flex;
+    background-color: var(--bg-tertiary, #252526);
+    border-bottom: 1px solid var(--border-color, #3c3c3c);
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary, #858585);
+    cursor: pointer;
+    font-size: 12px;
+    border-bottom: 2px solid transparent;
+}
+
+.tab-btn:hover {
+    color: var(--text-primary, #cccccc);
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.tab-btn.active {
+    color: var(--accent-color, #007acc);
+    border-bottom-color: var(--accent-color, #007acc);
+    background-color: rgba(0, 122, 204, 0.1);
+}
+
+.indicator-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.toggle-btn {
+    padding: 4px 8px;
+    font-size: 10px;
+    border: 1px solid var(--border-color, #3c3c3c);
+    background-color: var(--bg-primary, #1e1e1e);
+    color: var(--text-secondary, #858585);
+    border-radius: 3px;
+    cursor: pointer;
+    flex: 1 0 30%;
+    text-align: center;
+}
+
+.toggle-btn.active {
+    background-color: var(--accent-color, #007acc);
+    color: white;
+    border-color: var(--accent-color, #007acc);
+}
+
+.pressure-gauge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    background: var(--bg-tertiary, #252526);
+    padding: 8px;
+    border-radius: 4px;
+}
+
+.pressure-label {
+    font-size: 10px;
+    color: var(--text-secondary, #858585);
+    min-width: 60px;
+}
+
+.pressure-bar {
+    flex: 1;
+    height: 8px;
+    background-color: rgba(38, 166, 154, 0.5); /* Sell Color */
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.pressure-fill {
+    height: 100%;
+    background-color: rgba(239, 83, 80, 0.8); /* Buy Color */
+    transition: width 0.5s ease;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 11px;
+    border-bottom: 1px solid var(--border-color, #3c3c3c);
+}
+
+.text-up { color: #ef5350; }
+.text-down { color: #26a69a; }
+
+.full-width {
+    flex: 1; /* Override fixed width if needed */
 }

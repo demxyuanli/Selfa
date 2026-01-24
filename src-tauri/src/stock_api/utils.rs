@@ -71,9 +71,26 @@ pub fn parse_date(date_str: &str) -> Result<chrono::NaiveDate, String> {
     }
 }
 
+pub fn parse_datetime(date_str: &str) -> Result<chrono::NaiveDateTime, String> {
+    // Try full datetime first
+    chrono::NaiveDateTime::parse_from_str(date_str, "%Y-%m-%d %H:%M:%S")
+        .or_else(|_| chrono::NaiveDateTime::parse_from_str(date_str, "%Y-%m-%d %H:%M"))
+        .or_else(|_| {
+            // Fallback to date only, assume start of day
+            parse_date(date_str).map(|d| d.and_hms_opt(0, 0, 0).unwrap())
+        })
+        .map_err(|e| format!("Failed to parse datetime: {}", e))
+}
+
 pub fn add_days(date: &chrono::NaiveDate, days: i32) -> Result<String, String> {
     let new_date = *date + chrono::Duration::days(days as i64);
     Ok(new_date.format("%Y-%m-%d").to_string())
+}
+
+pub fn add_minutes(datetime_str: &str, minutes: i64) -> Result<String, String> {
+    let dt = parse_datetime(datetime_str)?;
+    let new_dt = dt + chrono::Duration::minutes(minutes);
+    Ok(new_dt.format("%Y-%m-%d %H:%M:%S").to_string())
 }
 
 pub fn calculate_variance(data: &[f64]) -> f64 {

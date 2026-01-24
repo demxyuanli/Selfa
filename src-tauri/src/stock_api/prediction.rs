@@ -34,6 +34,12 @@ pub fn predict_stock_price(
             "fibonacci_extension" => prediction_advanced::predict_fibonacci_extension(data, &last_date, period)?,
             "monte_carlo" => prediction_advanced::predict_monte_carlo(data, &last_date, period)?,
             "monte_carlo_advanced" => prediction_advanced::predict_monte_carlo_advanced(data, &last_date, period)?,
+            "deos_gpt" => prediction_advanced::predict_deos_alpha_time_gpt(data, &last_date, period)?,
+            "sspt" => prediction_advanced::predict_sspt_fine_tuned(data, &last_date, period)?,
+            "space_explore" => prediction_advanced::predict_space_explore_ai(data, &last_date, period)?,
+            "intraday_ma" => super::prediction_intraday::predict_intraday_ma(data, &last_date, period)?,
+            "intraday_volatility" => super::prediction_intraday::predict_intraday_volatility(data, &last_date, period)?,
+            "intraday_regime" => super::prediction_intraday::predict_intraday_regime(data, &last_date, period)?,
         _ => return Err(format!("Unknown prediction method: {}", method)),
     };
 

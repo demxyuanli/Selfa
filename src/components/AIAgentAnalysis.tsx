@@ -212,7 +212,7 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
       grid: {
         left: "8%",
         right: "3%",
-        top: "18%",
+        top: "22%",
         bottom: "10%",
       },
       xAxis: {
@@ -254,7 +254,7 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
         {
           type: "text",
           left: "center",
-          top: "1%",
+          top: "3%",
           style: {
             text: `${t("aiAgent.aiAnalysis")} - ${symbol}`,
             fontSize: 10,
@@ -393,13 +393,13 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
                     title={getModelDisplayName(model)}
                   >
                     <optgroup label={t("aiAgent.freeModels")}>
-                      <option value="groq:llama-3.1-70b-versatile">Groq Llama 3.1 70B (Free)</option>
-                      <option value="groq:mixtral-8x7b-32768">Groq Mixtral 8x7B (Free)</option>
-                      <option value="gemini:gemini-3-flash-preview">Google Gemini 3 Flash Preview (Free)</option>
-                      <option value="gemini:gemini-2.5-flash">Google Gemini 2.5 Flash (Free) - Recommended</option>
-                      <option value="gemini:gemini-1.5-flash">Google Gemini 1.5 Flash (Free)</option>
-                      <option value="gemini:gemini-1.5-pro">Google Gemini 1.5 Pro (Free)</option>
-                      <option value="huggingface:mistralai/Mistral-7B-Instruct-v0.2">Hugging Face Mistral (Free)</option>
+                      <option value="groq:llama-3.1-70b-versatile">Groq Llama 3.1 70B {t("aiAgent.modelFree")}</option>
+                      <option value="groq:mixtral-8x7b-32768">Groq Mixtral 8x7B {t("aiAgent.modelFree")}</option>
+                      <option value="gemini:gemini-3-flash-preview">Google Gemini 3 Flash Preview {t("aiAgent.modelFree")}</option>
+                      <option value="gemini:gemini-2.5-flash">Google Gemini 2.5 Flash {t("aiAgent.modelFree")} {t("aiAgent.modelRecommended")}</option>
+                      <option value="gemini:gemini-1.5-flash">Google Gemini 1.5 Flash {t("aiAgent.modelFree")}</option>
+                      <option value="gemini:gemini-1.5-pro">Google Gemini 1.5 Pro {t("aiAgent.modelFree")}</option>
+                      <option value="huggingface:mistralai/Mistral-7B-Instruct-v0.2">Hugging Face Mistral {t("aiAgent.modelFree")}</option>
                     </optgroup>
                     <optgroup label={t("aiAgent.paidModels")}>
                       <option value="gpt-4o-mini">GPT-4o Mini</option>
@@ -581,6 +581,13 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
         <div className="analysis-column chart-column">
           <div className="column-header">
             <span>{t("analysis.chart")}</span>
+            <button
+              className="chart-zoom-button"
+              onClick={() => setIsChartDialogOpen(true)}
+              title={t("chart.zoom")}
+            >
+              ZO
+            </button>
           </div>
           <div className="chart-content">
             {loading ? (
@@ -588,23 +595,14 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
             ) : Object.keys(chartOption).length === 0 ? (
               <div className="no-data">{t("analysis.noData")}</div>
             ) : (
-              <>
-                <button
-                  className="chart-zoom-button-overlay"
-                  onClick={() => setIsChartDialogOpen(true)}
-                  title={t("chart.zoom")}
-                >
-                  ZO
-                </button>
-                <ReactECharts
-                  ref={chartRef}
-                  option={chartOption}
-                  style={{ height: "100%", width: "100%" }}
-                  opts={{ renderer: "canvas" }}
-                  notMerge={true}
-                  lazyUpdate={true}
-                />
-              </>
+              <ReactECharts
+                ref={chartRef}
+                option={chartOption}
+                style={{ height: "100%", width: "100%" }}
+                opts={{ renderer: "canvas" }}
+                notMerge={true}
+                lazyUpdate={true}
+              />
             )}
           </div>
         </div>

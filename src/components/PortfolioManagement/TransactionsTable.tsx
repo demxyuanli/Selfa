@@ -169,9 +169,9 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                           <span className="quantity-display">{transaction.quantity}</span>
                         )}
                       </td>
-                      <td>¥{transaction.price.toFixed(2)}</td>
-                      <td>¥{transaction.amount.toFixed(2)}</td>
-                      <td>¥{transaction.commission.toFixed(2)}</td>
+                      <td>{t("common.currencySymbol")}{transaction.price.toFixed(2)}</td>
+                      <td>{t("common.currencySymbol")}{transaction.amount.toFixed(2)}</td>
+                      <td>{t("common.currencySymbol")}{transaction.commission.toFixed(2)}</td>
                       <td>{transaction.transactionDate}</td>
                       <td>{transaction.notes || "-"}</td>
                       <td>
@@ -217,17 +217,17 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                     <td className="subtotal-value">-</td>
                     <td className="subtotal-value">
                       <div className="subtotal-item">
-                        <span className="subtotal-label-small">{t("portfolio.buy")}:</span> ¥{group.subtotal.buyAmount.toFixed(2)}
+                        <span className="subtotal-label-small">{t("portfolio.buy")}:</span> {t("common.currencySymbol")}{group.subtotal.buyAmount.toFixed(2)}
                       </div>
                       <div className="subtotal-item">
-                        <span className="subtotal-label-small">{t("portfolio.sell")}:</span> ¥{group.subtotal.sellAmount.toFixed(2)}
+                        <span className="subtotal-label-small">{t("portfolio.sell")}:</span> {t("common.currencySymbol")}{group.subtotal.sellAmount.toFixed(2)}
                       </div>
                       <div className="subtotal-item">
                         <span className="subtotal-label-small">{t("portfolio.net")}:</span>{" "}
-                        <span className={group.subtotal.netAmount >= 0 ? "positive" : "negative"}>¥{group.subtotal.netAmount.toFixed(2)}</span>
+                        <span className={group.subtotal.netAmount >= 0 ? "positive" : "negative"}>{t("common.currencySymbol")}{group.subtotal.netAmount.toFixed(2)}</span>
                       </div>
                     </td>
-                    <td className="subtotal-value">¥{group.subtotal.totalCommission.toFixed(2)}</td>
+                    <td className="subtotal-value">{t("common.currencySymbol")}{group.subtotal.totalCommission.toFixed(2)}</td>
                     <td colSpan={3}>-</td>
                   </tr>
                 </React.Fragment>
