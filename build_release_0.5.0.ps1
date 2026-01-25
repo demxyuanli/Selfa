@@ -55,10 +55,24 @@ Write-Host "Building Frontend..." -ForegroundColor Cyan
 npm install
 npm run build
 
+# 5.5 Prepare Resources (Copy scripts to src-tauri/scripts to avoid relative path issues)
+Write-Host "Preparing resources..." -ForegroundColor Yellow
+$srcScripts = "scripts"
+$destScripts = "src-tauri\scripts"
+if (Test-Path $srcScripts) {
+    if (Test-Path $destScripts) {
+        Remove-Item -Recurse -Force $destScripts
+    }
+    Copy-Item -Recurse $srcScripts "src-tauri"
+} else {
+    Write-Warning "Scripts directory not found at $srcScripts"
+}
+
 # 6. Build Backend & Installer
 Write-Host "Building Backend and Installer..." -ForegroundColor Cyan
 # This will use the updated tauri.conf.json which includes ../scripts/** and python/**
-cargo tauri build
+# Use npx tauri build to ensure we use the project-local CLI
+npx tauri build
 
 Write-Host "Build Complete!" -ForegroundColor Green
 Write-Host "Installer should be in src-tauri\target\release\bundle\nsis"

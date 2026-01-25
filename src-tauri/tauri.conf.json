@@ -39,8 +39,8 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "../scripts/**",
-      "python/**"
+      "scripts/*",
+      "python/*"
     ]
   }
 }
