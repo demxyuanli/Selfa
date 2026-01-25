@@ -25,6 +25,8 @@ pub struct BuyingPressure {
     pub total_sell_volume: f64,
     pub buy_sell_ratio: f64,
     pub net_inflow: f64,
+    pub cumulative_delta: Vec<f64>, // Added: Cumulative Delta
+    pub delta_result: Option<Vec<f64>>, // Added: Individual Delta per bar
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -121,29 +123,62 @@ fn detect_large_orders(data: &[StockData], threshold_multiplier: f64) -> Vec<Lar
 fn calculate_buying_pressure(data: &[StockData]) -> BuyingPressure {
     let mut total_buy = 0.0;
     let mut total_sell = 0.0;
+    let mut cumulative_delta = Vec::with_capacity(data.len());
+    let mut delta_result = Vec::with_capacity(data.len());
+    let mut current_cum_delta = 0.0;
 
     for d in data {
         let vol = d.volume as f64;
-        // Simple approximation: 
-        // If close > open, assume mostly buy.
-        // If close < open, assume mostly sell.
-        // If close == open, split 50/50.
-        // Better approximation: use position of close within high-low range.
-        
         let range = d.high - d.low;
+        let mut buy_ratio = 0.5;
+
         if range > 0.0 {
-            let buy_ratio = (d.close - d.low) / range;
-            total_buy += vol * buy_ratio;
-            total_sell += vol * (1.0 - buy_ratio);
-        } else {
-            // Flat range
-            if d.close >= d.open {
-                 total_buy += vol * 0.5;
-                 total_sell += vol * 0.5;
+            // Enhanced Position Ratio Method (增强型位置比例法)
+            // Combine position within range and entity direction
+            let position = (d.close - d.low) / range;
+            let entity_ratio = (d.close - d.open) / range; // Entity strength (-1.0 to 1.0)
+            
+            // Non-linear weighting: position * (1 + clamped_entity_strength)
+            // This gives more weight to the direction of the candle body
+            let adjusted_buy_ratio = position * (1.0 + entity_ratio.clamp(-0.5, 0.5));
+            
+            // Layered Threshold Allocation (分层阈值分配) - Optional refinement
+            // If close is very high, assume aggressive buying
+            // If close is very low, assume aggressive selling
+            let refined_ratio = if adjusted_buy_ratio > 0.8 {
+                0.85 // Aggressive buy
+            } else if adjusted_buy_ratio < 0.2 {
+                0.15 // Aggressive sell
             } else {
-                 total_sell += vol;
+                adjusted_buy_ratio
+            };
+
+            buy_ratio = refined_ratio.clamp(0.0, 1.0);
+        } else {
+            // Flat range (Doji or limit up/down)
+            if d.close > d.open {
+                buy_ratio = 1.0;
+            } else if d.close < d.open {
+                buy_ratio = 0.0;
+            } else {
+                // Check against previous close if available? 
+                // For now, 0.5 split
+                buy_ratio = 0.5;
             }
         }
+        
+        let buy_vol = vol * buy_ratio;
+        let sell_vol = vol * (1.0 - buy_ratio);
+        
+        total_buy += buy_vol;
+        total_sell += sell_vol;
+        
+        // Calculate Delta
+        let delta = buy_vol - sell_vol;
+        current_cum_delta += delta;
+        
+        delta_result.push(delta);
+        cumulative_delta.push(current_cum_delta);
     }
 
     let buy_sell_ratio = if total_sell > 0.0 { total_buy / total_sell } else { 0.0 };
@@ -153,5 +188,7 @@ fn calculate_buying_pressure(data: &[StockData]) -> BuyingPressure {
         total_sell_volume: total_sell,
         buy_sell_ratio,
         net_inflow: total_buy - total_sell,
+        cumulative_delta,
+        delta_result: Some(delta_result),
     }
 }

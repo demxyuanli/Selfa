@@ -342,6 +342,7 @@ impl Database {
         indices::add_index(&self.conn, index)
     }
 
+    #[allow(dead_code)]
     pub fn get_all_indices(&self) -> Result<Vec<indices::IndexInfo>> {
         indices::get_all_indices(&self.conn)
     }
@@ -354,6 +355,7 @@ impl Database {
         indices::add_stock_index_relation(&self.conn, stock_symbol, index_symbol)
     }
 
+    #[allow(dead_code)]
     pub fn get_indices_for_stock(&self, stock_symbol: &str) -> Result<Vec<indices::IndexInfo>> {
         indices::get_indices_for_stock(&self.conn, stock_symbol)
     }

@@ -1,0 +1,57 @@
+{
+  "app": {
+    "loading": "加载中...",
+    "error": "错误",
+    "refresh": "刷新"
+  },
+  "stock": {
+    "intraday": "分时",
+    "daily": "日线",
+    "selectPeriod": "选择周期",
+    "periods": {
+      "1d": "1天",
+      "5d": "5天",
+      "1mo": "1月",
+      "3mo": "3月",
+      "6mo": "6月",
+      "1y": "1年",
+      "2y": "2年",
+      "5y": "5年"
+    },
+    "open": "开盘",
+    "high": "最高",
+    "low": "最低",
+    "previousClose": "昨收",
+    "volume": "成交量",
+    "marketCap": "市值"
+  },
+  "analysis": {
+    "params": "参数设置",
+    "sector": "板块",
+    "deviation": "偏差",
+    "deviationPercent": "偏差 %",
+    "changePercentLabel": "涨跌幅 %",
+    "noSectorsFound": "未找到相关板块数据"
+  },
+  "similarity": {
+    "title": "历史模式匹配预测",
+    "match": "匹配日期",
+    "percentChange": "涨跌幅 %",
+    "lookback": "回看周期",
+    "horizon": "预测周期",
+    "refresh": "重新分析",
+    "noData": "暂无匹配数据，请调整参数",
+    "analysisTitle": "分析说明",
+    "matchScore": "相似度评分",
+    "matchScoreDesc": "基于价格走势(70%)和成交量形态(30%)的加权评分，越接近100%代表历史形态越相似。",
+    "projection": "未来走势",
+    "projectionDesc": "展示历史上相似形态出现后的实际走势，作为当前行情的参考路径。",
+    "risk": "风险提示",
+    "riskDesc": "历史重演概率非100%，需结合当前市场环境（如大盘趋势、个股基本面）综合判断。"
+  },
+  "Chip Distribution Analysis": "筹码分布分析",
+  "Related Sectors": "相关板块",
+  "time": {
+    "daysShort": "天"
+  }
+}

@@ -24,7 +24,7 @@ interface ChartDialogProps {
   onClose: () => void;
   title: string;
   chartOption: any;
-  onEvents?: Record<string, (params: any) => void>;
+  onEvents?: Record<string, (params: any, ...args: any[]) => void>;
   chipMetrics?: ChipMetricsDetail | null;
   // Additional props for full functionality
   overlayIndicator?: IndicatorType;
@@ -42,6 +42,9 @@ interface ChartDialogProps {
   onChipParamsChange?: (params: ChipParams) => void;
   onIndicatorParamsChange?: (params: IndicatorParams) => void;
   showFullFeatures?: boolean; // Whether to show parameter panels and results panel
+  // Lock position props
+  isFixed?: boolean;
+  onToggleFix?: () => void;
 }
 
 const ChartDialog: React.FC<ChartDialogProps> = ({ 
@@ -59,13 +62,15 @@ const ChartDialog: React.FC<ChartDialogProps> = ({
   chipData,
   selectedDayChipMetrics,
   chipCalculationData,
-  symbol,
+  symbol: _symbol,
   onOverlayIndicatorChange,
   onOscillatorTypeChange,
   onShowSignalsChange,
   onChipParamsChange,
   onIndicatorParamsChange,
   showFullFeatures = false,
+  isFixed = false,
+  onToggleFix,
 }) => {
   const { t } = useTranslation();
   const chartRef = useRef<ReactECharts>(null);
@@ -273,6 +278,28 @@ const ChartDialog: React.FC<ChartDialogProps> = ({
     };
   }, []);
 
+  // Keyboard shortcut: Space to toggle fix (only when dialog is open and onToggleFix is provided)
+  useEffect(() => {
+    if (!isOpen || !onToggleFix) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle if not typing in an input/textarea
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
+      if (e.code === "Space" && !e.repeat) {
+        e.preventDefault();
+        onToggleFix();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onToggleFix]);
+
   if (!isOpen) return null;
 
   const hasChip = !!chipMetrics;
@@ -294,9 +321,32 @@ const ChartDialog: React.FC<ChartDialogProps> = ({
       <div className={`chart-dialog ${hasFullFeatures ? "chart-dialog-full-features" : ""}`} onClick={(e) => e.stopPropagation()}>
         <div className="chart-dialog-header">
           <h2>{title}</h2>
-          <button className="chart-dialog-close" onClick={onClose} title={t("chart.close")}>
-            <Icon name="close" size={18} />
-          </button>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            {onToggleFix && (
+              <button
+                className={`chart-lock-button ${isFixed ? "active" : ""}`}
+                onClick={onToggleFix}
+                title={`${isFixed ? t("chart.unlockPosition") : t("chart.lockPosition")} (Space)`}
+                style={{
+                  padding: "4px 8px",
+                  fontSize: "12px",
+                  border: "1px solid #ddd",
+                  borderRadius: "4px",
+                  background: isFixed ? "#e3f2fd" : "transparent",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <span style={{ fontSize: "14px" }}>{isFixed ? "🔒" : "🔓"}</span>
+                <span>{isFixed ? t("chart.locked") : t("chart.unlocked")}</span>
+              </button>
+            )}
+            <button className="chart-dialog-close" onClick={onClose} title={t("chart.close")}>
+              <Icon name="close" size={18} />
+            </button>
+          </div>
         </div>
         {hasFullFeatures ? (
           <div className="chart-dialog-content-full">

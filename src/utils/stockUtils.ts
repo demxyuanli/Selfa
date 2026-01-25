@@ -110,8 +110,6 @@ export function separateStocksAndIndices<T extends { stock: StockInfo }>(
   
   for (const stock of stocks) {
     const normalizedSymbol = normalizeSymbol(stock.stock.symbol);
-    const key = `${normalizedSymbol}|${stock.stock.name}`;
-    
     if (isIndexStock(stock.stock.symbol, stock.stock.exchange)) {
       // Check for duplicates in indices (by symbol or by name if symbol is different)
       // First check by normalized symbol

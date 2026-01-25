@@ -107,15 +107,22 @@ const KLineChipAnalysis: React.FC<KLineChipAnalysisProps> = ({ klineData, symbol
   const selectedDayChipMetrics = useMemo(() => {
     if (!chipData?.dailyDistributions?.length) return null;
     const dists = chipData.dailyDistributions;
+    const datePart = (s: string) => ((s || "").split(" ")[0] || s).trim();
     let displayDateIndex = dists.length - 1;
     // Use fixed index if available, otherwise use selectedDateIndex
     const activeIndex = isFixed && fixedDateIndex != null ? fixedDateIndex : selectedDateIndex;
     if (activeIndex != null && activeIndex >= 0 && activeIndex < klineData.length) {
-      const key = (klineData[activeIndex].date || "").split(" ")[0] || klineData[activeIndex].date;
-      const i = dists.findIndex((d) => ((d.date || "").split(" ")[0] || d.date) === key);
-      if (i >= 0) displayDateIndex = i;
-      else if (chipCalculationData.length === klineData.length && activeIndex < dists.length) {
+      const key = datePart(klineData[activeIndex].date || "");
+      const i = dists.findIndex((d) => datePart(d.date || "") === key);
+      if (i >= 0) {
+        displayDateIndex = i;
+      } else if (chipCalculationData.length === klineData.length && activeIndex < dists.length) {
         displayDateIndex = activeIndex;
+      } else if (chipCalculationData.length > klineData.length) {
+        const start = chipCalculationData.findIndex((d) => datePart(d.date || "") === datePart(klineData[0].date || ""));
+        if (start >= 0 && start + activeIndex < dists.length) {
+          displayDateIndex = start + activeIndex;
+        }
       }
     }
     const dayDist = dists[displayDateIndex];
@@ -599,6 +606,8 @@ const KLineChipAnalysis: React.FC<KLineChipAnalysisProps> = ({ klineData, symbol
         onShowSignalsChange={setShowSignals}
         onChipParamsChange={setChipParams}
         onIndicatorParamsChange={setIndicatorParams}
+        isFixed={isFixed}
+        onToggleFix={handleToggleFix}
       />
     </div>
   );

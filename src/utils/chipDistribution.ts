@@ -326,12 +326,12 @@ export function computeChipMetrics(
     morphology = "low_single_dense";
   } else if (position === "high" && peakCount === 1 && concentration90 < 18) {
     morphology = "high_single_dense";
-  } else if (peakCount >= 2 && peakCount <= 4) {
-    morphology = "multi_peak";
   } else if (concentration90 > 25) {
     morphology = "scattered";
   } else if (position === "low" && peakCount >= 2 && concentration90 < 20) {
     morphology = "bottom_converging";
+  } else if (peakCount >= 2 && peakCount <= 4) {
+    morphology = "multi_peak";
   }
 
   let chipInterpretation = "";
@@ -353,6 +353,8 @@ export function computeChipMetrics(
     chipInterpretation = "high_trapped_tactics";
   } else if (concentration90 < 12) {
     chipInterpretation = "highly_concentrated_tactics";
+  } else {
+    chipInterpretation = "neutral_tactics";
   }
 
   const baseMetrics: ChipMetricsDetail = {

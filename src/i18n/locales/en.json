@@ -811,6 +811,7 @@
     "high_profit_tactics": "Profit>70%: rally may stall, avoid chasing",
     "high_trapped_tactics": "Trapped>60%: heavy overhead supply, wait for turnover",
     "highly_concentrated_tactics": "Concentration<12%: lock-up or washout end, focus on breakout",
+    "neutral_tactics": "Balanced longs/shorts, moderate pattern; observe and decide with volume/price",
     "aiAgent": "AI Agent Analysis",
     "epochs": "Epochs",
     "epochsDesc": "Number of training iterations (current version is simplified)",
@@ -1185,6 +1186,9 @@
     "2y": "2 Years",
     "3y": "3 Years"
   },
+  "time": {
+    "daysShort": "d"
+  },
   "similarity": {
     "title": "Historical K-Line Similarity Matching & Prediction",
     "match": "Match Date",
@@ -1193,7 +1197,21 @@
     "refresh": "Refresh Prediction",
     "horizon": "Forecast Days",
     "lookback": "Match Window",
-    "noData": "No matching data"
+    "noData": "No matching data",
+    "overlayTitle": "Normalized Overlay",
+    "fanTitle": "Future Paths Fan",
+    "tableTitle": "Similarity Stats",
+    "targetLabel": "Current",
+    "meanLabel": "Mean",
+    "matchDate": "Match Date",
+    "score": "Score",
+    "futureReturn": "Future Return %",
+    "avgReturn": "Avg",
+    "medianReturn": "Median",
+    "winRate": "Win Rate",
+    "predictedRange": "Predicted Change Range",
+    "priceRange": "Price Range",
+    "refCurrentPrice": "Ref. Price"
   },
   "lstm": {
     "lstmPrediction": "LSTM Neural Network Prediction",

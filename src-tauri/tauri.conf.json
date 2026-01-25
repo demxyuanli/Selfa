@@ -1,6 +1,6 @@
 {
   "productName": "Stock Analyzer",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "identifier": "com.stockanalyzer.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -37,6 +37,10 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "resources": [
+      "../scripts/**",
+      "python/**"
     ]
   }
 }

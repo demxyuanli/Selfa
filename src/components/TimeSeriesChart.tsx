@@ -134,7 +134,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, quote, compact 
       percentMax = ((yAxisMax - previousClose) / previousClose) * 100;
     }
 
-    const volumeColors = fullTradingTimes.map((time, index) => {
+    const volumeColors = fullTradingTimes.map((time) => {
       const dataPoint = dataMap.get(time);
       if (!dataPoint || dataPoint.volume === null) {
         return "rgba(133, 133, 133, 0.3)";

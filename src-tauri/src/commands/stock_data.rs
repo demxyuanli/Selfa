@@ -1,7 +1,7 @@
 use crate::cache::StockCache;
 use crate::database::Database;
 use crate::stock_api::{fetch_stock_history, fetch_stock_quote, fetch_time_series, get_related_sectors, StockData, StockDataBundle, StockQuote, utils::is_trading_hours};
-use crate::stock_api::prediction_similarity::{find_similar_patterns, SimilarityResult};
+use crate::stock_api::prediction_similarity::{find_similar_patterns, SimilarityPredictionResponse, TargetPattern};
 use crate::stock_api::chip_analysis::{calculate_chip_distribution, ChipAnalysisResult};
 use chrono::Local;
 use std::sync::Arc;
@@ -239,8 +239,9 @@ pub async fn get_similarity_prediction(
     period: String, // "daily", "weekly", etc.
     lookback_window: usize,
     forecast_horizon: usize,
+    top_n: Option<usize>,
     cache: State<'_, Arc<StockCache>>,
-) -> Result<Vec<SimilarityResult>, String> {
+) -> Result<SimilarityPredictionResponse, String> {
     let klt = match period.as_str() {
         "daily" => "101",
         "weekly" => "102",
@@ -251,12 +252,20 @@ pub async fn get_similarity_prediction(
     let data = if let Some(cached) = cache.get_history(&symbol, klt).await {
         cached
     } else {
-        // Fetch if not in cache (though usually it should be)
         fetch_stock_history(&symbol, klt).await.map_err(|e| e.to_string())?
     };
 
-    let results = find_similar_patterns(&data, lookback_window, forecast_horizon, 5);
-    Ok(results)
+    let n = top_n.unwrap_or(5).clamp(1, 20);
+    match find_similar_patterns(&data, lookback_window, forecast_horizon, n) {
+        Some(resp) => Ok(resp),
+        None => Ok(SimilarityPredictionResponse {
+            target_pattern: TargetPattern {
+                dates: vec![],
+                closes: vec![],
+            },
+            matches: vec![],
+        }),
+    }
 }
 
 #[tauri::command]

@@ -569,6 +569,7 @@
     "high_profit_tactics": "利益>70%: 上昇鈍化、追い高注意",
     "high_trapped_tactics": "含み損>60%: 上値重圧、乗り換え待ち",
     "highly_concentrated_tactics": "集中度<12%: ロックまたは押し目終了、ブレイクに注目",
+    "neutral_tactics": "多空均衡・形態一般、観察を主とし量価で判断",
     "aiAgent": "AIエージェント分析",
     "actualPrice": "実際価格",
     "predictionResults": "予測結果",
@@ -779,6 +780,33 @@
     "chartTooltipProfit": "損益",
     "chartTooltipPosition": "ポジション",
     "chartTooltipShares": "株"
+  },
+  "time": {
+    "daysShort": "日"
+  },
+  "similarity": {
+    "title": "歴史K線類似度マッチ＆予測",
+    "match": "マッチ日",
+    "percentChange": "変動 (%)",
+    "explanation": "現在のK線に最も類似した過去パターンを検索し、今後の動きを予測します。参考用であり、投資助言ではありません。",
+    "refresh": "予測を更新",
+    "horizon": "予測日数",
+    "lookback": "マッチ窓",
+    "noData": "マッチするデータがありません",
+    "overlayTitle": "正規化オーバーレイ",
+    "fanTitle": "将来パス扇形",
+    "tableTitle": "類似度統計",
+    "targetLabel": "現在",
+    "meanLabel": "平均",
+    "matchDate": "マッチ日",
+    "score": "類似度",
+    "futureReturn": "以降変動%",
+    "avgReturn": "平均",
+    "medianReturn": "中央値",
+    "winRate": "勝率",
+    "predictedRange": "予測変動範囲",
+    "priceRange": "対応株価区間",
+    "refCurrentPrice": "参考現価"
   },
   "comments": {
     "title": "コメントログ",

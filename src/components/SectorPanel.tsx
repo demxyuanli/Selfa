@@ -497,7 +497,7 @@ const SectorPanel: React.FC<SectorPanelProps> = ({ symbol, stockName }) => {
             gridIndex: 0,
             axisLabel: {
               interval: 0,
-              formatter: (value: string, index: number) => {
+              formatter: (value: string, _index: number) => {
                 // Only show labels at 30-minute intervals (minutes are 00 or 30)
                 const parts = value.split(':');
                 if (parts.length >= 2) {

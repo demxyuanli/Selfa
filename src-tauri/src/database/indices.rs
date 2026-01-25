@@ -27,6 +27,7 @@ pub fn add_index(conn: &Mutex<Connection>, index: &IndexInfo) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn get_all_indices(conn: &Mutex<Connection>) -> Result<Vec<IndexInfo>> {
     let conn = conn.lock().unwrap();
     let mut stmt = conn.prepare("SELECT symbol, name, exchange, sector_type, secid FROM indices ORDER BY name")?;
@@ -79,6 +80,7 @@ pub fn add_stock_index_relation(conn: &Mutex<Connection>, stock_symbol: &str, in
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn get_indices_for_stock(conn: &Mutex<Connection>, stock_symbol: &str) -> Result<Vec<IndexInfo>> {
     let conn = conn.lock().unwrap();
     let mut stmt = conn.prepare(
