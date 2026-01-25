@@ -117,6 +117,7 @@
     "priceChangeThresholdDesc": "分析价格变化时的阈值（%）",
     "analysisVolumeMultiplier": "成交量倍数",
     "analysisVolumeMultiplierDesc": "分析成交量时的倍数",
+    "chipAnalysis": "筹码分析",
     "maPeriod": "移动平均周期",
     "trendDays": "趋势天数",
     "chipPriceBins": "筹码价格区间数",
@@ -182,7 +183,10 @@
     "flatCount": "平盘",
     "avgChange": "平均涨跌",
     "maxGain": "最大涨幅",
-    "maxLoss": "最大跌幅"
+    "maxLoss": "最大跌幅",
+    "stocks": "股票",
+    "indices": "指数",
+    "noIndices": "暂无指数"
   },
   "heatmap": {
     "chartType": "图表类型",
@@ -266,7 +270,9 @@
       "1y": "1年",
       "2y": "2年",
       "5y": "5年"
-    }
+    },
+    "intraday": "分时",
+    "daily": "日线"
   },
   "chart": {
     "zoom": "放大",
@@ -285,7 +291,11 @@
     "close": "收盘",
     "high": "最高",
     "low": "最低",
-    "noData": "无数据"
+    "noData": "无数据",
+    "lockPosition": "锁定位置",
+    "unlockPosition": "解锁位置",
+    "locked": "已锁定",
+    "unlocked": "未锁定"
   },
   "analysis": {
     "prediction": "预测",
@@ -311,6 +321,12 @@
     "lstm": "LSTM预测",
     "similarity": "相似度预测",
     "intradayPrediction": "分时预测",
+    "sectors": "相关板块",
+    "sector": "板块",
+    "deviation": "偏差",
+    "deviationPercent": "偏差 %",
+    "changePercentLabel": "涨跌幅",
+    "noSectorsFound": "未找到相关板块。（如果刚刚更新，请重启后端）",
     "params": "参数设置",
     "results": "分析结果",
     "chart": "图表",
@@ -410,6 +426,7 @@
     "willOversold": "超卖区域",
     "predictionMethod": "预测方法",
     "predictionPeriod": "预测天数",
+    "enablePrediction": "启用价格预测",
     "bars": "根",
     "resetSelection": "重置选择",
     "generate": "生成",
@@ -624,6 +641,7 @@
     "chipTacticsLabel": "操作参考",
     "chipSinglePeak": "单峰",
     "chipMultiPeak": "多峰",
+    "chipMainPeaks": "主要峰值",
     "zeroLine": "零轴",
     "overbought100": "超买 (+100)",
     "oversold100": "超卖 (-100)",
@@ -1036,6 +1054,16 @@
     "lookbackPeriod": "计算周期",
     "decayFactor": "衰减系数",
     "decayFactorDesc": "系数越大，历史筹码保留越多(换手率低)",
+    "decayCoefficient": "历史换手衰减系数",
+    "decayCoefficientDesc": "动态衰减方法中的衰减系数A，用于调整换手率对筹码分布的影响",
+    "decayMethod": "衰减方法",
+    "decayMethodFixed": "固定衰减",
+    "decayMethodDynamic": "动态衰减(kengerlwl)",
+    "decayMethodDesc": "固定衰减：使用固定衰减因子；动态衰减：基于换手率的动态衰减算法",
+    "distributionType": "分布类型",
+    "distributionUniform": "平均分布",
+    "distributionTriangular": "三角形分布",
+    "distributionTypeDesc": "平均分布：在最高价和最低价之间均匀分布；三角形分布：在最高价、最低价和平均价之间三角形分布",
     "priceBins": "价格分档",
     "priceBinsDesc": "分档越多，分布越精细",
     "prediction": "智能预测",

@@ -48,11 +48,14 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
     });
 
     const candlestickData = data.map((d) => [d.open, d.close, d.low, d.high]);
-    const volumes = data.map((d, i) => [
-      i,
-      d.volume,
-      d.close >= d.open ? 1 : -1,
-    ]);
+    const volumes = data.map((d) => {
+      // Determine color based on current day's open vs close (A-share convention: red for up, green for down)
+      const color = d.close >= d.open ? "#ff0000" : "#00ff00";
+      return {
+        value: d.volume,
+        itemStyle: { color },
+      };
+    });
 
     const ma5 = calculateMA(data, 5);
     const ma10 = calculateMA(data, 10);
@@ -289,20 +292,6 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
           xAxisIndex: 1,
           yAxisIndex: 1,
           data: volumes,
-          itemStyle: {
-            color: (params: any) => {
-              const index = params.dataIndex;
-              if (index < 0 || index >= data.length) {
-                return "rgba(133, 133, 133, 0.6)";
-              }
-              const stockData = data[index];
-              if (index === 0) {
-                return "rgba(133, 133, 133, 0.6)";
-              }
-              const prevData = data[index - 1];
-              return stockData.close >= prevData.close ? "#ff0000" : "#00ff00";
-            },
-          },
         },
       ],
       legend: {

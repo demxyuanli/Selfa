@@ -25,6 +25,8 @@ pub struct StockData {
     pub low: f64,
     pub close: f64,
     pub volume: i64,
+    pub amount: Option<f64>,        // f57: Turnover Amount
+    pub turnover_rate: Option<f64>, // f61: Turnover Rate (%)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -119,5 +121,41 @@ pub struct StockDataBundle {
     pub symbol: String,
     pub quote: Option<StockQuote>,
     pub time_series: Vec<StockData>,      // Daily data (klt=1)
-    pub intraday: Vec<StockData>,         // 5-minute intraday data (klt=5)
+    pub intraday: Vec<StockData>,         // 1-minute intraday data (klt=1)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SectorInfo {
+    pub code: String,
+    pub name: String,
+    pub sector_type: String, // "Industry", "Concept", "Region"
+    pub change_percent: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secid: Option<String>, // Original secid format (e.g., "2.932094", "90.BK0145")
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PredictionConfig {
+    pub method: String,
+    pub period: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub monte_carlo_simulations: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ensemble_methods: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ensemble_weights: Option<Vec<f64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub use_dynamic_weights: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arima_p: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arima_d: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arima_q: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lookback_window: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confidence_threshold: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_params: Option<std::collections::HashMap<String, String>>,
 }

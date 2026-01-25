@@ -1,7 +1,8 @@
 use crate::cache::StockCache;
 use crate::database::Database;
-use crate::stock_api::{fetch_stock_history, fetch_stock_quote, fetch_time_series, StockData, StockDataBundle, StockQuote, utils::is_trading_hours};
+use crate::stock_api::{fetch_stock_history, fetch_stock_quote, fetch_time_series, get_related_sectors, StockData, StockDataBundle, StockQuote, utils::is_trading_hours};
 use crate::stock_api::prediction_similarity::{find_similar_patterns, SimilarityResult};
+use crate::stock_api::chip_analysis::{calculate_chip_distribution, ChipAnalysisResult};
 use chrono::Local;
 use std::sync::Arc;
 use tauri::State;
@@ -38,6 +39,13 @@ fn get_latest_day_data(data: &[StockData]) -> Vec<StockData> {
     } else {
         vec![]
     }
+}
+
+#[tauri::command]
+pub async fn get_stock_sectors(
+    symbol: String,
+) -> Result<Vec<crate::stock_api::SectorInfo>, String> {
+    get_related_sectors(&symbol).await
 }
 
 #[tauri::command]
@@ -118,6 +126,110 @@ pub async fn get_all_favorites_quotes(
         result.push((stock, quote.flatten()));
     }
 
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn get_chip_analysis(
+    symbol: String,
+    decay_method: Option<String>, // "fixed" or "dynamic"
+    decay_factor: Option<f64>,    // For fixed: 0.8-0.99, For dynamic: 0.5-2.0 (decay coefficient A)
+    distribution_type: Option<String>, // "uniform" or "triangular"
+    cache: State<'_, Arc<StockCache>>,
+    db: State<'_, Arc<Database>>,
+) -> Result<Vec<ChipAnalysisResult>, String> {
+    use crate::stock_api::chip_analysis::{DecayMethod, DistributionType};
+    
+    let period = "1d".to_string();
+    
+    // Parse parameters with defaults
+    let method = match decay_method.as_deref() {
+        Some("dynamic") => DecayMethod::Dynamic,
+        _ => DecayMethod::Fixed,
+    };
+    
+    let factor = match method {
+        DecayMethod::Fixed => decay_factor.unwrap_or(0.97), // Default fixed decay
+        DecayMethod::Dynamic => decay_factor.unwrap_or(1.0), // Default decay coefficient A=1.0
+    };
+    
+    let dist_type = match distribution_type.as_deref() {
+        Some("triangular") => DistributionType::Triangular,
+        _ => DistributionType::Uniform,
+    };
+    
+    // Try cache first
+    let history = if let Some(cached) = cache.get_history(&symbol, &period).await {
+        cached
+    } else {
+        // Try DB
+        let db_data = db.get_kline(&symbol, &period, None).unwrap_or_default();
+        let latest_date = db.get_latest_kline_date(&symbol, &period).unwrap_or(None);
+        
+        let should_fetch = if db_data.is_empty() {
+            true
+        } else {
+            cache.should_fetch_from_network(&symbol, &period, 600).await
+        };
+        
+        if should_fetch {
+            match fetch_stock_history(&symbol, &period).await {
+                Ok(fetched) => {
+                    cache.record_fetch_time(&symbol, &period).await;
+                    
+                    if let Some(ref latest) = latest_date {
+                        let new_data: Vec<StockData> = fetched
+                            .into_iter()
+                            .filter(|d| d.date > *latest)
+                            .collect();
+                        
+                        if !new_data.is_empty() {
+                            let mut data = db_data;
+                            data.extend(new_data);
+                            data.sort_by(|a, b| a.date.cmp(&b.date));
+                            // Update cache
+                            cache.set_history(symbol.clone(), period.clone(), data.clone()).await;
+                            data
+                        } else {
+                            if !db_data.is_empty() {
+                                cache.set_history(symbol.clone(), period.clone(), db_data.clone()).await;
+                            }
+                            db_data
+                        }
+                    } else {
+                        cache.set_history(symbol.clone(), period.clone(), fetched.clone()).await;
+                        fetched
+                    }
+                }
+                Err(_) => {
+                    // Fallback to DB if fetch fails
+                    if !db_data.is_empty() {
+                        cache.set_history(symbol.clone(), period.clone(), db_data.clone()).await;
+                        db_data
+                    } else {
+                        return Err("Failed to fetch data and no cached data".to_string());
+                    }
+                }
+            }
+        } else {
+            cache.set_history(symbol.clone(), period.clone(), db_data.clone()).await;
+            db_data
+        }
+    };
+    
+    if history.is_empty() {
+        return Err("No data available for chip analysis".to_string());
+    }
+    
+    // Calculate Chip Distribution with selected method
+    let result = calculate_chip_distribution(
+        &history, 
+        method, 
+        factor, 
+        dist_type,
+        true, // include_distribution: include detailed price_levels and chip_amounts
+        100,  // price_bins: number of bins for distribution
+    );
     Ok(result)
 }
 
@@ -297,7 +409,7 @@ pub async fn get_intraday_time_series(
 ) -> Result<Vec<StockData>, String> {
     let today = Local::now().format("%Y-%m-%d").to_string();
     
-    if let Some(cached_data) = cache.get_history(&symbol, "5m").await {
+    if let Some(cached_data) = cache.get_history(&symbol, "1m").await {
         let has_today_data = cached_data.iter().any(|d| d.date.starts_with(&today));
         if has_today_data {
             let today_data: Vec<StockData> = cached_data.into_iter()
@@ -307,22 +419,22 @@ pub async fn get_intraday_time_series(
         }
     }
     
-    let cached = db.get_kline(&symbol, "5m", None)
+    let cached = db.get_kline(&symbol, "1m", None)
         .map_err(|e| format!("Database error: {}", e))?;
     
-    let latest_date = db.get_latest_kline_date(&symbol, "5m")
+    let latest_date = db.get_latest_kline_date(&symbol, "1m")
         .map_err(|e| format!("Database error: {}", e))?;
     
     let should_fetch = if is_trading_hours() {
         true
     } else {
-        cache.should_fetch_from_network(&symbol, "5m", 600).await
+        cache.should_fetch_from_network(&symbol, "1m", 600).await
     };
     
     let result = if should_fetch {
-        let fetched = fetch_stock_history(&symbol, "5m").await?;
+        let fetched = fetch_stock_history(&symbol, "1m").await?;
         
-        cache.record_fetch_time(&symbol, "5m").await;
+        cache.record_fetch_time(&symbol, "1m").await;
         
         if let Some(ref latest) = latest_date {
             let new_data: Vec<StockData> = fetched
@@ -335,21 +447,21 @@ pub async fn get_intraday_time_series(
                 data.extend(new_data);
                 data.sort_by(|a, b| a.date.cmp(&b.date));
                 let final_data = data.clone();
-                cache.set_history(symbol.clone(), "5m".to_string(), final_data).await;
+                cache.set_history(symbol.clone(), "1m".to_string(), final_data).await;
                 data
             } else {
                 if !cached.is_empty() {
-                    cache.set_history(symbol.clone(), "5m".to_string(), cached.clone()).await;
+                    cache.set_history(symbol.clone(), "1m".to_string(), cached.clone()).await;
                 }
                 cached
             }
         } else {
-            cache.set_history(symbol.clone(), "5m".to_string(), fetched.clone()).await;
+            cache.set_history(symbol.clone(), "1m".to_string(), fetched.clone()).await;
             fetched
         }
     } else {
         if !cached.is_empty() {
-            cache.set_history(symbol.clone(), "5m".to_string(), cached.clone()).await;
+            cache.set_history(symbol.clone(), "1m".to_string(), cached.clone()).await;
         }
         cached
     };
@@ -359,8 +471,8 @@ pub async fn get_intraday_time_series(
         .collect();
     
     if today_data.is_empty() {
-        let cached_all = cache.get_history(&symbol, "5m").await
-            .unwrap_or_else(|| db.get_kline(&symbol, "5m", None).unwrap_or_default());
+        let cached_all = cache.get_history(&symbol, "1m").await
+            .unwrap_or_else(|| db.get_kline(&symbol, "1m", None).unwrap_or_default());
         
         if !cached_all.is_empty() {
             let final_data = get_latest_day_data(&cached_all);
@@ -513,7 +625,7 @@ pub async fn get_batch_intraday_time_series(
     
     let mut need_fetch = Vec::new();
     for symbol in &symbols {
-        if let Some(cached_data) = cache.get_history(symbol, "5m").await {
+        if let Some(cached_data) = cache.get_history(symbol, "1m").await {
             let has_today_data = cached_data.iter().any(|d| d.date.starts_with(&today));
             if has_today_data {
                 let today_data: Vec<StockData> = cached_data.into_iter()
@@ -533,22 +645,22 @@ pub async fn get_batch_intraday_time_series(
     }
     
     for symbol in need_fetch {
-        let latest_date = db.get_latest_kline_date(&symbol, "5m")
+        let latest_date = db.get_latest_kline_date(&symbol, "1m")
             .map_err(|e| format!("Database error: {}", e))?;
         
-        let cached = db.get_kline(&symbol, "5m", None)
+        let cached = db.get_kline(&symbol, "1m", None)
             .map_err(|e| format!("Database error: {}", e))?;
         
         let should_fetch = if is_trading_hours() {
             true
         } else {
-            cache.should_fetch_from_network(&symbol, "5m", 600).await
+            cache.should_fetch_from_network(&symbol, "1m", 600).await
         };
         
         let merged_data = if should_fetch {
-            match fetch_stock_history(&symbol, "5m").await {
+            match fetch_stock_history(&symbol, "1m").await {
                 Ok(fetched) => {
-                    cache.record_fetch_time(&symbol, "5m").await;
+                    cache.record_fetch_time(&symbol, "1m").await;
                     
                     if let Some(ref latest) = latest_date {
                         let new_data: Vec<StockData> = fetched
@@ -561,16 +673,16 @@ pub async fn get_batch_intraday_time_series(
                             data.extend(new_data);
                             data.sort_by(|a, b| a.date.cmp(&b.date));
                             let final_data = data.clone();
-                            cache.set_history(symbol.clone(), "5m".to_string(), final_data).await;
+                            cache.set_history(symbol.clone(), "1m".to_string(), final_data).await;
                             data
                         } else {
                             if !cached.is_empty() {
-                                cache.set_history(symbol.clone(), "5m".to_string(), cached.clone()).await;
+                                cache.set_history(symbol.clone(), "1m".to_string(), cached.clone()).await;
                             }
                             cached
                         }
                     } else {
-                        cache.set_history(symbol.clone(), "5m".to_string(), fetched.clone()).await;
+                        cache.set_history(symbol.clone(), "1m".to_string(), fetched.clone()).await;
                         fetched
                     }
                 }
@@ -581,7 +693,7 @@ pub async fn get_batch_intraday_time_series(
             }
         } else {
             if !cached.is_empty() {
-                cache.set_history(symbol.clone(), "5m".to_string(), cached.clone()).await;
+                cache.set_history(symbol.clone(), "1m".to_string(), cached.clone()).await;
             }
             cached
         };

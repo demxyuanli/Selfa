@@ -16,6 +16,7 @@ export function generateChartOption(params: ChartOptionParams): any {
 
   const dates = data.map(d => d.date.includes(" ") ? d.date.split(" ")[1] : d.date.split(" ")[0]);
   const closes = data.map(d => d.close);
+  const opens = data.map(d => d.open);
   const volumes = data.map(d => d.volume);
 
   if (analysisType === "timeseries") {
@@ -118,7 +119,7 @@ export function generateChartOption(params: ChartOptionParams): any {
         { name: "MA5", type: "line", data: ma5, symbol: "none", lineStyle: { color: "#ffff00", width: 1 } },
         { name: "MA10", type: "line", data: ma10, symbol: "none", lineStyle: { color: "#00ffff", width: 1 } },
         { name: "MA20", type: "line", data: ma20, symbol: "none", lineStyle: { color: "#ff00ff", width: 1 } },
-        { name: t("stock.volume"), type: "bar", xAxisIndex: 1, yAxisIndex: 1, data: volumes.map((v, i) => ({ value: v, itemStyle: { color: closes[i] >= (closes[i-1] || closes[i]) ? "#2ecc71" : "#e74c3c" } })) },
+        { name: t("stock.volume"), type: "bar", xAxisIndex: 1, yAxisIndex: 1, data: volumes.map((v, i) => ({ value: v, itemStyle: { color: closes[i] >= opens[i] ? "#ff0000" : "#00ff00" } })) },
       ],
       tooltip: { 
         trigger: "axis", 

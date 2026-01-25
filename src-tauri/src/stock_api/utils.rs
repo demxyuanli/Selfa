@@ -32,6 +32,11 @@ pub fn should_reset_triggered_alerts() -> bool {
 pub fn parse_symbol(symbol: &str) -> (String, String) {
     let code = symbol.trim();
     
+    // Handle Sector/Block codes (BKxxxx)
+    if code.starts_with("BK") {
+        return (format!("90.{}", code), "BK".to_string());
+    }
+    
     // Special handling for index symbols
     if code == "000001" {
         return (format!("1.{}", code), "SH".to_string());

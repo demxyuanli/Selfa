@@ -1,4 +1,4 @@
-use super::types::{StockData, PredictionResult};
+use super::types::{StockData, PredictionResult, PredictionConfig};
 use super::utils::{parse_date, add_days, calculate_variance, determine_signal, polynomial_predict, calculate_autocorrelation, validate_data, calculate_r_squared, calculate_volatility};
 use super::technical_indicators::{calculate_ema, calculate_rsi};
 
@@ -41,6 +41,57 @@ pub fn predict_stock_price(
             "intraday_volatility" => super::prediction_intraday::predict_intraday_volatility(data, &last_date, period)?,
             "intraday_regime" => super::prediction_intraday::predict_intraday_regime(data, &last_date, period)?,
         _ => return Err(format!("Unknown prediction method: {}", method)),
+    };
+
+    Ok(predictions)
+}
+
+pub fn predict_stock_price_with_config(
+    data: &[StockData],
+    config: &PredictionConfig,
+) -> Result<Vec<PredictionResult>, String> {
+    if data.len() < 20 {
+        return Err("Insufficient data for prediction".to_string());
+    }
+
+    let closes: Vec<f64> = data.iter().map(|d| d.close).collect();
+    let dates: Vec<String> = data.iter().map(|d| d.date.clone()).collect();
+    let last_date = dates.last().unwrap().clone();
+
+    let predictions = match config.method.as_str() {
+        "linear" => predict_linear_regression(&closes, &last_date, config.period)?,
+        "ma" => predict_moving_average(&closes, &last_date, config.period)?,
+        "technical" => predict_technical_indicator(&closes, &last_date, config.period)?,
+        "polynomial" => predict_polynomial(&closes, &last_date, config.period)?,
+        "arima" => prediction_arima::predict_arima(&closes, &last_date, config.period)?,
+        "exponential" => predict_exponential_smoothing(&closes, &last_date, config.period)?,
+        "mean_reversion" => prediction_advanced::predict_mean_reversion(&closes, &last_date, config.period)?,
+        "wma" => prediction_advanced::predict_weighted_ma(&closes, &last_date, config.period)?,
+        "pattern" => prediction_advanced::predict_pattern_recognition(data, &last_date, config.period)?,
+        "similarity" => prediction_advanced::predict_similarity_match(&closes, &last_date, config.period)?,
+        "ensemble" => prediction_advanced::predict_ensemble_advanced(data, &last_date, config.period)?,
+        "fibonacci" => prediction_advanced::predict_fibonacci_retracement(data, &last_date, config.period)?,
+        "fibonacci_extension" => prediction_advanced::predict_fibonacci_extension(data, &last_date, config.period)?,
+        "monte_carlo" => {
+            if let Some(simulations) = config.monte_carlo_simulations {
+                use super::prediction_advanced::monte_carlo::MonteCarloConfig;
+                let mc_config = MonteCarloConfig {
+                    simulations,
+                    ..Default::default()
+                };
+                prediction_advanced::monte_carlo::predict_monte_carlo_with_config(data, &last_date, config.period, &mc_config)?
+            } else {
+                prediction_advanced::predict_monte_carlo(data, &last_date, config.period)?
+            }
+        },
+        "monte_carlo_advanced" => prediction_advanced::predict_monte_carlo_advanced(data, &last_date, config.period)?,
+        "deos_gpt" => prediction_advanced::predict_deos_alpha_time_gpt(data, &last_date, config.period)?,
+        "sspt" => prediction_advanced::predict_sspt_fine_tuned(data, &last_date, config.period)?,
+        "space_explore" => prediction_advanced::predict_space_explore_ai(data, &last_date, config.period)?,
+        "intraday_ma" => super::prediction_intraday::predict_intraday_ma(data, &last_date, config.period)?,
+        "intraday_volatility" => super::prediction_intraday::predict_intraday_volatility(data, &last_date, config.period)?,
+        "intraday_regime" => super::prediction_intraday::predict_intraday_regime(data, &last_date, config.period)?,
+        _ => return Err(format!("Unknown prediction method: {}", config.method)),
     };
 
     Ok(predictions)

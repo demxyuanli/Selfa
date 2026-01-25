@@ -11,6 +11,7 @@ mod cache;
 mod portfolio;
 mod transfers;
 mod settings;
+pub mod indices;
 
 use rusqlite::Connection;
 use rusqlite::Result;
@@ -334,5 +335,38 @@ impl Database {
 
     pub fn set_initial_balance(&self, balance: f64) -> Result<()> {
         settings::set_initial_balance(&self.conn, balance)
+    }
+
+    // Indices
+    pub fn add_index(&self, index: &indices::IndexInfo) -> Result<()> {
+        indices::add_index(&self.conn, index)
+    }
+
+    pub fn get_all_indices(&self) -> Result<Vec<indices::IndexInfo>> {
+        indices::get_all_indices(&self.conn)
+    }
+
+    pub fn get_index_by_symbol(&self, symbol: &str) -> Result<Option<indices::IndexInfo>> {
+        indices::get_index_by_symbol(&self.conn, symbol)
+    }
+
+    pub fn add_stock_index_relation(&self, stock_symbol: &str, index_symbol: &str) -> Result<()> {
+        indices::add_stock_index_relation(&self.conn, stock_symbol, index_symbol)
+    }
+
+    pub fn get_indices_for_stock(&self, stock_symbol: &str) -> Result<Vec<indices::IndexInfo>> {
+        indices::get_indices_for_stock(&self.conn, stock_symbol)
+    }
+
+    pub fn get_indices_for_stocks(&self, stock_symbols: &[String]) -> Result<Vec<indices::IndexInfo>> {
+        indices::get_indices_for_stocks(&self.conn, stock_symbols)
+    }
+
+    pub fn clear_stock_index_relations(&self, stock_symbol: &str) -> Result<()> {
+        indices::clear_stock_index_relations(&self.conn, stock_symbol)
+    }
+
+    pub fn get_index_count(&self) -> Result<i64> {
+        indices::get_index_count(&self.conn)
     }
 }

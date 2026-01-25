@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tauri::State;
 
 #[tauri::command]
-pub fn add_portfolio_position(
+pub async fn add_portfolio_position(
     symbol: String,
     name: String,
     quantity: i64,
@@ -11,8 +11,19 @@ pub fn add_portfolio_position(
     current_price: Option<f64>,
     db: State<'_, Arc<Database>>,
 ) -> Result<i64, String> {
-    db.add_portfolio_position(&symbol, &name, quantity, avg_cost, current_price)
-        .map_err(|e| format!("Failed to add position: {}", e))
+    let position_id = db.add_portfolio_position(&symbol, &name, quantity, avg_cost, current_price)
+        .map_err(|e| format!("Failed to add position: {}", e))?;
+    
+    // Update stock-index relations in background
+    let db_clone = db.inner().clone();
+    let symbol_clone = symbol.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = crate::commands::indices::update_stock_index_relations_internal(&db_clone, &symbol_clone).await {
+            eprintln!("Failed to update index relations for {}: {}", symbol_clone, e);
+        }
+    });
+    
+    Ok(position_id)
 }
 
 #[tauri::command]
@@ -54,7 +65,7 @@ pub fn delete_portfolio_position(
 }
 
 #[tauri::command]
-pub fn add_portfolio_transaction(
+pub async fn add_portfolio_transaction(
     symbol: String,
     transaction_type: String,
     quantity: i64,
@@ -65,7 +76,7 @@ pub fn add_portfolio_transaction(
     stock_name: Option<String>,
     db: State<'_, Arc<Database>>,
 ) -> Result<i64, String> {
-    db.add_portfolio_transaction(
+    let transaction_id = db.add_portfolio_transaction(
         &symbol,
         &transaction_type,
         quantity,
@@ -75,7 +86,18 @@ pub fn add_portfolio_transaction(
         notes.as_deref(),
         stock_name.as_deref(),
     )
-    .map_err(|e| format!("Failed to add transaction: {}", e))
+    .map_err(|e| format!("Failed to add transaction: {}", e))?;
+    
+    // Update stock-index relations in background if this is a new position
+    let db_clone = db.inner().clone();
+    let symbol_clone = symbol.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = crate::commands::indices::update_stock_index_relations_internal(&db_clone, &symbol_clone).await {
+            eprintln!("Failed to update index relations for {}: {}", symbol_clone, e);
+        }
+    });
+    
+    Ok(transaction_id)
 }
 
 #[tauri::command]

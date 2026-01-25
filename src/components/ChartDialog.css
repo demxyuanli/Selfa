@@ -141,3 +141,171 @@
   font-size: 14px;
   color: var(--text-muted);
 }
+
+/* Full features layout (three columns like main view) */
+.chart-dialog-full-features {
+  width: 98%;
+  height: 95%;
+  max-width: 98vw;
+  max-height: 95vh;
+}
+
+.chart-dialog-content-full {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chart-dialog-analysis-columns {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+  width: 100%;
+  overflow: hidden;
+  height: 100%;
+}
+
+.chart-dialog-analysis-column {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  height: 100%;
+}
+
+.chart-dialog-params-column {
+  width: 280px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding-right: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 280px;
+  height: 100%;
+}
+
+.chart-dialog-results-column {
+  width: 360px;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 360px;
+  height: 100%;
+  flex: 0 0 360px;
+}
+
+.chart-dialog-results-column .analysis-column {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  min-height: 0;
+  width: 100%;
+  flex: 1;
+}
+
+.chart-dialog-results-column .column-header {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary, #cccccc);
+  background: var(--bg-tertiary, #252526);
+  border-bottom: 1px solid var(--border-color, #3c3c3c);
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.chart-dialog-results-column .results-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+  min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+}
+
+.chart-dialog-results-column .results-content > * {
+  flex-shrink: 0;
+}
+
+.chart-dialog-results-column .results-content .prediction-card {
+  margin-bottom: 10px;
+}
+
+.chart-dialog-results-column .results-content .indicator-summary {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chart-dialog-results-column .results-content .summary-card {
+  min-height: fit-content;
+}
+
+.chart-dialog-results-column .results-content .summary-card:last-child,
+.chart-dialog-results-column .results-content .result-card:last-child {
+  margin-bottom: 0;
+}
+
+.chart-dialog-params-column {
+  width: 280px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding-right: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 280px;
+  height: 100%;
+}
+
+.chart-dialog-chart-column {
+  flex: 1;
+  min-width: 400px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.chart-dialog-chart-column {
+  flex: 1;
+  min-width: 400px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.chart-dialog-chart-column .chart-dialog-chart {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.chart-dialog-column-divider {
+  width: 1px;
+  background-color: var(--border-color);
+  flex-shrink: 0;
+  margin: 0 8px;
+  height: 100%;
+}

@@ -54,6 +54,8 @@ pub fn get_time_series(conn: &Mutex<Connection>, symbol: &str, limit: Option<i32
             low: row.get(3)?,
             close: row.get(4)?,
             volume: row.get(5)?,
+            amount: None,
+            turnover_rate: None,
         })
     })?;
     
@@ -98,6 +100,8 @@ pub fn get_batch_time_series(conn: &Mutex<Connection>, symbols: &[String], limit
                 low: row.get(4)?,
                 close: row.get(5)?,
                 volume: row.get(6)?,
+                amount: None,
+                turnover_rate: None,
             }
         ))
     })?;

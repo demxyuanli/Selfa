@@ -57,6 +57,8 @@ pub fn get_kline(conn: &Mutex<Connection>, symbol: &str, period: &str, limit: Op
             low: row.get(3)?,
             close: row.get(4)?,
             volume: row.get(5)?,
+            amount: None,
+            turnover_rate: None,
         })
     })?;
     

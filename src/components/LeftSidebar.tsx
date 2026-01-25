@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { useAlert } from "../contexts/AlertContext";
+import { isIndexStock } from "../utils/stockUtils";
 import Icon from "./Icon";
 import "./LeftSidebar.css";
 import { PanelType, StockInfo, StockWithTags, TagInfo, DEFAULT_TAG_COLORS, LeftSidebarProps } from "./LeftSidebar/types";
@@ -380,7 +381,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
           {activePanel === "favorites" && (
             <FavoritesPanel
-              stocks={allStocks}
+              stocks={allStocks.filter(stock => !isIndexStock(stock.symbol, stock.exchange))}
               allTags={allTags}
               tagMenuStock={tagMenuStock}
               onTagMenuToggle={setTagMenuStock}

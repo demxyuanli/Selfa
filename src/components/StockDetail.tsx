@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import StockChart from "./StockChart";
+import SectorPanel from "./SectorPanel";
 import TechnicalAnalysis from "./TechnicalAnalysis";
 import "./StockDetail.css";
 
@@ -142,6 +143,7 @@ const StockDetail: React.FC<StockDetailProps> = ({ stock }) => {
       {!loading && !error && history.length > 0 && (
         <>
           <StockChart data={history} />
+          <SectorPanel symbol={stock.symbol} stockName={stock.name} />
           <TechnicalAnalysis data={history} />
         </>
       )}

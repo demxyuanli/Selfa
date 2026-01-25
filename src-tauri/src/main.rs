@@ -154,6 +154,34 @@ fn main() {
                 }
             });
             
+            // Start background task to initialize all indices
+            let db_for_indices = db_arc.clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+                
+                let index_count = match db_for_indices.get_index_count() {
+                    Ok(count) => count,
+                    Err(e) => {
+                        eprintln!("Failed to check index count: {}", e);
+                        return;
+                    }
+                };
+                
+                if index_count == 0 {
+                    println!("Initializing indices database for the first time...");
+                    match crate::commands::indices::initialize_all_indices_internal(&db_for_indices).await {
+                        Ok(count) => {
+                            println!("Indices database initialized with {} indices", count);
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to initialize indices: {}", e);
+                        }
+                    }
+                } else {
+                    println!("Indices database already exists with {} indices", index_count);
+                }
+            });
+            
             app.manage(db_arc);
             app.manage(cache);
             Ok(())
@@ -167,6 +195,8 @@ fn main() {
             get_batch_intraday_time_series,
             get_stock_data_bundle,
             get_batch_stock_data_bundle,
+            get_stock_sectors,
+            get_chip_analysis,
             get_similarity_prediction,
             search_stocks,
             filter_stocks,
@@ -190,6 +220,7 @@ fn main() {
             get_stock_tags,
             get_stocks_by_tag,
             predict_stock_price,
+            predict_stock_price_with_config,
             ai_analyze_stock,
             get_intraday_analysis,
             run_backtest_command,
@@ -218,7 +249,11 @@ fn main() {
             delete_capital_transfer,
             get_total_capital,
             get_initial_balance,
-            set_initial_balance
+            set_initial_balance,
+            initialize_all_indices,
+            update_stock_index_relations,
+            get_indices_for_portfolio_stocks,
+            refresh_indices_data_for_portfolio
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

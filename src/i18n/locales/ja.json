@@ -113,6 +113,7 @@
     "priceChangeThresholdDesc": "価格変化分析時の閾値（％）",
     "analysisVolumeMultiplier": "出来高倍数",
     "analysisVolumeMultiplierDesc": "出来高分析時の倍数",
+    "chipAnalysis": "チップ分析",
     "maPeriod": "移動平均期間",
     "trendDays": "トレンド日数",
     "chipPriceBins": "チップ価格ビン数",
@@ -169,6 +170,8 @@
     "dashboard": "お気に入りダッシュボード",
     "title": "お気に入り",
     "empty": "お気に入りがありません",
+    "addStock": "株式を追加",
+    "alreadyAdded": "追加済み",
     "total": "合計",
     "withQuote": "見積もりあり",
     "upCount": "上昇",
@@ -176,7 +179,10 @@
     "flatCount": "横ばい",
     "avgChange": "平均変化",
     "maxGain": "最大上昇",
-    "maxLoss": "最大下降"
+    "maxLoss": "最大下降",
+    "stocks": "株式",
+    "indices": "指数",
+    "noIndices": "指数なし"
   },
   "heatmap": {
     "chartType": "チャートタイプ",
@@ -256,13 +262,20 @@
       "1y": "1年",
       "2y": "2年",
       "5y": "5年"
-    }
+    },
+    "intraday": "分時",
+    "daily": "日足"
   },
   "chart": {
     "zoom": "拡大",
+    "zoomAbbr": "拡大",
     "close": "閉じる",
     "title": "チャート",
-    "timeSeries": "分時チャート"
+    "timeSeries": "分時チャート",
+    "lockPosition": "位置を固定",
+    "unlockPosition": "固定を解除",
+    "locked": "固定中",
+    "unlocked": "未固定"
   },
   "analysis": {
     "prediction": "予測",
@@ -283,6 +296,12 @@
     "timeSeries": "分時分析",
     "klineAnalysis": "K線分析",
     "klineChipAnalysis": "K線チップ",
+    "sectors": "関連セクター",
+    "sector": "セクター",
+    "deviation": "偏差",
+    "deviationPercent": "偏差 %",
+    "changePercentLabel": "% 変化",
+    "noSectorsFound": "関連セクターが見つかりません。（更新した場合は、バックエンドを再起動してください）",
     "params": "パラメータ設定",
     "results": "分析結果",
     "chart": "チャート",

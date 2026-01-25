@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useAlert } from "../contexts/AlertContext";
 import { stockDataManager } from "../services/StockDataManager";
 import { useTradingHoursTimeseriesRefresh } from "../hooks/useTradingHoursTimeseriesRefresh";
+import { separateStocksAndIndices } from "../utils/stockUtils";
 import Icon from "./Icon";
 import AddTransactionDialog from "./PortfolioManagement/dialogs/AddTransactionDialog";
 import PriceAlertDialog from "./PriceAlertDialog";
@@ -104,6 +105,7 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
   const resizeStartWidth = useRef<number>(0);
   const [sortField, setSortField] = useState<"changePercent" | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [activeTab, setActiveTab] = useState<"stocks" | "indices">("stocks");
 
   // Load intraday time series data for stocks using stockDataManager
   const loadTimeSeriesData = useCallback(async (symbols: string[]) => {
@@ -390,6 +392,13 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
         })
       );
       setTransactions(loadedTransactions);
+      
+      // Refresh indices data for portfolio stocks in background
+      if (positionsWithPrices.length > 0) {
+        invoke("refresh_indices_data_for_portfolio").catch((err) => {
+          console.debug("Failed to refresh indices data:", err);
+        });
+      }
     } catch (err) {
       console.debug("Failed to refresh positions:", err);
     }
@@ -617,11 +626,16 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
     return new Set(positions.map(p => p.symbol));
   }, [positions]);
 
+  const { regularStocks, indices } = useMemo(() => {
+    return separateStocksAndIndices(stocks);
+  }, [stocks]);
+
   const sortedStocks = useMemo(() => {
+    const stocksToSort = activeTab === "stocks" ? regularStocks : indices;
     if (!sortField) {
-      return stocks;
+      return stocksToSort;
     }
-    const sorted = [...stocks].sort((a, b) => {
+    const sorted = [...stocksToSort].sort((a, b) => {
       if (sortField === "changePercent") {
         const aValue = a.quote?.change_percent ?? -Infinity;
         const bValue = b.quote?.change_percent ?? -Infinity;
@@ -630,7 +644,7 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
       return 0;
     });
     return sorted;
-  }, [stocks, sortField, sortDirection]);
+  }, [regularStocks, indices, activeTab, sortField, sortDirection]);
 
   if (loading) {
     return (
@@ -671,7 +685,7 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
             <div className="card-stats">
               <div className="stat-item">
                 <span className="stat-label">{t("favorites.total")}</span>
-                <span className="stat-value">{stocks.length}</span>
+                <span className="stat-value">{regularStocks.length + indices.length}</span>
               </div>
               <div className="stat-item">
                 <span className="stat-label">{t("favorites.upCount")}</span>
@@ -749,7 +763,22 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
         {expandedCard === "stocks" && (
           <div className="data-table-section">
             <div className="section-header">
-              <h3>{t("favorites.title")}</h3>
+              <div className="section-header-tabs">
+                <button
+                  className={`tab-button ${activeTab === "stocks" ? "active" : ""}`}
+                  onClick={() => setActiveTab("stocks")}
+                >
+                  {t("favorites.stocks") || "Stocks"} ({regularStocks.length})
+                </button>
+                {indices.length > 0 && (
+                  <button
+                    className={`tab-button ${activeTab === "indices" ? "active" : ""}`}
+                    onClick={() => setActiveTab("indices")}
+                  >
+                    {t("favorites.indices") || "Indices"} ({indices.length})
+                  </button>
+                )}
+              </div>
               <button
                 onClick={() => setShowAddStock(!showAddStock)}
                 className="add-stock-button"
@@ -822,31 +851,31 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
                 )}
               </div>
             )}
-            {stocks.length === 0 ? (
-              <div className="stocks-empty">{t("favorites.empty")}</div>
+            {(activeTab === "stocks" && regularStocks.length === 0) || (activeTab === "indices" && indices.length === 0) ? (
+              <div className="stocks-empty">
+                {activeTab === "stocks" 
+                  ? t("favorites.empty") 
+                  : (t("favorites.noIndices") || "No indices")}
+              </div>
             ) : (
               <div className="stocks-table-container">
                 <table className="stocks-table">
                   <thead>
                     <tr>
-                      <th style={{ width: columnWidths.get(0), minWidth: 60, position: "relative" }}>
+                      <th style={{ width: 100, minWidth: 100, maxWidth: 100 }}>
                         {t("common.symbol")}
-                        <div className="resize-handle" onMouseDown={(e) => handleResizeStart(e, 0)} />
                       </th>
-                      <th style={{ width: columnWidths.get(1), minWidth: 60, position: "relative" }}>
+                      <th style={{ width: 100, minWidth: 100, maxWidth: 100 }}>
                         {t("common.name")}
-                        <div className="resize-handle" onMouseDown={(e) => handleResizeStart(e, 1)} />
                       </th>
-                      <th style={{ width: columnWidths.get(2), minWidth: 60, position: "relative" }}>
+                      <th style={{ width: 100, minWidth: 100, maxWidth: 100 }}>
                         {t("common.price")}
-                        <div className="resize-handle" onMouseDown={(e) => handleResizeStart(e, 2)} />
                       </th>
-                      <th style={{ width: columnWidths.get(3), minWidth: 60, position: "relative" }}>
+                      <th style={{ width: 100, minWidth: 100, maxWidth: 100 }}>
                         {t("common.change")}
-                        <div className="resize-handle" onMouseDown={(e) => handleResizeStart(e, 3)} />
                       </th>
                       <th 
-                        style={{ width: columnWidths.get(4), minWidth: 60, position: "relative", cursor: "pointer" }}
+                        style={{ width: 100, minWidth: 100, maxWidth: 100, cursor: "pointer" }}
                         onClick={handleSortChangePercent}
                         className={sortField === "changePercent" ? "sortable sorted" : "sortable"}
                       >
@@ -862,11 +891,9 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
                             <Icon name="chevronUp" size={12} primaryFill="var(--text-secondary)" />
                           )}
                         </div>
-                        <div className="resize-handle" onMouseDown={(e) => handleResizeStart(e, 4)} />
                       </th>
-                      <th style={{ width: columnWidths.get(5), minWidth: 60, position: "relative" }}>
+                      <th style={{ width: 100, minWidth: 100, maxWidth: 100 }}>
                         {t("common.volume")}
-                        <div className="resize-handle" onMouseDown={(e) => handleResizeStart(e, 5)} />
                       </th>
                       <th style={{ width: 120, minWidth: 120, maxWidth: 120, position: "relative" }}>
                         {t("chart.timeSeries")}
@@ -885,7 +912,7 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
                           key={stock.symbol}
                           className={`stock-row ${quote ? (quote.change_percent > 0 ? "up" : quote.change_percent < 0 ? "down" : "") : ""} ${hasTriggeredAlert ? "alert-triggered" : ""}`}
                         >
-                          <td className="stock-symbol" style={{ width: columnWidths.get(0), minWidth: 60 }} onClick={() => handleStockClick(stock)}>
+                          <td className="stock-symbol" style={{ width: 100, minWidth: 100, maxWidth: 100 }} onClick={() => handleStockClick(stock)}>
                             {stock.symbol}
                             {positionSymbols.has(stock.symbol) && <span className="position-indicator" title={t("portfolio.positions")}>★</span>}
                             {hasTriggeredAlert && <span className="alert-indicator" title={t("priceAlert.triggered")}>⚠</span>}
@@ -894,7 +921,7 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
                           className={`stock-name ${
                             quote ? (quote.change_percent > 0 ? "up" : quote.change_percent < 0 ? "down" : "") : ""
                           }`}
-                          style={{ width: columnWidths.get(1), minWidth: 60 }}
+                          style={{ width: 100, minWidth: 100, maxWidth: 100 }}
                           onClick={() => handleStockClick(stock)}
                         >
                           {editingStock?.symbol === stock.symbol ? (
@@ -928,16 +955,16 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
                         </td>
                         {quote ? (
                           <>
-                            <td className="stock-price" style={{ width: columnWidths.get(2), minWidth: 60 }} onClick={() => handleStockClick(stock)}>{quote.price.toFixed(2)}</td>
-                            <td className={`stock-change ${quote.change > 0 ? "up" : quote.change < 0 ? "down" : ""}`} style={{ width: columnWidths.get(3), minWidth: 60 }} onClick={() => handleStockClick(stock)}>
+                            <td className="stock-price" style={{ width: 100, minWidth: 100, maxWidth: 100 }} onClick={() => handleStockClick(stock)}>{quote.price.toFixed(2)}</td>
+                            <td className={`stock-change ${quote.change > 0 ? "up" : quote.change < 0 ? "down" : ""}`} style={{ width: 100, minWidth: 100, maxWidth: 100 }} onClick={() => handleStockClick(stock)}>
                               {quote.change > 0 ? "+" : ""}
                               {quote.change.toFixed(2)}
                             </td>
-                            <td className={`stock-change-percent ${quote.change_percent > 0 ? "up" : quote.change_percent < 0 ? "down" : ""}`} style={{ width: columnWidths.get(4), minWidth: 60 }} onClick={() => handleStockClick(stock)}>
+                            <td className={`stock-change-percent ${quote.change_percent > 0 ? "up" : quote.change_percent < 0 ? "down" : ""}`} style={{ width: 100, minWidth: 100, maxWidth: 100 }} onClick={() => handleStockClick(stock)}>
                               {quote.change_percent > 0 ? "+" : ""}
                               {quote.change_percent.toFixed(2)}%
                             </td>
-                            <td className="stock-volume" style={{ width: columnWidths.get(5), minWidth: 60 }} onClick={() => handleStockClick(stock)}>{(quote.volume / 10000).toFixed(0)}{t("common.tenThousand")}</td>
+                            <td className="stock-volume" style={{ width: 100, minWidth: 100, maxWidth: 100 }} onClick={() => handleStockClick(stock)}>{(quote.volume / 10000).toFixed(0)}{t("common.tenThousand")}</td>
                             <td className="stock-chart" style={{ width: 120, minWidth: 120, maxWidth: 120 }} onClick={(e) => e.stopPropagation()}>
                               {timeSeriesDataMap.has(stock.symbol) ? (
                                 <TimeSeriesThumbnail data={timeSeriesDataMap.get(stock.symbol)!} height={40} />

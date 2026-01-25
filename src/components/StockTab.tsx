@@ -18,6 +18,7 @@ import LSTMPredictionAnalysis from "./LSTMPredictionAnalysis";
 import IntradayPredictionAnalysis from "./IntradayPredictionAnalysis";
 import SimilarityPrediction from "./SimilarityPrediction";
 import StockComments from "./StockComments";
+import SectorAnalysis from "./SectorAnalysis";
 import Icon from "./Icon";
 import "./StockTab.css";
 
@@ -33,7 +34,7 @@ interface StockTabProps {
 }
 
 type KLinePeriod = "1d" | "1w" | "1mo" | "1y";
-type AnalysisTab = "timeseries" | "kline" | "klinechip" | "prediction" | "compare" | "aiagent" | "customIndicator" | "backtest" | "lstm" | "comments" | "similarity" | "intradayPrediction";
+type AnalysisTab = "timeseries" | "kline" | "klinechip" | "prediction" | "compare" | "aiagent" | "customIndicator" | "backtest" | "lstm" | "comments" | "similarity" | "intradayPrediction" | "sectors";
 
 interface StockData {
   date: string;
@@ -327,6 +328,10 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
         return (
           <StockComments symbol={tab.symbol} quote={tab.quote} />
         );
+      case "sectors":
+        return (
+          <SectorAnalysis symbol={tab.symbol} stockName={tab.name} />
+        );
       default:
         return null;
     }
@@ -437,6 +442,13 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
           >
             <Icon name="kline" size={14} />
             <span className="tab-label">{t("analysis.klineAnalysis")}</span>
+          </button>
+          <button
+            className={`analysis-tab ${activeAnalysisTab === "sectors" ? "active" : ""}`}
+            onClick={() => handleAnalysisTabChange("sectors")}
+          >
+            <Icon name="chart" size={14} />
+            <span className="tab-label">{t("analysis.sectors")}</span>
           </button>
           <button
             className={`analysis-tab ${activeAnalysisTab === "klinechip" ? "active" : ""}`}

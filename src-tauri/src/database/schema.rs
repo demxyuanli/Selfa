@@ -407,5 +407,50 @@ pub fn init_tables(conn: &Connection) -> rusqlite::Result<()> {
         [],
     )?;
 
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS indices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            exchange TEXT NOT NULL,
+            sector_type TEXT,
+            secid TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_indices_symbol ON indices(symbol)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_indices_name ON indices(name)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS stock_index_relations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            stock_symbol TEXT NOT NULL,
+            index_symbol TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(stock_symbol, index_symbol)
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_stock_index_relations_stock ON stock_index_relations(stock_symbol)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_stock_index_relations_index ON stock_index_relations(index_symbol)",
+        [],
+    )?;
+
     Ok(())
 }

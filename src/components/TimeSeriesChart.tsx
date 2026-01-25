@@ -55,7 +55,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, quote, compact 
     }
     
     const previousClose = quote?.previous_close;
-    const dataMap = new Map<string, { price: number; volume: number }>();
+    const dataMap = new Map<string, { price: number; volume: number; open: number; close: number }>();
     data.forEach((d) => {
       const dateStr = d.date;
       let timeStr: string;
@@ -77,7 +77,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, quote, compact 
         const minutes = parts[1].padStart(2, "0");
         timeStr = `${hours}:${minutes}`;
       }
-      dataMap.set(timeStr, { price: d.close, volume: d.volume });
+      dataMap.set(timeStr, { price: d.close, volume: d.volume, open: d.open, close: d.close });
     });
 
     // Map prices and volumes to full trading times
@@ -134,18 +134,13 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ data, quote, compact 
       percentMax = ((yAxisMax - previousClose) / previousClose) * 100;
     }
 
-    const volumeColors = prices.map((price, index) => {
-      if (price === null) {
+    const volumeColors = fullTradingTimes.map((time, index) => {
+      const dataPoint = dataMap.get(time);
+      if (!dataPoint || dataPoint.volume === null) {
         return "rgba(133, 133, 133, 0.3)";
       }
-      if (index === 0) {
-        return "rgba(133, 133, 133, 0.6)";
-      }
-      const prevPrice = prices[index - 1];
-      if (prevPrice === null) {
-        return "rgba(133, 133, 133, 0.6)";
-      }
-      return price >= prevPrice ? "#ff0000" : "#00ff00";
+      // Determine color based on current minute's open vs close (A-share convention: red for up, green for down)
+      return dataPoint.close >= dataPoint.open ? "#ff0000" : "#00ff00";
     });
 
     return {

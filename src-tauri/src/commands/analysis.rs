@@ -1,10 +1,11 @@
 use crate::stock_api::{
     calculate_indicators, 
-    predict_stock_price as api_predict_stock_price, 
+    predict_stock_price as api_predict_stock_price,
+    predict_stock_price_with_config as api_predict_stock_price_with_config,
     ai_analyze_stock as api_ai_analyze_stock, 
     backtest::{run_backtest as api_run_backtest, BacktestConfig, BacktestResult},
     analysis_intraday::{analyze_intraday_data, IntradayAnalysisResult},
-    StockData, StockQuote, TechnicalIndicators
+    StockData, StockQuote, TechnicalIndicators, PredictionConfig
 };
 
 #[tauri::command]
@@ -24,6 +25,14 @@ pub fn predict_stock_price(
     period: usize,
 ) -> Result<Vec<crate::stock_api::PredictionResult>, String> {
     api_predict_stock_price(&data, &method, period)
+}
+
+#[tauri::command]
+pub fn predict_stock_price_with_config(
+    data: Vec<StockData>,
+    config: PredictionConfig,
+) -> Result<Vec<crate::stock_api::PredictionResult>, String> {
+    api_predict_stock_price_with_config(&data, &config)
 }
 
 #[tauri::command]

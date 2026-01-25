@@ -1,0 +1,127 @@
+.sector-panel {
+    background: #1e1e1e;
+    padding: 12px;
+    border-radius: 8px;
+    margin-top: 16px;
+    color: #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+.sector-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.sector-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 1;
+    min-height: 28px;
+}
+
+.sector-header {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.period-toggle {
+    display: flex;
+    flex-shrink: 0;
+}
+
+.period-toggle button {
+    background: #333;
+    border: 1px solid #444;
+    color: #aaa;
+    padding: 3px 10px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.period-toggle button:first-child {
+    border-radius: 4px 0 0 4px;
+}
+
+.period-toggle button:last-child {
+    border-radius: 0 4px 4px 0;
+}
+
+.period-toggle button.active {
+    background: #007acc;
+    color: white;
+    border-color: #007acc;
+}
+
+.sector-chip {
+    background: #2d2d2d;
+    border: 1px solid #3d3d3d;
+    border-radius: 14px;
+    padding: 3px 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+    font-size: 12px;
+}
+
+.sector-chip:hover {
+    background: #3d3d3d;
+}
+
+.sector-chip.selected {
+    border-color: #007acc;
+    background: rgba(0, 122, 204, 0.1);
+}
+
+.sector-chip .change.up {
+    color: #ef5350;
+}
+
+.sector-chip .change.down {
+    color: #26a69a;
+}
+
+.chart-container {
+    background: #252526;
+    border-radius: 4px;
+    padding: 4px;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex: 1;
+    color: #888;
+}
+
+.loading-text, .empty-text {
+    color: #888;
+    font-size: 13px;
+    padding: 2px;
+}
+
+.no-data-message {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+    color: #888;
+    font-size: 14px;
+    text-align: center;
+}

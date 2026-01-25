@@ -13,6 +13,7 @@ pub mod ai_analysis;
 pub mod ai_analysis_json;
 pub mod ai_analysis_local;
 pub mod backtest;
+pub mod chip_analysis;
 
 pub use types::*;
 #[allow(unused_imports)]
@@ -29,3 +30,4 @@ pub use ai_analysis::*;
 pub use ai_analysis_json::*;
 #[allow(unused_imports)]
 pub use ai_analysis_local::*;
+pub use chip_analysis::{ChipAnalysisResult, DecayMethod, DistributionType};

@@ -67,8 +67,8 @@ const AnalysisResultsPanel: React.FC<AnalysisResultsPanelProps> = ({
             
             <div className="prediction-score-container" style={{ margin: "10px 0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: "4px" }}>
-                <span>{t("chip.predictionScore")}: {m.prediction.score}</span>
-                <span>{t("chip.confidence")}: {m.prediction.confidence}%</span>
+                <span>{t("chip.predictionScore")}: {m.prediction.score.toFixed(2)}</span>
+                <span>{t("chip.confidence")}: {m.prediction.confidence.toFixed(2)}%</span>
               </div>
               <div className="score-bar-bg" style={{ height: "6px", background: "#333", borderRadius: "3px", overflow: "hidden" }}>
                 <div 
@@ -384,13 +384,13 @@ const AnalysisResultsPanel: React.FC<AnalysisResultsPanelProps> = ({
               )}
               <div className="confidence-bar">
                 <span className="confidence-text">
-                  {t("analysis.confidence")}: {Math.abs(m.profitRatio - 50) * 2}%
+                  {t("analysis.confidence")}: {m.profitRatio.toFixed(1)}%
                 </span>
                 <div className="confidence-track">
                   <div 
                     className="confidence-fill" 
                     style={{ 
-                      width: `${Math.abs(m.profitRatio - 50) * 2}%`, 
+                      width: `${m.profitRatio}%`, 
                       backgroundColor: m.profitRatio > 70 ? "#2ecc71" : 
                                      m.profitRatio < 30 ? "#e74c3c" : "#f39c12"
                     }} 
