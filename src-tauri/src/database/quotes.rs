@@ -1,10 +1,8 @@
 use rusqlite::{Connection, Result, params};
 use chrono::Utc;
-use std::sync::Mutex;
 use crate::stock_api::StockQuote;
 
-pub fn save_quote(conn: &Mutex<Connection>, quote: &StockQuote) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn save_quote(conn: &Connection, quote: &StockQuote) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     
     conn.execute(
@@ -33,8 +31,7 @@ pub fn save_quote(conn: &Mutex<Connection>, quote: &StockQuote) -> Result<()> {
     Ok(())
 }
 
-pub fn get_quote(conn: &Mutex<Connection>, symbol: &str) -> Result<Option<StockQuote>> {
-    let conn = conn.lock().unwrap();
+pub fn get_quote(conn: &Connection, symbol: &str) -> Result<Option<StockQuote>> {
     let mut stmt = conn.prepare(
         "SELECT symbol, name, price, change, change_percent, volume, market_cap, pe_ratio, turnover, 
                 high, low, open, previous_close 

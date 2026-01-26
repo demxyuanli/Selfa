@@ -336,126 +336,156 @@ const SimilarityPrediction: React.FC<SimilarityPredictionProps> = ({ symbol }) =
 
       {response && (
         <>
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <div style={{ fontSize: "13px", fontWeight: 600, color: "#ddd" }}>
-              {t("similarity.overlayTitle")}
-            </div>
-            <div style={{ minHeight: "220px", position: "relative" }}>
-              {overlayData && overlayData.datasets.length > 0 ? (
-                <Line data={overlayData} options={chartOptions(t("similarity.percentChange"))} />
-              ) : (
-                <div style={{ padding: "20px", color: "#666" }}>{t("similarity.noData")}</div>
-              )}
-            </div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <div style={{ fontSize: "13px", fontWeight: 600, color: "#ddd" }}>
-              {t("similarity.fanTitle")}
-            </div>
-            <div style={{ minHeight: "220px", position: "relative" }}>
-              {fanData && fanData.datasets.length > 0 ? (
-                <Line data={fanData} options={chartOptions(t("similarity.percentChange"))} />
-              ) : (
-                <div style={{ padding: "20px", color: "#666" }}>{t("similarity.noData")}</div>
-              )}
-            </div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <div style={{ fontSize: "13px", fontWeight: 600, color: "#ddd" }}>
-              {t("similarity.tableTitle")}
-            </div>
+          <div
+            style={{
+              display: "flex",
+              gap: "12px",
+              flexWrap: "wrap",
+              alignItems: "stretch",
+            }}
+          >
             <div
               style={{
-                background: "#252526",
-                borderRadius: "6px",
-                overflow: "hidden",
-                fontSize: "12px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                flex: "2 1 520px",
+                minWidth: "360px",
               }}
             >
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "#333" }}>
-                    <th style={{ padding: "8px 10px", textAlign: "left", color: "#ccc" }}>
-                      {t("similarity.matchDate")}
-                    </th>
-                    <th style={{ padding: "8px 10px", textAlign: "right", color: "#ccc" }}>
-                      {t("similarity.score")} %
-                    </th>
-                    <th style={{ padding: "8px 10px", textAlign: "right", color: "#ccc" }}>
-                      {t("similarity.futureReturn")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tableRows.map((r, i) => (
-                    <tr
-                      key={r.match_date}
-                      style={{
-                        borderTop: "1px solid #333",
-                        background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.03)",
-                      }}
-                    >
-                      <td style={{ padding: "6px 10px", color: "#e0e0e0" }}>{r.match_date}</td>
-                      <td style={{ padding: "6px 10px", textAlign: "right", color: "#9cdcfe" }}>
-                        {r.score.toFixed(1)}
-                      </td>
-                      <td
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: "#ddd" }}>
+                  {t("similarity.overlayTitle")}
+                </div>
+                <div style={{ minHeight: "240px", position: "relative" }}>
+                  {overlayData && overlayData.datasets.length > 0 ? (
+                    <Line data={overlayData} options={chartOptions(t("similarity.percentChange"))} />
+                  ) : (
+                    <div style={{ padding: "20px", color: "#666" }}>{t("similarity.noData")}</div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: "#ddd" }}>
+                  {t("similarity.fanTitle")}
+                </div>
+                <div style={{ minHeight: "240px", position: "relative" }}>
+                  {fanData && fanData.datasets.length > 0 ? (
+                    <Line data={fanData} options={chartOptions(t("similarity.percentChange"))} />
+                  ) : (
+                    <div style={{ padding: "20px", color: "#666" }}>{t("similarity.noData")}</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                flex: "1 1 380px",
+                minWidth: "320px",
+              }}
+            >
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "#ddd" }}>
+                {t("similarity.tableTitle")}
+              </div>
+              <div
+                style={{
+                  background: "#252526",
+                  borderRadius: "6px",
+                  overflow: "auto",
+                  fontSize: "12px",
+                  flex: 1,
+                  minHeight: "360px",
+                }}
+              >
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#333" }}>
+                      <th style={{ padding: "8px 10px", textAlign: "left", color: "#ccc" }}>
+                        {t("similarity.matchDate")}
+                      </th>
+                      <th style={{ padding: "8px 10px", textAlign: "right", color: "#ccc" }}>
+                        {t("similarity.score")} %
+                      </th>
+                      <th style={{ padding: "8px 10px", textAlign: "right", color: "#ccc" }}>
+                        {t("similarity.futureReturn")}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableRows.map((r, i) => (
+                      <tr
+                        key={r.match_date}
                         style={{
-                          padding: "6px 10px",
-                          textAlign: "right",
-                          color: r.futureReturn >= 0 ? "#4ec9b0" : "#f48771",
+                          borderTop: "1px solid #333",
+                          background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.03)",
                         }}
                       >
-                        {(r.futureReturn >= 0 ? "+" : "") + r.futureReturn.toFixed(2)}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                {stats && tableRows.length > 0 && (
-                  <tfoot>
-                    <tr style={{ borderTop: "1px solid #555", background: "#2d2d30" }}>
-                      <td style={{ padding: "8px 10px", color: "#888" }}>
-                        {t("similarity.avgReturn")} / {t("similarity.medianReturn")} /{" "}
-                        {t("similarity.winRate")}
-                      </td>
-                      <td style={{ padding: "8px 10px", textAlign: "right" }} />
-                      <td style={{ padding: "8px 10px", textAlign: "right", color: "#ccc" }}>
-                        {stats.avg.toFixed(2)}% / {stats.median.toFixed(2)}% / {stats.winRate.toFixed(0)}%
-                      </td>
-                    </tr>
-                    <tr style={{ borderTop: "1px solid #444", background: "#2d2d30" }}>
-                      <td style={{ padding: "8px 10px", color: "#9cdcfe" }}>
-                        {t("similarity.predictedRange")}
-                      </td>
-                      <td style={{ padding: "8px 10px", textAlign: "right" }} />
-                      <td
-                        style={{
-                          padding: "8px 10px",
-                          textAlign: "right",
-                          color: stats.minReturn >= 0 ? "#4ec9b0" : stats.maxReturn <= 0 ? "#f48771" : "#dcdcaa",
-                        }}
-                      >
-                        {(stats.minReturn >= 0 ? "+" : "") + stats.minReturn.toFixed(2)}% ~{" "}
-                        {(stats.maxReturn >= 0 ? "+" : "") + stats.maxReturn.toFixed(2)}%
-                      </td>
-                    </tr>
-                    {priceRange && currentPrice != null && (
-                      <tr style={{ borderTop: "1px solid #444", background: "#2d2d30" }}>
-                        <td style={{ padding: "8px 10px", color: "#9cdcfe" }}>
-                          {t("similarity.priceRange")} ({t("similarity.refCurrentPrice")}{" "}
-                          {currentPrice.toFixed(2)})
+                        <td style={{ padding: "6px 10px", color: "#e0e0e0" }}>{r.match_date}</td>
+                        <td style={{ padding: "6px 10px", textAlign: "right", color: "#9cdcfe" }}>
+                          {r.score.toFixed(1)}
                         </td>
-                        <td style={{ padding: "8px 10px", textAlign: "right" }} />
-                        <td style={{ padding: "8px 10px", textAlign: "right", color: "#dcdcaa" }}>
-                          {priceRange.low.toFixed(2)} ~ {priceRange.high.toFixed(2)}
+                        <td
+                          style={{
+                            padding: "6px 10px",
+                            textAlign: "right",
+                            color: r.futureReturn >= 0 ? "#4ec9b0" : "#f48771",
+                          }}
+                        >
+                          {(r.futureReturn >= 0 ? "+" : "") + r.futureReturn.toFixed(2)}%
                         </td>
                       </tr>
-                    )}
-                  </tfoot>
-                )}
-              </table>
+                    ))}
+                  </tbody>
+                  {stats && tableRows.length > 0 && (
+                    <tfoot>
+                      <tr style={{ borderTop: "1px solid #555", background: "#2d2d30" }}>
+                        <td style={{ padding: "8px 10px", color: "#888" }}>
+                          {t("similarity.avgReturn")} / {t("similarity.medianReturn")} /{" "}
+                          {t("similarity.winRate")}
+                        </td>
+                        <td style={{ padding: "8px 10px", textAlign: "right" }} />
+                        <td style={{ padding: "8px 10px", textAlign: "right", color: "#ccc" }}>
+                          {stats.avg.toFixed(2)}% / {stats.median.toFixed(2)}% / {stats.winRate.toFixed(0)}%
+                        </td>
+                      </tr>
+                      <tr style={{ borderTop: "1px solid #444", background: "#2d2d30" }}>
+                        <td style={{ padding: "8px 10px", color: "#9cdcfe" }}>
+                          {t("similarity.predictedRange")}
+                        </td>
+                        <td style={{ padding: "8px 10px", textAlign: "right" }} />
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            textAlign: "right",
+                            color:
+                              stats.minReturn >= 0 ? "#4ec9b0" : stats.maxReturn <= 0 ? "#f48771" : "#dcdcaa",
+                          }}
+                        >
+                          {(stats.minReturn >= 0 ? "+" : "") + stats.minReturn.toFixed(2)}% ~{" "}
+                          {(stats.maxReturn >= 0 ? "+" : "") + stats.maxReturn.toFixed(2)}%
+                        </td>
+                      </tr>
+                      {priceRange && currentPrice != null && (
+                        <tr style={{ borderTop: "1px solid #444", background: "#2d2d30" }}>
+                          <td style={{ padding: "8px 10px", color: "#9cdcfe" }}>
+                            {t("similarity.priceRange")} ({t("similarity.refCurrentPrice")}{" "}
+                            {currentPrice.toFixed(2)})
+                          </td>
+                          <td style={{ padding: "8px 10px", textAlign: "right" }} />
+                          <td style={{ padding: "8px 10px", textAlign: "right", color: "#dcdcaa" }}>
+                            {priceRange.low.toFixed(2)} ~ {priceRange.high.toFixed(2)}
+                          </td>
+                        </tr>
+                      )}
+                    </tfoot>
+                  )}
+                </table>
+              </div>
             </div>
           </div>
         </>

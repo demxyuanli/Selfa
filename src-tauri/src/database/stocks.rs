@@ -1,10 +1,8 @@
 use rusqlite::{Connection, Result, params};
 use chrono::Utc;
-use std::sync::Mutex;
 use crate::stock_api::StockInfo;
 
-pub fn add_stock(conn: &Mutex<Connection>, stock: &StockInfo, group_id: Option<i64>) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn add_stock(conn: &Connection, stock: &StockInfo, group_id: Option<i64>) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     
     let mut stmt = conn.prepare("SELECT visible FROM stocks WHERE symbol = ?1")?;
@@ -30,8 +28,7 @@ pub fn add_stock(conn: &Mutex<Connection>, stock: &StockInfo, group_id: Option<i
     Ok(())
 }
 
-pub fn remove_stock(conn: &Mutex<Connection>, symbol: &str) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn remove_stock(conn: &Connection, symbol: &str) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     
     conn.execute(
@@ -42,8 +39,7 @@ pub fn remove_stock(conn: &Mutex<Connection>, symbol: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn restore_stock(conn: &Mutex<Connection>, symbol: &str) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn restore_stock(conn: &Connection, symbol: &str) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     
     conn.execute(
@@ -54,8 +50,7 @@ pub fn restore_stock(conn: &Mutex<Connection>, symbol: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn update_stocks_order(conn: &Mutex<Connection>, symbols: &[String]) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn update_stocks_order(conn: &Connection, symbols: &[String]) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     
     let mut stmt = conn.prepare(
@@ -69,8 +64,7 @@ pub fn update_stocks_order(conn: &Mutex<Connection>, symbols: &[String]) -> Resu
     Ok(())
 }
 
-pub fn get_stocks_by_group(conn: &Mutex<Connection>, group_name: Option<&str>) -> Result<Vec<StockInfo>> {
-    let conn = conn.lock().unwrap();
+pub fn get_stocks_by_group(conn: &Connection, group_name: Option<&str>) -> Result<Vec<StockInfo>> {
     let mut stocks = Vec::new();
     
     if let Some(group_name) = group_name {

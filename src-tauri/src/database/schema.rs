@@ -1,6 +1,6 @@
-use rusqlite::Connection;
+use r2d2_sqlite::rusqlite::{Connection, Result};
 
-fn migrate_remove_foreign_keys(conn: &Connection) -> rusqlite::Result<()> {
+fn migrate_remove_foreign_keys(conn: &Connection) -> Result<()> {
     conn.execute("PRAGMA foreign_keys = OFF", [])?;
     
     let tables_to_migrate = vec![
@@ -100,7 +100,7 @@ fn migrate_remove_foreign_keys(conn: &Connection) -> rusqlite::Result<()> {
         )"),
     ];
 
-    let result = (|| -> rusqlite::Result<()> {
+    let result = (|| -> Result<()> {
         let tx = conn.unchecked_transaction()?;
         
         for (table_name, create_sql) in tables_to_migrate {
@@ -143,7 +143,7 @@ fn migrate_remove_foreign_keys(conn: &Connection) -> rusqlite::Result<()> {
     result
 }
 
-pub fn init_tables(conn: &Connection) -> rusqlite::Result<()> {
+pub fn init_tables(conn: &Connection) -> Result<()> {
     migrate_remove_foreign_keys(conn)?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS stock_groups (
@@ -367,6 +367,14 @@ pub fn init_tables(conn: &Connection) -> rusqlite::Result<()> {
             name TEXT NOT NULL,
             exchange TEXT NOT NULL,
             updated_at TEXT NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS api_fetch_state (
+            key TEXT PRIMARY KEY,
+            last_fetch_ts INTEGER NOT NULL
         )",
         [],
     )?;

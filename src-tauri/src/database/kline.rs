@@ -1,12 +1,10 @@
 use rusqlite::{Connection, Result, params};
 use chrono::Utc;
-use std::sync::Mutex;
 use crate::stock_api::StockData;
 use super::utils::ensure_stock_exists_with_name_from_quote;
 
-pub fn save_kline(conn: &Mutex<Connection>, symbol: &str, period: &str, data: &[StockData]) -> Result<usize> {
-    let conn = conn.lock().unwrap();
-    ensure_stock_exists_with_name_from_quote(&conn, symbol)?;
+pub fn save_kline(conn: &Connection, symbol: &str, period: &str, data: &[StockData]) -> Result<usize> {
+    ensure_stock_exists_with_name_from_quote(conn, symbol)?;
     
     let now = Utc::now().to_rfc3339();
     let mut count = 0;
@@ -37,8 +35,7 @@ pub fn save_kline(conn: &Mutex<Connection>, symbol: &str, period: &str, data: &[
     Ok(count)
 }
 
-pub fn get_kline(conn: &Mutex<Connection>, symbol: &str, period: &str, limit: Option<i32>) -> Result<Vec<StockData>> {
-    let conn = conn.lock().unwrap();
+pub fn get_kline(conn: &Connection, symbol: &str, period: &str, limit: Option<i32>) -> Result<Vec<StockData>> {
     let limit = limit.unwrap_or(240);
     
     let mut stmt = conn.prepare(
@@ -70,8 +67,7 @@ pub fn get_kline(conn: &Mutex<Connection>, symbol: &str, period: &str, limit: Op
     Ok(data)
 }
 
-pub fn get_latest_kline_date(conn: &Mutex<Connection>, symbol: &str, period: &str) -> Result<Option<String>> {
-    let conn = conn.lock().unwrap();
+pub fn get_latest_kline_date(conn: &Connection, symbol: &str, period: &str) -> Result<Option<String>> {
     let mut stmt = conn.prepare(
         "SELECT date FROM stock_kline 
          WHERE symbol = ?1 AND period = ?2 

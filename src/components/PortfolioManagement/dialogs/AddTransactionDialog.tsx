@@ -13,7 +13,7 @@ import { parseQuantity, parsePrice } from "../utils/formValidation";
 interface AddTransactionDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: () => void;
+  onAdd: (symbol?: string) => void;
 }
 
 const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({ isOpen, onClose, onAdd }) => {
@@ -74,7 +74,7 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({ isOpen, onC
         stockName: selectedName || null,
       });
 
-      onAdd();
+      onAdd(selectedSymbol);
       handleClose();
     } catch (err) {
       console.error("Error adding transaction:", err);

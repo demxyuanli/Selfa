@@ -108,6 +108,7 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
   const [activeTab, setActiveTab] = useState<"stocks" | "indices">("stocks");
 
   // Load intraday time series data for stocks using stockDataManager
+  // Incremental update: only update changed time series data
   const loadTimeSeriesData = useCallback(async (symbols: string[]) => {
     if (symbols.length === 0) {
       return;
@@ -116,11 +117,34 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
       // Use stockDataManager to get intraday data
       const bundles = await stockDataManager.getBatchStockData(symbols);
       const missingSymbols: string[] = [];
+      
       setTimeSeriesDataMap(prev => {
         const newMap = new Map(prev);
+        let hasChanges = false;
+        
         for (const [symbol, bundle] of bundles.entries()) {
           if (bundle?.intraday && bundle.intraday.length > 0) {
-            newMap.set(symbol, bundle.intraday);
+            const oldData = prev.get(symbol);
+            // Only update if data changed (compare last data point)
+            if (!oldData || oldData.length === 0) {
+              newMap.set(symbol, bundle.intraday);
+              hasChanges = true;
+            } else {
+              const oldLast = oldData[oldData.length - 1];
+              const newLast = bundle.intraday[bundle.intraday.length - 1];
+              // Update if last data point changed or length changed significantly
+              if (
+                oldLast.date !== newLast.date ||
+                oldLast.close !== newLast.close ||
+                Math.abs(oldData.length - bundle.intraday.length) > 1
+              ) {
+                newMap.set(symbol, bundle.intraday);
+                hasChanges = true;
+              } else {
+                // Keep old reference to avoid re-render
+                newMap.set(symbol, oldData);
+              }
+            }
             console.debug(`Loaded intraday data for ${symbol}:`, {
               count: bundle.intraday.length,
               first: bundle.intraday[0],
@@ -130,8 +154,11 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
             missingSymbols.push(symbol);
           }
         }
-        return newMap;
+        
+        // Only return new map if there were changes
+        return hasChanges ? newMap : prev;
       });
+      
       // Retry missing symbols individually
       if (missingSymbols.length > 0) {
         for (const symbol of missingSymbols) {
@@ -139,9 +166,25 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
             const bundle = await stockDataManager.getStockData(symbol, true);
             if (bundle?.intraday && bundle.intraday.length > 0) {
               setTimeSeriesDataMap(prev => {
-                const newMap = new Map(prev);
-                newMap.set(symbol, bundle.intraday);
-                return newMap;
+                const oldData = prev.get(symbol);
+                // Only update if changed
+                if (!oldData || oldData.length === 0) {
+                  const newMap = new Map(prev);
+                  newMap.set(symbol, bundle.intraday);
+                  return newMap;
+                }
+                const oldLast = oldData[oldData.length - 1];
+                const newLast = bundle.intraday[bundle.intraday.length - 1];
+                if (
+                  oldLast.date !== newLast.date ||
+                  oldLast.close !== newLast.close ||
+                  Math.abs(oldData.length - bundle.intraday.length) > 1
+                ) {
+                  const newMap = new Map(prev);
+                  newMap.set(symbol, bundle.intraday);
+                  return newMap;
+                }
+                return prev; // No change
               });
             }
           } catch (err) {
@@ -240,16 +283,77 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
   }, [loadTimeSeriesData]);
 
   // Independent async refresh functions for each data type
+  // Incremental update: only update changed quotes without re-rendering entire list
   const refreshStocks = useCallback(async () => {
     try {
       const stocksData = await invoke<Array<[StockInfo, StockQuote | null]>>("get_all_favorites_quotes");
-      const updatedStocks = stocksData.map(([stock, quote]) => ({
-        stock,
-        quote,
-      }));
-      setStocks(updatedStocks);
-      // Load time series data for all stocks
-      const symbols = updatedStocks.map(({ stock }) => stock.symbol);
+      const newStocksMap = new Map<string, { stock: StockInfo; quote: StockQuote | null }>();
+      
+      // Build map of new data
+      stocksData.forEach(([stock, quote]) => {
+        newStocksMap.set(stock.symbol, { stock, quote });
+      });
+
+      // Incremental update: only update changed items
+      setStocks(prevStocks => {
+        const updatedStocks = prevStocks.map(item => {
+          const newData = newStocksMap.get(item.stock.symbol);
+          if (!newData) {
+            // Stock removed, keep old data (will be filtered out if needed)
+            return item;
+          }
+          
+          // Check if quote changed
+          const oldQuote = item.quote;
+          const newQuote = newData.quote;
+          
+          if (oldQuote === null && newQuote === null) {
+            return item; // No change
+          }
+          if (oldQuote === null || newQuote === null) {
+            return newData; // Quote status changed
+          }
+          
+          // Compare quote values
+          if (
+            oldQuote.price !== newQuote.price ||
+            oldQuote.change !== newQuote.change ||
+            oldQuote.change_percent !== newQuote.change_percent ||
+            oldQuote.volume !== newQuote.volume ||
+            oldQuote.high !== newQuote.high ||
+            oldQuote.low !== newQuote.low ||
+            oldQuote.open !== newQuote.open ||
+            oldQuote.previous_close !== newQuote.previous_close
+          ) {
+            return newData; // Quote changed
+          }
+          
+          // Check if stock info changed
+          if (
+            item.stock.name !== newData.stock.name ||
+            item.stock.exchange !== newData.stock.exchange
+          ) {
+            return newData; // Stock info changed
+          }
+          
+          return item; // No change, keep old reference
+        });
+
+        // Add new stocks that weren't in previous list
+        const existingSymbols = new Set(prevStocks.map(s => s.stock.symbol));
+        const newStocks = Array.from(newStocksMap.values()).filter(
+          item => !existingSymbols.has(item.stock.symbol)
+        );
+        
+        if (newStocks.length > 0) {
+          return [...updatedStocks, ...newStocks];
+        }
+        
+        return updatedStocks;
+      });
+
+      // Load time series data for all stocks (async, non-blocking)
+      const symbols = Array.from(newStocksMap.keys());
       loadTimeSeriesData(symbols);
     } catch (err) {
       console.debug("Failed to refresh stocks:", err);
@@ -369,29 +473,66 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
           profitPercent,
         } as PortfolioPosition;
       });
-      setPositions(positionsWithPrices);
       
-      // Load transactions
-      const transactionsData: Array<[number, string, string, number, number, number, number, string, string | null]> = await invoke("get_portfolio_transactions", { symbol: null });
-      const symbolToNameMap = new Map<string, string>();
-      positionsWithPrices.forEach((position) => {
-        symbolToNameMap.set(position.symbol, position.name);
+      // Incremental update: only update changed positions
+      setPositions(prevPositions => {
+        const positionsMap = new Map(prevPositions.map(p => [p.id, p]));
+        let hasChanges = false;
+        
+        const updatedPositions = positionsWithPrices.map(newPos => {
+          const oldPos = positionsMap.get(newPos.id);
+          if (!oldPos) {
+            hasChanges = true;
+            return newPos; // New position
+          }
+          
+          // Compare key fields
+          if (
+            oldPos.currentPrice !== newPos.currentPrice ||
+            oldPos.quantity !== newPos.quantity ||
+            oldPos.avgCost !== newPos.avgCost ||
+            oldPos.name !== newPos.name
+          ) {
+            hasChanges = true;
+            return newPos; // Position changed
+          }
+          
+          return oldPos; // No change, keep old reference
+        });
+        
+        // Check for removed positions
+        const newIds = new Set(positionsWithPrices.map(p => p.id));
+        const removed = prevPositions.filter(p => !newIds.has(p.id));
+        if (removed.length > 0) {
+          hasChanges = true;
+        }
+        
+        return hasChanges ? updatedPositions : prevPositions;
       });
-      const loadedTransactions = transactionsData.map(
-        ([id, symbol, transactionType, quantity, price, amount, commission, transactionDate, notes]) => ({
-          id,
-          symbol,
-          name: symbolToNameMap.get(symbol),
-          transactionType: transactionType as "buy" | "sell",
-          quantity,
-          price,
-          amount,
-          commission,
-          transactionDate,
-          notes: notes || undefined,
-        })
-      );
-      setTransactions(loadedTransactions);
+      
+      // Load transactions (only if position expanded)
+      if (expandedPositionSymbol) {
+        const transactionsData: Array<[number, string, string, number, number, number, number, string, string | null]> = await invoke("get_portfolio_transactions", { symbol: null });
+        const symbolToNameMap = new Map<string, string>();
+        positionsWithPrices.forEach((position) => {
+          symbolToNameMap.set(position.symbol, position.name);
+        });
+        const loadedTransactions = transactionsData.map(
+          ([id, symbol, transactionType, quantity, price, amount, commission, transactionDate, notes]) => ({
+            id,
+            symbol,
+            name: symbolToNameMap.get(symbol),
+            transactionType: transactionType as "buy" | "sell",
+            quantity,
+            price,
+            amount,
+            commission,
+            transactionDate,
+            notes: notes || undefined,
+          })
+        );
+        setTransactions(loadedTransactions);
+      }
       
       // Refresh indices data for portfolio stocks in background
       if (positionsWithPrices.length > 0) {
@@ -402,7 +543,7 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
     } catch (err) {
       console.debug("Failed to refresh positions:", err);
     }
-  }, []);
+  }, [expandedPositionSymbol]);
 
   // Manual refresh function (for refresh button)
   const loadFavoritesAndAlerts = useCallback(async () => {

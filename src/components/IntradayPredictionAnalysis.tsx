@@ -236,44 +236,133 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
     }
   };
 
+  const generateTradingMinutes = () => {
+    const times: string[] = [];
+    // Morning 09:30 - 11:30
+    for (let h = 9; h <= 11; h++) {
+      for (let m = 0; m < 60; m++) {
+        if (h === 9 && m < 30) continue;
+        if (h === 11 && m > 30) break;
+        times.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+      }
+    }
+    // Afternoon 13:00 - 15:00
+    for (let h = 13; h <= 15; h++) {
+      for (let m = 0; m < 60; m++) {
+        if (h === 15 && m > 0) break;
+        times.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+      }
+    }
+    return times;
+  };
+
   const chartOption = useMemo(() => {
     if (klineData.length === 0) return {};
 
-    const dates = klineData.map(d => d.date.split(" ").pop() || d.date);
-    const closes = klineData.map(d => d.close);
+    // Determine if it's intraday data (check if times vary within the same day or just generic time check)
+    // For this component, we assume it IS intraday data.
+    // We construct a full trading day axis.
+    const fullDayTimes = generateTradingMinutes();
+    
+    // Map existing data to the full day axis
+    const timeToDataMap = new Map<string, StockData>();
+    
+    klineData.forEach(d => {
+      const timePart = d.date.split(" ").pop(); // "HH:mm:ss"
+      if (timePart) {
+        const timeHHMM = timePart.substring(0, 5); // "HH:mm"
+        timeToDataMap.set(timeHHMM, d);
+      }
+    });
+
+    // Create aligned data arrays
+    // We need to fill gaps. ECharts handles nulls as breaks or connected lines depending on config.
+    // Usually for stock charts, we might want to connect or leave gaps. 
+    // But for "aligned" axis, we must provide a value for every category or null.
+    
+    // However, if klineData has times NOT in standard trading hours (e.g. 09:25 pre-market), 
+    // we might want to include them or ignore them. 
+    // The user requirement is "conform to trading session specifications", so we strictly use standard hours.
+    
+    const alignedCloses = fullDayTimes.map(t => {
+      const d = timeToDataMap.get(t);
+      return d ? d.close : null;
+    });
+
+    // Find the last valid index to know where to start prediction
+    let lastValidIndex = -1;
+    for (let i = 0; i < alignedCloses.length; i++) {
+        if (alignedCloses[i] !== null) lastValidIndex = i;
+    }
+    
+    // If we have no valid data in standard hours, fallback to raw data? 
+    // No, user wants standard axis.
+    
+    // Use fullDayTimes as the X-axis categories
+    const finalDates = fullDayTimes;
 
     // Common Grid
     const grid = { left: "10%", right: "8%", top: "10%", bottom: "15%" };
 
     if (activeTab === "prediction") {
-      // (Reusing existing prediction chart logic, simplified for brevity but keeping core features)
-      const predDates = predictions.map(p => p.date.split(" ").pop() || p.date);
-      const allDates = [...dates];
-      const newPredDates = predDates.filter(d => !allDates.includes(d as string));
-      const finalDates = [...allDates, ...newPredDates];
+      // Note: selectedPointIndex is an index into klineData, NOT fullDayTimes.
+      // We need to map selectedPointIndex (from raw klineData) to index in fullDayTimes.
       
-      const predictionStartIdx = selectedPointIndex !== null ? selectedPointIndex : closes.length - 1;
-      const lastPrice = closes[predictionStartIdx];
-
-      const predData = new Array(finalDates.length).fill(null);
-      const upperData = new Array(finalDates.length).fill(null);
-      const lowerData = new Array(finalDates.length).fill(null);
+      let mappedPredictionStartIdx = -1;
+      if (selectedPointIndex !== null && klineData[selectedPointIndex]) {
+          const t = klineData[selectedPointIndex].date.split(" ").pop()?.substring(0, 5);
+          if (t) mappedPredictionStartIdx = fullDayTimes.indexOf(t);
+      } else {
+          mappedPredictionStartIdx = lastValidIndex;
+      }
       
-      predData[predictionStartIdx] = lastPrice;
-      upperData[predictionStartIdx] = lastPrice;
-      lowerData[predictionStartIdx] = lastPrice;
-
-      predictions.forEach((p, i) => {
-        const idx = predictionStartIdx + 1 + i;
-        if (idx < finalDates.length) {
-            predData[idx] = p.predicted_price;
-            upperData[idx] = p.upper_bound;
-            lowerData[idx] = p.lower_bound;
-        }
-      });
+      const lastPrice = mappedPredictionStartIdx !== -1 ? alignedCloses[mappedPredictionStartIdx] : 0;
       
-      const lastPred = predictions[predictions.length - 1]?.predicted_price || lastPrice;
-      const trendDirection = lastPred > lastPrice ? "up" : "down";
+      // Prepare prediction data arrays aligned to fullDayTimes
+      const predData = new Array(fullDayTimes.length).fill(null);
+      const upperData = new Array(fullDayTimes.length).fill(null);
+      const lowerData = new Array(fullDayTimes.length).fill(null);
+      
+      if (mappedPredictionStartIdx !== -1 && lastPrice !== null) {
+        predData[mappedPredictionStartIdx] = lastPrice;
+        upperData[mappedPredictionStartIdx] = lastPrice;
+        lowerData[mappedPredictionStartIdx] = lastPrice;
+        
+        predictions.forEach((p, i) => {
+            // Predictions need to be placed at the correct time slots following the start
+            // The prediction result has a 'date' (time). We should match it.
+            const pTime = p.date.split(" ").pop()?.substring(0, 5);
+            if (pTime) {
+                const idx = fullDayTimes.indexOf(pTime);
+                if (idx !== -1) {
+                    predData[idx] = p.predicted_price;
+                    upperData[idx] = p.upper_bound;
+                    lowerData[idx] = p.lower_bound;
+                }
+            } else {
+                // Fallback if prediction has no time (unlikely) or just sequential?
+                // If prediction just says "next bar", we increment index.
+                const idx = mappedPredictionStartIdx + 1 + i;
+                if (idx < fullDayTimes.length) {
+                    predData[idx] = p.predicted_price;
+                    upperData[idx] = p.upper_bound;
+                    lowerData[idx] = p.lower_bound;
+                }
+            }
+        });
+      }
+      
+      const lastPred = predictions[predictions.length - 1]?.predicted_price || lastPrice || 0;
+      const trendDirection = lastPred > (lastPrice || 0) ? "up" : "down";
+      
+      // Find index of last prediction for markPoint
+      let lastPredIdx = -1;
+      for(let i = fullDayTimes.length - 1; i >= 0; i--) {
+          if (predData[i] !== null) {
+              lastPredIdx = i;
+              break;
+          }
+      }
 
       return {
         backgroundColor: "transparent",
@@ -285,12 +374,13 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
           {
             name: t("stock.price"),
             type: "line",
-            data: [...closes, ...new Array(finalDates.length - closes.length).fill(null)],
+            data: alignedCloses,
             itemStyle: { color: "#007acc" },
             symbol: "none",
-            markPoint: {
-                data: [{ coord: [predictionStartIdx, lastPrice], symbol: "circle", symbolSize: 8, itemStyle: { color: "#007acc" } }]
-            }
+            connectNulls: true, // Connect gaps in data
+            markPoint: mappedPredictionStartIdx !== -1 ? {
+                data: [{ coord: [mappedPredictionStartIdx, lastPrice], symbol: "circle", symbolSize: 8, itemStyle: { color: "#007acc" } }]
+            } : undefined
           },
           {
             name: t("analysis.prediction"),
@@ -298,31 +388,31 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
             data: predData,
             smooth: true,
             symbol: "none",
+            connectNulls: true,
             lineStyle: {
                 color: trendDirection === "up" ? "#ff4081" : "#00e676",
                 width: 3,
                 type: "dashed"
             },
-            markPoint: {
+            markPoint: lastPredIdx !== -1 ? {
                 data: [{
-                    coord: [predictionStartIdx + predictions.length, lastPred],
+                    coord: [lastPredIdx, lastPred],
                     symbol: "pin",
                     symbolSize: 30,
                     itemStyle: { color: trendDirection === "up" ? "#ff4081" : "#00e676" },
                     label: { 
                         show: true, 
                         formatter: () => {
-                            const value = lastPred ?? predictions[predictions.length - 1]?.predicted_price ?? 0;
-                            return typeof value === 'number' ? value.toFixed(2) : '0.00';
+                            return typeof lastPred === 'number' ? lastPred.toFixed(2) : '0.00';
                         }, 
                         color: "#fff", 
                         fontSize: 9 
                     }
                 }]
-            }
+            } : undefined
           },
-          { name: t("analysis.upperBound"), type: "line", data: upperData, symbol: "none", lineStyle: { opacity: 0 }, areaStyle: { color: trendDirection === "up" ? "rgba(255, 64, 129, 0.1)" : "rgba(0, 230, 118, 0.1)" } },
-          { name: t("analysis.lowerBound"), type: "line", data: lowerData, symbol: "none", lineStyle: { opacity: 0 } }
+          { name: t("analysis.upperBound"), type: "line", data: upperData, symbol: "none", connectNulls: true, lineStyle: { opacity: 0 }, areaStyle: { color: trendDirection === "up" ? "rgba(255, 64, 129, 0.1)" : "rgba(0, 230, 118, 0.1)" } },
+          { name: t("analysis.lowerBound"), type: "line", data: lowerData, symbol: "none", connectNulls: true, lineStyle: { opacity: 0 } }
         ]
       };
     } 
@@ -337,34 +427,53 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
 
       const gridHeight = 100 / (1 + subCharts.length) - 5;
       const grids = [];
-      const xAxes = [];
-      const yAxes = [];
-      const series = [];
+      const xAxes: any[] = [];
+      const yAxes: any[] = [];
+      const series: any[] = [];
+
+      // Helper to align indicator data
+      const alignIndicatorData = (data: number[]) => {
+          // Indicator data usually matches klineData length and order.
+          // We map it to fullDayTimes using the same logic as alignedCloses.
+          // Assuming data[i] corresponds to klineData[i].
+          const aligned = new Array(fullDayTimes.length).fill(null);
+          klineData.forEach((d, i) => {
+              const timePart = d.date.split(" ").pop()?.substring(0, 5);
+              if (timePart) {
+                  const idx = fullDayTimes.indexOf(timePart);
+                  if (idx !== -1 && i < data.length) {
+                      aligned[idx] = data[i];
+                  }
+              }
+          });
+          return aligned;
+      };
 
       // Main Chart
       grids.push({ left: "10%", right: "8%", top: "5%", height: `${gridHeight}%` });
-      xAxes.push({ type: "category", data: dates, show: subCharts.length === 0 }); // Hide x-axis if subcharts exist
+      xAxes.push({ type: "category", data: finalDates, show: subCharts.length === 0 }); // Hide x-axis if subcharts exist
       yAxes.push({ scale: true, splitLine: { show: false } });
       
       series.push({
         name: t("stock.price"),
         type: "line",
-        data: closes,
+        data: alignedCloses,
         itemStyle: { color: "#333" },
-        showSymbol: false
+        showSymbol: false,
+        connectNulls: true
       });
 
       if (indicators) {
         if (activeIndicators.has("MA")) {
-            series.push({ name: t("analysis.ma20"), type: "line", data: indicators.sma_20, showSymbol: false, lineStyle: { width: 1 } });
-            series.push({ name: t("analysis.ma50"), type: "line", data: indicators.sma_50, showSymbol: false, lineStyle: { width: 1 } });
+            series.push({ name: t("analysis.ma20"), type: "line", data: alignIndicatorData(indicators.sma_20), showSymbol: false, lineStyle: { width: 1 }, connectNulls: true });
+            series.push({ name: t("analysis.ma50"), type: "line", data: alignIndicatorData(indicators.sma_50), showSymbol: false, lineStyle: { width: 1 }, connectNulls: true });
         }
         if (activeIndicators.has("BOLL")) {
-            series.push({ name: t("analysis.upper"), type: "line", data: indicators.bollinger_upper, showSymbol: false, lineStyle: { type: "dashed", opacity: 0.5 } });
-            series.push({ name: t("analysis.lower"), type: "line", data: indicators.bollinger_lower, showSymbol: false, lineStyle: { type: "dashed", opacity: 0.5 } });
+            series.push({ name: t("analysis.upper"), type: "line", data: alignIndicatorData(indicators.bollinger_upper), showSymbol: false, lineStyle: { type: "dashed", opacity: 0.5 }, connectNulls: true });
+            series.push({ name: t("analysis.lower"), type: "line", data: alignIndicatorData(indicators.bollinger_lower), showSymbol: false, lineStyle: { type: "dashed", opacity: 0.5 }, connectNulls: true });
         }
         if (activeIndicators.has("VWAP")) {
-            series.push({ name: t("indicatorVWAP"), type: "line", data: indicators.vwap, showSymbol: false, itemStyle: { color: "#9c27b0" }, lineStyle: { width: 2 } });
+            series.push({ name: t("indicatorVWAP"), type: "line", data: alignIndicatorData(indicators.vwap), showSymbol: false, itemStyle: { color: "#9c27b0" }, lineStyle: { width: 2 }, connectNulls: true });
         }
       }
 
@@ -374,34 +483,44 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
         grids.push({ left: "10%", right: "8%", top: `${top}%`, height: `${gridHeight}%` });
         xAxes.push({ 
             type: "category", 
-            data: dates, 
+            data: finalDates, 
             gridIndex: idx + 1, 
             show: idx === subCharts.length - 1 // Show axis only on last chart
         });
         yAxes.push({ gridIndex: idx + 1, scale: true, splitLine: { show: false }, axisLabel: { fontSize: 9 } });
 
         if (ind === "MACD" && indicators) {
-            series.push({ name: t("analysis.macdDIF"), type: "line", xAxisIndex: idx + 1, yAxisIndex: idx + 1, data: indicators.macd, showSymbol: false });
-            series.push({ name: t("analysis.macdDEA"), type: "line", xAxisIndex: idx + 1, yAxisIndex: idx + 1, data: indicators.macd_signal, showSymbol: false });
-            series.push({ name: t("indicatorMACD"), type: "bar", xAxisIndex: idx + 1, yAxisIndex: idx + 1, data: indicators.macd_histogram, itemStyle: { color: (p: any) => p.value > 0 ? "#ef5350" : "#26a69a" } });
+            series.push({ name: t("analysis.macdDIF"), type: "line", xAxisIndex: idx + 1, yAxisIndex: idx + 1, data: alignIndicatorData(indicators.macd), showSymbol: false, connectNulls: true });
+            series.push({ name: t("analysis.macdDEA"), type: "line", xAxisIndex: idx + 1, yAxisIndex: idx + 1, data: alignIndicatorData(indicators.macd_signal), showSymbol: false, connectNulls: true });
+            series.push({ name: t("indicatorMACD"), type: "bar", xAxisIndex: idx + 1, yAxisIndex: idx + 1, data: alignIndicatorData(indicators.macd_histogram), itemStyle: { color: (p: any) => p.value > 0 ? "#ef5350" : "#26a69a" } });
         } else if (ind === "RSI" && indicators) {
-            series.push({ name: t("indicatorRSI"), type: "line", xAxisIndex: idx + 1, yAxisIndex: idx + 1, data: indicators.rsi, showSymbol: false });
-            // Add marks for 30/70
+            series.push({ name: t("indicatorRSI"), type: "line", xAxisIndex: idx + 1, yAxisIndex: idx + 1, data: alignIndicatorData(indicators.rsi), showSymbol: false, connectNulls: true });
             series.push({ type: 'line', xAxisIndex: idx + 1, yAxisIndex: idx + 1, markLine: { data: [{ yAxis: 70 }, { yAxis: 30 }], symbol: "none", lineStyle: { type: "dashed", color: "#ccc" } } });
         } else if (ind === "KDJ" && indicators) {
-            series.push({ name: t("analysis.kdjK"), type: "line", xAxisIndex: idx + 1, yAxisIndex: idx + 1, data: indicators.kdj_k, showSymbol: false });
-            series.push({ name: t("analysis.kdjD"), type: "line", xAxisIndex: idx + 1, yAxisIndex: idx + 1, data: indicators.kdj_d, showSymbol: false });
-            series.push({ name: t("analysis.kdjJ"), type: "line", xAxisIndex: idx + 1, yAxisIndex: idx + 1, data: indicators.kdj_j, showSymbol: false });
+            series.push({ name: t("analysis.kdjK"), type: "line", xAxisIndex: idx + 1, yAxisIndex: idx + 1, data: alignIndicatorData(indicators.kdj_k), showSymbol: false, connectNulls: true });
+            series.push({ name: t("analysis.kdjD"), type: "line", xAxisIndex: idx + 1, yAxisIndex: idx + 1, data: alignIndicatorData(indicators.kdj_d), showSymbol: false, connectNulls: true });
+            series.push({ name: t("analysis.kdjJ"), type: "line", xAxisIndex: idx + 1, yAxisIndex: idx + 1, data: alignIndicatorData(indicators.kdj_j), showSymbol: false, connectNulls: true });
         } else if (ind === "VOL") {
+            const alignedVol = new Array(fullDayTimes.length).fill(null);
+            klineData.forEach((d) => {
+                const timePart = d.date.split(" ").pop()?.substring(0, 5);
+                if (timePart) {
+                    const idx = fullDayTimes.indexOf(timePart);
+                    if (idx !== -1) {
+                        alignedVol[idx] = {
+                            value: d.volume,
+                            itemStyle: { color: d.close > d.open ? "#ef5350" : "#26a69a" }
+                        };
+                    }
+                }
+            });
+            
             series.push({ 
                 name: t("analysis.analysisVolume"), 
                 type: "bar", 
                 xAxisIndex: idx + 1, 
                 yAxisIndex: idx + 1, 
-                data: klineData.map(d => ({
-                    value: d.volume,
-                    itemStyle: { color: d.close > d.open ? "#ef5350" : "#26a69a" }
-                }))
+                data: alignedVol
             });
         }
       });
@@ -421,6 +540,13 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
       // Left: Price Chart with Large Orders
       // Right: Volume Profile (Horizontal)
       
+      // Align Large Orders
+      const alignedLargeOrders = analysisResult.large_orders.map(o => {
+          const timePart = o.date.split(" ").pop()?.substring(0, 5);
+          const idx = timePart ? fullDayTimes.indexOf(timePart) : -1;
+          return [idx, o.price, o.volume, o.type_];
+      }).filter(item => item[0] !== -1);
+
       return {
         tooltip: { trigger: "axis", axisPointer: { type: "cross" } },
         grid: [
@@ -428,7 +554,7 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
             { left: "70%", right: "5%", top: "10%", bottom: "10%" }  // Volume Profile
         ],
         xAxis: [
-            { type: "category", data: dates, gridIndex: 0 },
+            { type: "category", data: finalDates, gridIndex: 0 },
             { type: "value", gridIndex: 1, show: false } // Volume axis
         ],
         yAxis: [
@@ -439,10 +565,11 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
             {
                 name: t("stock.price"),
                 type: "line",
-                data: closes,
+                data: alignedCloses,
                 xAxisIndex: 0,
                 yAxisIndex: 0,
-                showSymbol: false
+                showSymbol: false,
+                connectNulls: true
             },
             // Large Orders Scatter
             {
@@ -450,10 +577,7 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
                 type: "scatter",
                 xAxisIndex: 0,
                 yAxisIndex: 0,
-                data: analysisResult.large_orders.map(o => {
-                    const idx = klineData.findIndex(d => d.date === o.date);
-                    return [idx, o.price, o.volume, o.type_];
-                }),
+                data: alignedLargeOrders,
                 symbolSize: (val: any) => Math.min(20, Math.max(5, Math.log(val[2]) * 2)),
                 itemStyle: {
                     color: (p: any) => p.data[3] === "buy" ? "rgba(239, 83, 80, 0.7)" : "rgba(38, 166, 154, 0.7)"

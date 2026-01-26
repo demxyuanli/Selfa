@@ -1,10 +1,7 @@
 use rusqlite::{Connection, Result, params};
 use chrono::Utc;
-use std::sync::Mutex;
 
-pub fn create_group(conn: &Mutex<Connection>, name: &str) -> Result<i64> {
-    let conn = conn.lock().unwrap();
-    
+pub fn create_group(conn: &Connection, name: &str) -> Result<i64> {
     let mut stmt = conn.prepare("SELECT id FROM stock_groups WHERE name = ?1")?;
     let mut rows = stmt.query_map(params![name], |row| {
         Ok(row.get::<_, i64>(0)?)
@@ -24,8 +21,7 @@ pub fn create_group(conn: &Mutex<Connection>, name: &str) -> Result<i64> {
     Ok(id)
 }
 
-pub fn get_groups(conn: &Mutex<Connection>) -> Result<Vec<String>> {
-    let conn = conn.lock().unwrap();
+pub fn get_groups(conn: &Connection) -> Result<Vec<String>> {
     let mut stmt = conn.prepare("SELECT name FROM stock_groups ORDER BY name")?;
     let rows = stmt.query_map([], |row| {
         Ok(row.get::<_, String>(0)?)
@@ -39,8 +35,7 @@ pub fn get_groups(conn: &Mutex<Connection>) -> Result<Vec<String>> {
 }
 
 #[allow(dead_code)]
-pub fn get_group_id_by_name(conn: &Mutex<Connection>, name: &str) -> Result<Option<i64>> {
-    let conn = conn.lock().unwrap();
+pub fn get_group_id_by_name(conn: &Connection, name: &str) -> Result<Option<i64>> {
     let mut stmt = conn.prepare("SELECT id FROM stock_groups WHERE name = ?1")?;
     let mut rows = stmt.query_map(params![name], |row| {
         Ok(row.get::<_, i64>(0)?)
@@ -53,8 +48,7 @@ pub fn get_group_id_by_name(conn: &Mutex<Connection>, name: &str) -> Result<Opti
     }
 }
 
-pub fn update_group(conn: &Mutex<Connection>, old_name: &str, new_name: &str) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn update_group(conn: &Connection, old_name: &str, new_name: &str) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     
     conn.execute(
@@ -65,9 +59,7 @@ pub fn update_group(conn: &Mutex<Connection>, old_name: &str, new_name: &str) ->
     Ok(())
 }
 
-pub fn delete_group(conn: &Mutex<Connection>, name: &str) -> Result<()> {
-    let conn = conn.lock().unwrap();
-    
+pub fn delete_group(conn: &Connection, name: &str) -> Result<()> {
     conn.execute(
         "UPDATE stocks SET group_id = NULL WHERE group_id = (SELECT id FROM stock_groups WHERE name = ?1)",
         params![name],
@@ -78,8 +70,7 @@ pub fn delete_group(conn: &Mutex<Connection>, name: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn move_stock_to_group(conn: &Mutex<Connection>, symbol: &str, group_name: Option<&str>) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn move_stock_to_group(conn: &Connection, symbol: &str, group_name: Option<&str>) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     
     let group_id: Option<i64> = if let Some(group_name) = group_name {

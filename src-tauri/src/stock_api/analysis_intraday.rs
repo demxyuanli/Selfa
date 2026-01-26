@@ -130,7 +130,7 @@ fn calculate_buying_pressure(data: &[StockData]) -> BuyingPressure {
     for d in data {
         let vol = d.volume as f64;
         let range = d.high - d.low;
-        let mut buy_ratio = 0.5;
+        let buy_ratio;
 
         if range > 0.0 {
             // Enhanced Position Ratio Method (增强型位置比例法)

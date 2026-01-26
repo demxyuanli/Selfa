@@ -12,6 +12,7 @@ pub enum StrategyType {
     Macd { fast: usize, slow: usize, signal: usize },
     Kdj { period: usize, k_period: usize, d_period: usize, overbought: f64, oversold: f64 },
     Bollinger { period: usize, multiplier: f64 },
+    Turtle { entry_period: usize, exit_period: usize },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +58,15 @@ pub struct BacktestResult {
     pub trades: Vec<Trade>,
     pub equity_curve: Vec<EquityPoint>,
     pub next_signal: Option<String>, // "buy", "sell", or "hold"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OptimizationResult {
+    pub params: String,
+    pub total_return_pct: f64,
+    pub max_drawdown_pct: f64,
+    pub win_rate: f64,
+    pub sharpe_ratio: f64,
 }
 
 pub fn run_backtest(data: &[StockData], config: BacktestConfig) -> Result<BacktestResult, String> {
@@ -120,23 +130,34 @@ pub fn run_backtest(data: &[StockData], config: BacktestConfig) -> Result<Backte
 
         // Execute Trade
         if action == "buy" && cash > 0.0 {
-            let invest_amount = cash * (config.position_size_pct / 100.0);
-            let cost = invest_amount * (1.0 + config.commission_rate);
+            // Calculate max affordable amount considering commission: amount * (1 + rate) <= cash
+            // amount <= cash / (1 + rate)
+            let max_afford_amount = cash / (1.0 + config.commission_rate);
+            let target_amount = cash * (config.position_size_pct / 100.0);
             
-            if cost <= cash {
+            // Take the smaller of target and affordable to ensure we can pay commission
+            let invest_amount = target_amount.min(max_afford_amount);
+            
+            if invest_amount > 0.0 {
                 let quantity = invest_amount / price;
-                cash -= quantity * price * (1.0 + config.commission_rate);
-                holdings += quantity;
-                entry_price = price;
+                let cost = quantity * price * (1.0 + config.commission_rate);
                 
-                trades.push(Trade {
-                    date: date.clone(),
-                    price,
-                    quantity,
-                    type_: "buy".to_string(),
-                    profit: None,
-                    reason: reason.to_string(),
-                });
+                // Allow for small floating point errors
+                if cost <= cash * 1.000001 {
+                    // Update cash, ensuring it doesn't go below zero due to float precision
+                    cash = (cash - cost).max(0.0);
+                    holdings += quantity;
+                    entry_price = price;
+                    
+                    trades.push(Trade {
+                        date: date.clone(),
+                        price,
+                        quantity,
+                        type_: "buy".to_string(),
+                        profit: None,
+                        reason: reason.to_string(),
+                    });
+                }
             }
         } else if action == "sell" && holdings > 0.0 {
             let revenue = holdings * price * (1.0 - config.commission_rate);
@@ -231,6 +252,133 @@ pub fn run_backtest(data: &[StockData], config: BacktestConfig) -> Result<Backte
     })
 }
 
+pub fn run_optimization(data: &[StockData], config: BacktestConfig) -> Result<Vec<OptimizationResult>, String> {
+    if data.len() < 50 {
+        return Err("Insufficient data for optimization (minimum 50 points)".to_string());
+    }
+    let base = &config;
+    let mut results: Vec<OptimizationResult> = Vec::new();
+
+    let build_cfg = |strategy: StrategyType| BacktestConfig {
+        initial_capital: base.initial_capital,
+        commission_rate: base.commission_rate,
+        strategy,
+        stop_loss_pct: base.stop_loss_pct,
+        take_profit_pct: base.take_profit_pct,
+        position_size_pct: base.position_size_pct,
+    };
+
+    match &config.strategy {
+        StrategyType::MaCross { .. } => {
+            for fast in [5, 10, 15] {
+                for slow in [20, 30, 40] {
+                    if slow <= fast { continue; }
+                    let cfg = build_cfg(StrategyType::MaCross { fast, slow });
+                    if let Ok(r) = run_backtest(data, cfg) {
+                        results.push(OptimizationResult {
+                            params: format!("MaCross fast={} slow={}", fast, slow),
+                            total_return_pct: r.total_return_pct,
+                            max_drawdown_pct: r.max_drawdown_pct,
+                            win_rate: r.win_rate,
+                            sharpe_ratio: r.sharpe_ratio,
+                        });
+                    }
+                }
+            }
+        }
+        StrategyType::Rsi { .. } => {
+            for period in [10, 14, 20] {
+                for overbought in [70.0, 75.0, 80.0] {
+                    for oversold in [20.0, 25.0, 30.0] {
+                        if oversold >= overbought { continue; }
+                        let cfg = build_cfg(StrategyType::Rsi { period, overbought, oversold });
+                        if let Ok(r) = run_backtest(data, cfg) {
+                            results.push(OptimizationResult {
+                                params: format!("Rsi period={} ob={} os={}", period, overbought as i32, oversold as i32),
+                                total_return_pct: r.total_return_pct,
+                                max_drawdown_pct: r.max_drawdown_pct,
+                                win_rate: r.win_rate,
+                                sharpe_ratio: r.sharpe_ratio,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        StrategyType::Macd { .. } => {
+            for fast in [8, 12] {
+                for slow in [20, 26] {
+                    for signal in [7, 9] {
+                        if slow <= fast { continue; }
+                        let cfg = build_cfg(StrategyType::Macd { fast, slow, signal });
+                        if let Ok(r) = run_backtest(data, cfg) {
+                            results.push(OptimizationResult {
+                                params: format!("Macd fast={} slow={} signal={}", fast, slow, signal),
+                                total_return_pct: r.total_return_pct,
+                                max_drawdown_pct: r.max_drawdown_pct,
+                                win_rate: r.win_rate,
+                                sharpe_ratio: r.sharpe_ratio,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        StrategyType::Kdj { .. } => {
+            for period in [7, 9, 14] {
+                let (k_period, d_period, overbought, oversold) = (3, 3, 80.0, 20.0);
+                let cfg = build_cfg(StrategyType::Kdj { period, k_period, d_period, overbought, oversold });
+                if let Ok(r) = run_backtest(data, cfg) {
+                    results.push(OptimizationResult {
+                        params: format!("Kdj period={}", period),
+                        total_return_pct: r.total_return_pct,
+                        max_drawdown_pct: r.max_drawdown_pct,
+                        win_rate: r.win_rate,
+                        sharpe_ratio: r.sharpe_ratio,
+                    });
+                }
+            }
+        }
+        StrategyType::Bollinger { .. } => {
+            for period in [15, 20, 25] {
+                for multiplier in [1.5, 2.0, 2.5] {
+                    let cfg = build_cfg(StrategyType::Bollinger { period, multiplier });
+                    if let Ok(r) = run_backtest(data, cfg) {
+                        results.push(OptimizationResult {
+                            params: format!("Bollinger period={} mult={}", period, multiplier),
+                            total_return_pct: r.total_return_pct,
+                            max_drawdown_pct: r.max_drawdown_pct,
+                            win_rate: r.win_rate,
+                            sharpe_ratio: r.sharpe_ratio,
+                        });
+                    }
+                }
+            }
+        }
+        StrategyType::Turtle { .. } => {
+            for entry_period in [15, 20, 25] {
+                for exit_period in [8, 10, 12] {
+                    if exit_period >= entry_period { continue; }
+                    let cfg = build_cfg(StrategyType::Turtle { entry_period, exit_period });
+                    if let Ok(r) = run_backtest(data, cfg) {
+                        results.push(OptimizationResult {
+                            params: format!("Turtle entry={} exit={}", entry_period, exit_period),
+                            total_return_pct: r.total_return_pct,
+                            max_drawdown_pct: r.max_drawdown_pct,
+                            win_rate: r.win_rate,
+                            sharpe_ratio: r.sharpe_ratio,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    results.sort_by(|a, b| b.sharpe_ratio.partial_cmp(&a.sharpe_ratio).unwrap_or(std::cmp::Ordering::Equal));
+    results.truncate(20);
+    Ok(results)
+}
+
 fn generate_signals(data: &[StockData], closes: &[f64], strategy: &StrategyType) -> Vec<i32> {
     let mut signals = vec![0; data.len()];
     
@@ -249,14 +397,12 @@ fn generate_signals(data: &[StockData], closes: &[f64], strategy: &StrategyType)
         },
         StrategyType::Rsi { period, overbought, oversold } => {
             let rsi = calculate_rsi(closes, *period);
-            
-            for i in *period..data.len() {
-                // Buy when RSI crosses above oversold
-                if rsi[i] > *oversold && rsi[i-1] <= *oversold {
+            for i in (*period + 1)..data.len() {
+                if rsi[i] > *oversold && rsi[i - 1] <= *oversold {
                     signals[i] = 1;
-                }
-                // Sell when RSI crosses below overbought
-                else if rsi[i] < *overbought && rsi[i-1] >= *overbought {
+                } else if rsi[i] < *overbought && rsi[i - 1] >= *overbought {
+                    signals[i] = -1;
+                } else if rsi[i] < *oversold && rsi[i - 1] >= *oversold {
                     signals[i] = -1;
                 }
             }
@@ -303,6 +449,31 @@ fn generate_signals(data: &[StockData], closes: &[f64], strategy: &StrategyType)
                 // Sell: Price closes below upper band after being above it
                 else if closes[i] < bb.upper[i] && closes[i-1] >= bb.upper[i-1] {
                     signals[i] = -1;
+                }
+            }
+        },
+        StrategyType::Turtle { entry_period, exit_period } => {
+            // Donchian Channels logic
+            // Buy when price > Max(High, entry_period) of previous days
+            // Sell when price < Min(Low, exit_period) of previous days
+            
+            // We need High and Low prices
+            let highs: Vec<f64> = data.iter().map(|d| d.high).collect();
+            let lows: Vec<f64> = data.iter().map(|d| d.low).collect();
+            
+            let start_idx = (*entry_period).max(*exit_period);
+            
+            for i in start_idx..data.len() {
+                // Calculate Max High of previous N days (excluding today)
+                let max_high = highs[i-*entry_period..i].iter().fold(f64::MIN, |a: f64, &b| a.max(b));
+                
+                // Calculate Min Low of previous M days (excluding today)
+                let min_low = lows[i-*exit_period..i].iter().fold(f64::MAX, |a: f64, &b| a.min(b));
+                
+                if closes[i] > max_high {
+                    signals[i] = 1; // Buy breakout
+                } else if closes[i] < min_low {
+                    signals[i] = -1; // Sell breakdown
                 }
             }
         }

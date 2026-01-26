@@ -7,7 +7,7 @@ export interface UseTradingHoursTimeseriesRefreshOptions {
 }
 
 /**
- * During trading hours (08:30-12:05 and 12:55-16:05):
+ * During trading hours (09:30-11:30 and 13:00-15:00):
  * If intervalInMs is provided, runs fetch at that interval.
  * If intervalInMs is NOT provided, runs fetch aligned with system clock's minute boundaries (00 seconds).
  * Also fetches immediately when transitioning into trading hours.

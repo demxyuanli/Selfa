@@ -88,7 +88,9 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
   });
 
   useEffect(() => {
+    let isMounted = true;
     const fetchKLineData = async () => {
+      if (!isMounted) return;
       setLoading(true);
       setChartRendering(true);
       try {
@@ -96,29 +98,44 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
           symbol: tab.symbol,
           period: klinePeriod,
         });
+        if (!isMounted) return;
         setKlineData(klData as StockData[]);
         // Delay hiding rendering indicator to allow chart to render
         if (chartRenderingTimeoutRef.current) {
           clearTimeout(chartRenderingTimeoutRef.current);
         }
         chartRenderingTimeoutRef.current = setTimeout(() => {
-          setChartRendering(false);
+          if (isMounted) {
+            setChartRendering(false);
+          }
         }, 300);
       } catch (err) {
         console.error("Error fetching K-line data:", err);
-        setChartRendering(false);
+        if (isMounted) {
+          setChartRendering(false);
+          // Keep existing data if available, don't clear on error
+          // This allows fallback to cached data from backend
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     if (tab.symbol) {
       fetchKLineData();
+    } else {
+      setKlineData([]);
+      setChartRendering(false);
+      setLoading(false);
     }
 
     return () => {
+      isMounted = false;
       if (chartRenderingTimeoutRef.current) {
         clearTimeout(chartRenderingTimeoutRef.current);
+        chartRenderingTimeoutRef.current = null;
       }
     };
   }, [tab.symbol, klinePeriod]);
@@ -261,7 +278,7 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
     const isLoading = isTabLoading() || chartRendering;
     const dataReady = isDataReady();
 
-    if (isLoading || !dataReady) {
+    if (isLoading) {
       return (
         <div className="chart-loading-overlay">
           <div className="loading-spinner">
@@ -271,6 +288,14 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
             <div className="spinner-ring"></div>
           </div>
           <div className="loading-text">{t("analysis.loadingChart")}</div>
+        </div>
+      );
+    }
+
+    if (!dataReady) {
+      return (
+        <div className="chart-loading-overlay">
+          <div className="no-data-text">{t("analysis.noData") || "No Data Available"}</div>
         </div>
       );
     }

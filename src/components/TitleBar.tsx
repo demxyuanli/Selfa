@@ -117,6 +117,8 @@ const TitleBar: React.FC<TitleBarProps> = ({ onMenuAction, onSettingsClick }) =>
   ];
 
   const helpMenuItems: MenuItem[] = [
+    { label: t("menu.helpDocumentation"), action: "help:documentation" },
+    { separator: true },
     { label: t("menu.helpAbout"), action: "help:about" },
   ];
 

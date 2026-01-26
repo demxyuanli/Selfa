@@ -12,9 +12,7 @@ pub fn is_trading_hours() -> bool {
     let minute = now.minute();
     let total_minutes = hour * 60 + minute;
     
-    // Morning: 8:30-12:05 (510-725) - Covers A-share/HK pre-market and morning session
-    // Afternoon: 12:55-16:05 (775-965) - Covers A-share/HK afternoon session and post-market
-    (total_minutes >= 510 && total_minutes <= 725) || (total_minutes >= 775 && total_minutes <= 965)
+    (total_minutes >= 570 && total_minutes <= 690) || (total_minutes >= 780 && total_minutes <= 900)
 }
 
 pub fn should_reset_triggered_alerts() -> bool {

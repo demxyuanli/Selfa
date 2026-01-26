@@ -796,16 +796,30 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       type: "custom",
       xAxisIndex: chipGridIndex,
       yAxisIndex: chipYAxisIndex,
+      encode: {
+        x: 0,
+        y: 1,
+      },
       renderItem: (params: any, api: any) => {
+        if (!params || !api) return null;
+        if (params.dataIndex == null || params.dataIndex < 0) return null;
+        
         const amount = api.value(0);
         const price = api.value(1);
         
+        if (amount == null || price == null || isNaN(amount) || isNaN(price)) return null;
         if (amount <= 0) return null;
+        
+        if (!params.coordSys || !params.coordSys.height) return null;
         
         // Get coordinate for this price
         const pricePoint = api.coord([amount, price]);
+        if (!pricePoint) return null;
+        
         // Get coordinate for the start (left edge, which is K-line chart right boundary)
         const startPoint = api.coord([0, price]);
+        if (!startPoint) return null;
+        
         const barWidth = pricePoint[0] - startPoint[0];
         
         const isProfit = price < dayPrice;
@@ -833,8 +847,13 @@ export function generateChartConfig(options: ChartConfigOptions): any {
       tooltip: {
         trigger: "item",
         formatter: (params: any) => {
+          if (!params || !params.value || !Array.isArray(params.value)) return "";
+          
           const amount = params.value[0];
           const price = params.value[1];
+          
+          if (amount == null || price == null || isNaN(amount) || isNaN(price)) return "";
+          
           const isProfit = price < dayPrice;
           const dayDate = dayDist.date ? (dayDist.date.includes(" ") ? dayDist.date.split(" ")[0] : dayDist.date) : "";
           return `<div>

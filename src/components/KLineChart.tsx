@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from "react";
+import React, { useMemo, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import ReactECharts from "echarts-for-react";
 import "./KLineChart.css";
@@ -34,6 +34,14 @@ const calculateMA = (data: StockData[], period: number): number[] => {
 const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
   const { t } = useTranslation();
   const chartRef = useRef<any>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   const option = useMemo(() => {
     if (!data || data.length === 0) {
       return {};
@@ -370,12 +378,14 @@ const KLineChart: React.FC<KLineChartProps> = ({ data, compact = false }) => {
   return (
     <div className="kline-chart">
       <ReactECharts
+        key={`${data.length}-${data[0]?.date || ''}`}
         ref={chartRef}
         option={option}
         style={{ height: "100%", width: "100%" }}
         opts={{ renderer: "canvas" }}
         onEvents={{
           mousemove: (params: any) => {
+            if (!isMountedRef.current) return;
             if (chartRef.current && data.length > 0 && params.offsetX !== undefined) {
               const echartsInstance = chartRef.current.getEchartsInstance();
               if (echartsInstance) {

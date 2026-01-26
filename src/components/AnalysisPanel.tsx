@@ -519,15 +519,68 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   const timeSeriesChartOption = useMemo(() => {
     if (!timeSeriesData || timeSeriesData.length === 0) return {};
     
-    const times = timeSeriesData.map(d => d.date.includes(" ") ? d.date.split(" ")[1] : d.date);
-    const prices = timeSeriesData.map(d => d.close);
-    const volumes = timeSeriesData.map(d => d.volume);
+    // Generate standard trading minutes
+    const generateTradingMinutes = () => {
+        const times: string[] = [];
+        // Morning 09:30 - 11:30
+        for (let h = 9; h <= 11; h++) {
+          for (let m = 0; m < 60; m++) {
+            if (h === 9 && m < 30) continue;
+            if (h === 11 && m > 30) break;
+            times.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+          }
+        }
+        // Afternoon 13:00 - 15:00
+        for (let h = 13; h <= 15; h++) {
+          for (let m = 0; m < 60; m++) {
+            if (h === 15 && m > 0) break;
+            times.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+          }
+        }
+        return times;
+    };
+
+    const fullDayTimes = generateTradingMinutes();
+
+    // Map existing data to standard times
+    const timeToDataMap = new Map<string, StockData>();
+    timeSeriesData.forEach(d => {
+        const timePart = d.date.includes(" ") ? d.date.split(" ")[1].substring(0, 5) : d.date.substring(0, 5);
+        timeToDataMap.set(timePart, d);
+    });
+
+    const prices = fullDayTimes.map(t => {
+        const d = timeToDataMap.get(t);
+        return d ? d.close : null;
+    });
+
+    const volumes = fullDayTimes.map(t => {
+        const d = timeToDataMap.get(t);
+        return d ? d.volume : null;
+    });
     
     const maPeriod = tsParams.maPeriod;
-    const maData: (number | null)[] = prices.map((_, i) => {
+    // Calculate MA based on aligned prices (skipping nulls for calculation logic or treating them carefully)
+    // Simple approach: Calculate MA on available data first, then map? 
+    // Or calculate on the fly ignoring nulls?
+    // Better: Calculate MA on the original dense timeSeriesData, then map that to the timeline.
+    
+    // 1. Calculate MA on dense data
+    const densePrices = timeSeriesData.map(d => d.close);
+    const denseMaData = densePrices.map((_, i) => {
       if (i < maPeriod - 1) return null;
-      const slice = prices.slice(i - maPeriod + 1, i + 1);
+      const slice = densePrices.slice(i - maPeriod + 1, i + 1);
       return slice.reduce((a, b) => a + b, 0) / maPeriod;
+    });
+
+    // 2. Map dense MA to timeline
+    const maData = fullDayTimes.map(t => {
+        const d = timeToDataMap.get(t);
+        if (!d) return null;
+        // Find index in original data
+        const idx = timeSeriesData.findIndex(item => (item.date.includes(" ") ? item.date.split(" ")[1].substring(0, 5) : item.date.substring(0, 5)) === t);
+        if (idx !== -1) return denseMaData[idx];
+        return null;
     });
 
     return {
@@ -537,16 +590,16 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         { left: "8%", right: "3%", top: "65%", height: "25%" },
       ],
       xAxis: [
-        { type: "category", data: times, gridIndex: 0, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } },
-        { type: "category", data: times, gridIndex: 1, axisLabel: { show: false }, axisPointer: { snap: true } },
+        { type: "category", data: fullDayTimes, gridIndex: 0, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } },
+        { type: "category", data: fullDayTimes, gridIndex: 1, axisLabel: { show: false }, axisPointer: { snap: true } },
       ],
       yAxis: [
         { type: "value", gridIndex: 0, scale: true, axisPointer: { snap: true }, axisLabel: { fontSize: 9, color: "#858585" } },
         { type: "value", gridIndex: 1, scale: true, axisPointer: { snap: true }, axisLabel: { fontSize: 9, color: "#858585" } },
       ],
       series: [
-        { name: t("stock.price"), type: "line", data: prices, smooth: false, symbol: "none", lineStyle: { color: "#007acc", width: 1 } },
-        { name: `MA${maPeriod}`, type: "line", data: maData, smooth: true, symbol: "none", lineStyle: { color: "#f39c12", width: 1, type: "dashed" } },
+        { name: t("stock.price"), type: "line", data: prices, smooth: false, symbol: "none", connectNulls: true, lineStyle: { color: "#007acc", width: 1 } },
+        { name: `MA${maPeriod}`, type: "line", data: maData, smooth: true, symbol: "none", connectNulls: true, lineStyle: { color: "#f39c12", width: 1, type: "dashed" } },
         { name: t("stock.volume"), type: "bar", xAxisIndex: 1, yAxisIndex: 1, data: volumes, itemStyle: { color: "#3498db" } },
       ],
       tooltip: { 

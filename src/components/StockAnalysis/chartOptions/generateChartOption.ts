@@ -20,7 +20,51 @@ export function generateChartOption(params: ChartOptionParams): any {
   const volumes = data.map(d => d.volume);
 
   if (analysisType === "timeseries") {
-    const ma = closes.map((_, i) => i < tsParams.maPeriod - 1 ? null : calculateMA(closes.slice(0, i + 1), tsParams.maPeriod));
+    // Generate standard trading minutes
+    const generateTradingMinutes = () => {
+        const times: string[] = [];
+        // Morning 09:30 - 11:30
+        for (let h = 9; h <= 11; h++) {
+          for (let m = 0; m < 60; m++) {
+            if (h === 9 && m < 30) continue;
+            if (h === 11 && m > 30) break;
+            times.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+          }
+        }
+        // Afternoon 13:00 - 15:00
+        for (let h = 13; h <= 15; h++) {
+          for (let m = 0; m < 60; m++) {
+            if (h === 15 && m > 0) break;
+            times.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+          }
+        }
+        return times;
+    };
+
+    const fullDayTimes = generateTradingMinutes();
+
+    // Map existing data to standard times
+    const timeToDataMap = new Map<string, StockData>();
+    timeSeriesData.forEach(d => {
+        const timePart = d.date.includes(" ") ? d.date.split(" ")[1].substring(0, 5) : d.date.substring(0, 5);
+        timeToDataMap.set(timePart, d);
+    });
+
+    const alignedCloses = fullDayTimes.map(t => timeToDataMap.get(t)?.close ?? null);
+    const alignedVolumes = fullDayTimes.map(t => timeToDataMap.get(t)?.volume ?? null);
+    
+    // Calculate MA on original data then map
+    const denseCloses = timeSeriesData.map(d => d.close);
+    const denseMa = denseCloses.map((_, i) => i < tsParams.maPeriod - 1 ? null : calculateMA(denseCloses.slice(0, i + 1), tsParams.maPeriod));
+    
+    const alignedMa = fullDayTimes.map(t => {
+        const d = timeToDataMap.get(t);
+        if (!d) return null;
+        const idx = timeSeriesData.findIndex(item => (item.date.includes(" ") ? item.date.split(" ")[1].substring(0, 5) : item.date.substring(0, 5)) === t);
+        if (idx !== -1) return denseMa[idx];
+        return null;
+    });
+
     return {
       backgroundColor: "transparent",
       axisPointer: {
@@ -32,17 +76,17 @@ export function generateChartOption(params: ChartOptionParams): any {
       },
       grid: [{ left: "8%", right: "3%", top: "8%", height: "55%" }, { left: "8%", right: "3%", top: "70%", height: "25%" }],
       xAxis: [
-        { type: "category", data: dates, gridIndex: 0, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } },
-        { type: "category", data: dates, gridIndex: 1, axisLabel: { show: false }, axisPointer: { snap: true } },
+        { type: "category", data: fullDayTimes, gridIndex: 0, axisLabel: { fontSize: 9, color: "#858585" }, axisPointer: { snap: true } },
+        { type: "category", data: fullDayTimes, gridIndex: 1, axisLabel: { show: false }, axisPointer: { snap: true } },
       ],
       yAxis: [
         { type: "value", gridIndex: 0, scale: true, axisPointer: { snap: true }, axisLabel: { fontSize: 9, color: "#858585" } },
         { type: "value", gridIndex: 1, scale: true, axisPointer: { snap: true }, axisLabel: { fontSize: 9, color: "#858585" } },
       ],
       series: [
-        { name: t("stock.price"), type: "line", data: closes, symbol: "none", lineStyle: { color: "#007acc", width: 1.5 } },
-        { name: `MA${tsParams.maPeriod}`, type: "line", data: ma, symbol: "none", lineStyle: { color: "#f39c12", width: 1, type: "dashed" } },
-        { name: t("stock.volume"), type: "bar", xAxisIndex: 1, yAxisIndex: 1, data: volumes, itemStyle: { color: "#3498db" } },
+        { name: t("stock.price"), type: "line", data: alignedCloses, symbol: "none", connectNulls: true, lineStyle: { color: "#007acc", width: 1.5 } },
+        { name: `MA${tsParams.maPeriod}`, type: "line", data: alignedMa, symbol: "none", connectNulls: true, lineStyle: { color: "#f39c12", width: 1, type: "dashed" } },
+        { name: t("stock.volume"), type: "bar", xAxisIndex: 1, yAxisIndex: 1, data: alignedVolumes, itemStyle: { color: "#3498db" } },
       ],
       tooltip: { 
         trigger: "axis", 

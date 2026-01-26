@@ -1,12 +1,13 @@
-use crate::database::Database;
+use crate::database::{Database, run_blocking_db};
 use crate::stock_api::{fetch_all_a_stocks, filter_stocks_by_market_and_sector, search_stocks_by_query};
 use std::sync::Arc;
 use tauri::State;
 
-pub async fn refresh_stock_cache_internal(db: &Database) -> Result<usize, String> {
+pub async fn refresh_stock_cache_internal(db: Arc<Database>) -> Result<usize, String> {
     let stocks = fetch_all_a_stocks().await?;
     let count = stocks.len();
-    db.update_stock_cache(&stocks)
+    let db_clone = db.clone();
+    run_blocking_db(move || db_clone.update_stock_cache(&stocks))
         .map_err(|e| format!("Failed to update stock cache: {}", e))?;
     Ok(count)
 }
@@ -17,13 +18,12 @@ pub async fn search_stocks(
     db: State<'_, Arc<Database>>,
 ) -> Result<Vec<crate::stock_api::StockInfo>, String> {
     match search_stocks_by_query(&query).await {
-        Ok(api_results) => {
-            Ok(api_results)
-        }
+        Ok(api_results) => Ok(api_results),
         Err(_) => {
-            let cache_results = db.search_stocks_from_cache(&query, 50)
-                .map_err(|e| format!("Cache search error: {}", e))?;
-            Ok(cache_results)
+            let db = db.inner().clone();
+            let q = query.clone();
+            run_blocking_db(move || db.search_stocks_from_cache(&q, 50))
+                .map_err(|e| format!("Cache search error: {}", e))
         }
     }
 }
@@ -52,7 +52,8 @@ pub async fn refresh_stock_cache(
 ) -> Result<usize, String> {
     let stocks = fetch_all_a_stocks().await?;
     let count = stocks.len();
-    db.update_stock_cache(&stocks)
+    let db = db.inner().clone();
+    run_blocking_db(move || db.update_stock_cache(&stocks))
         .map_err(|e| format!("Failed to update stock cache: {}", e))?;
     Ok(count)
 }

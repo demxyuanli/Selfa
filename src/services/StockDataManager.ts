@@ -1,6 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 
-// 9:00-11:30, 13:00-15:30 (morning 540-690 min, afternoon 780-930 min)
 export function isTradingHours(): boolean {
   const now = new Date();
   const day = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
@@ -11,9 +10,7 @@ export function isTradingHours(): boolean {
   const minutes = now.getMinutes();
   const totalMinutes = hours * 60 + minutes;
 
-  // Morning: 8:30-12:05 (510-725), Afternoon: 12:55-16:05 (775-965)
-  // Covers pre-market (9:15), lunch buffer, and post-market (15:05-15:30)
-  return (totalMinutes >= 510 && totalMinutes <= 725) || (totalMinutes >= 775 && totalMinutes <= 965);
+  return (totalMinutes >= 570 && totalMinutes <= 690) || (totalMinutes >= 780 && totalMinutes <= 900);
 }
 
 export interface StockQuote {
@@ -51,19 +48,50 @@ export interface StockDataBundle {
 class StockDataManager {
   private cache: Map<string, { data: StockDataBundle; timestamp: number }> = new Map();
   private pendingRequests: Map<string, Promise<StockDataBundle>> = new Map();
-  private readonly CACHE_TTL = 10000; // 10 seconds
+  private readonly CACHE_TTL = 60000; // 60 seconds - minimum interval for stock API
+
+  private pruneSymbolCache(symbol: string, maxEntries: number): void {
+    const entries: Array<{ key: string; timestamp: number }> = [];
+    for (const [key, value] of this.cache.entries()) {
+      if (key === symbol || key.startsWith(`${symbol}:`)) {
+        entries.push({ key, timestamp: value.timestamp });
+      }
+    }
+    entries.sort((a, b) => b.timestamp - a.timestamp);
+    for (const entry of entries.slice(maxEntries)) {
+      this.cache.delete(entry.key);
+    }
+  }
+
+  private getLocalDateKey(now: Date): string {
+    const y = now.getFullYear();
+    const m = (now.getMonth() + 1).toString().padStart(2, "0");
+    const d = now.getDate().toString().padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  private getCacheKey(symbol: string, now: Date): string {
+    if (isTradingHours()) {
+      const minuteBucket = Math.floor(now.getTime() / 60000);
+      return `${symbol}:m:${minuteBucket}`;
+    }
+    return `${symbol}:d:${this.getLocalDateKey(now)}`;
+  }
 
   async getStockData(symbol: string, forceRefresh = false): Promise<StockDataBundle> {
+    const now = new Date();
+    const cacheKey = this.getCacheKey(symbol, now);
+
     // Check cache first
     if (!forceRefresh) {
-      const cached = this.cache.get(symbol);
+      const cached = this.cache.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
         return cached.data;
       }
     }
 
     // Check if there's already a pending request for this symbol
-    const pending = this.pendingRequests.get(symbol);
+    const pending = this.pendingRequests.get(cacheKey);
     if (pending) {
       return pending;
     }
@@ -72,28 +100,31 @@ class StockDataManager {
     const request = invoke<StockDataBundle>("get_stock_data_bundle", { symbol })
       .then((data) => {
         if (data.quote || data.time_series.length > 0 || data.intraday.length > 0) {
-          this.cache.set(symbol, { data, timestamp: Date.now() });
+          this.cache.set(cacheKey, { data, timestamp: Date.now() });
+          this.pruneSymbolCache(symbol, 3);
         }
-        this.pendingRequests.delete(symbol);
+        this.pendingRequests.delete(cacheKey);
         return data;
       })
       .catch((error) => {
-        this.pendingRequests.delete(symbol);
+        this.pendingRequests.delete(cacheKey);
         throw error;
       });
 
-    this.pendingRequests.set(symbol, request);
+    this.pendingRequests.set(cacheKey, request);
     return request;
   }
 
   async getBatchStockData(symbols: string[], forceRefresh = false): Promise<Map<string, StockDataBundle>> {
     const result = new Map<string, StockDataBundle>();
     const needFetch: string[] = [];
+    const now = new Date();
 
     // Check cache for all symbols
     for (const symbol of symbols) {
+      const cacheKey = this.getCacheKey(symbol, now);
       if (!forceRefresh) {
-        const cached = this.cache.get(symbol);
+        const cached = this.cache.get(cacheKey);
         if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
           const data = cached.data;
           if (data.quote || data.time_series.length > 0 || data.intraday.length > 0) {
@@ -115,7 +146,9 @@ class StockDataManager {
         const incompleteSymbols: string[] = [];
         for (const [symbol, data] of Object.entries(fetched)) {
           if (data.quote || data.time_series.length > 0 || data.intraday.length > 0) {
-            this.cache.set(symbol, { data, timestamp: Date.now() });
+            const cacheKey = this.getCacheKey(symbol, now);
+            this.cache.set(cacheKey, { data, timestamp: Date.now() });
+            this.pruneSymbolCache(symbol, 3);
             result.set(symbol, data);
           } else {
             incompleteSymbols.push(symbol);
@@ -155,7 +188,9 @@ class StockDataManager {
   }
 
   getCachedData(symbol: string): StockDataBundle | null {
-    const cached = this.cache.get(symbol);
+    const now = new Date();
+    const cacheKey = this.getCacheKey(symbol, now);
+    const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
       return cached.data;
     }
@@ -164,7 +199,11 @@ class StockDataManager {
 
   clearCache(symbol?: string): void {
     if (symbol) {
-      this.cache.delete(symbol);
+      for (const key of this.cache.keys()) {
+        if (key === symbol || key.startsWith(`${symbol}:`)) {
+          this.cache.delete(key);
+        }
+      }
     } else {
       this.cache.clear();
     }

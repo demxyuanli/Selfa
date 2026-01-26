@@ -17,7 +17,7 @@ import "./PortfolioManagement.css";
 
 const PortfolioManagement: React.FC = () => {
   const { t } = useTranslation();
-  const { positions, transactions, loadPortfolio, refreshPrices, quickRefresh } = usePortfolio();
+  const { positions, transactions, loadPortfolio, refreshPrices, quickRefresh, refreshSymbol } = usePortfolio();
   const [selectedTransactionSymbol, setSelectedTransactionSymbol] = useState<string | null>(null);
   const [showAddTransactionDialog, setShowAddTransactionDialog] = useState(false);
   const [showAddTransferDialog, setShowAddTransferDialog] = useState(false);
@@ -97,6 +97,7 @@ const PortfolioManagement: React.FC = () => {
           selectedTransactionSymbol={selectedTransactionSymbol}
           onSymbolSelect={setSelectedTransactionSymbol}
           onReload={loadPortfolio}
+          onRefreshSymbol={refreshSymbol}
         />
 
         <TransfersTable transfers={capitalTransfers} onReload={loadCapitalTransfers} />
@@ -104,7 +105,17 @@ const PortfolioManagement: React.FC = () => {
         <PortfolioChart positions={positions} onZoom={() => setIsChartDialogOpen(true)} />
       </div>
 
-      <AddTransactionDialog isOpen={showAddTransactionDialog} onClose={() => setShowAddTransactionDialog(false)} onAdd={quickRefresh} />
+      <AddTransactionDialog 
+        isOpen={showAddTransactionDialog} 
+        onClose={() => setShowAddTransactionDialog(false)} 
+        onAdd={(symbol) => {
+          if (symbol) {
+            refreshSymbol(symbol);
+          } else {
+            quickRefresh();
+          }
+        }} 
+      />
       <AddTransferDialog isOpen={showAddTransferDialog} onClose={() => setShowAddTransferDialog(false)} onAdd={loadCapitalTransfers} />
 
       <ChartDialog

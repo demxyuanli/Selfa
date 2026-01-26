@@ -1,4 +1,4 @@
-use crate::database::Database;
+use crate::database::{Database, run_blocking_db};
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::State;
@@ -83,17 +83,22 @@ pub fn remove_tag_from_stock(
 }
 
 #[tauri::command]
-pub fn get_stock_tags(
+pub async fn get_stock_tags(
     symbol: String,
     db: State<'_, Arc<Database>>,
-) -> Result<Vec<TagInfo>, String> {
-    db.get_stock_tags(&symbol)
-        .map(|tags: Vec<(i64, String, String)>| {
-            tags.into_iter()
-                .map(|(id, name, color)| TagInfo { id, name, color })
-                .collect()
-        })
+) -> Result<Vec<String>, String> {
+    let db_clone = db.inner().clone();
+    run_blocking_db(move || db_clone.get_stock_tags(&symbol))
         .map_err(|e| format!("Failed to get stock tags: {}", e))
+}
+
+#[tauri::command]
+pub async fn get_all_stock_tags_map(
+    db: State<'_, Arc<Database>>,
+) -> Result<std::collections::HashMap<String, Vec<String>>, String> {
+    let db_clone = db.inner().clone();
+    run_blocking_db(move || db_clone.get_all_stock_tags_map())
+        .map_err(|e| format!("Failed to get all stock tags map: {}", e))
 }
 
 #[tauri::command]

@@ -142,7 +142,7 @@ const StockDetail: React.FC<StockDetailProps> = ({ stock }) => {
       {loading && <div className="loading-message">{t("app.loading")}</div>}
       {!loading && !error && history.length > 0 && (
         <>
-          <StockChart data={history} />
+          <StockChart data={history} period={period} />
           <SectorPanel symbol={stock.symbol} stockName={stock.name} />
           <TechnicalAnalysis data={history} />
         </>

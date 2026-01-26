@@ -19,32 +19,38 @@ export const useSidebarData = (ungroupedGroup: string) => {
 
   const loadAllStocks = useCallback(async () => {
     try {
+      // 1. Fetch quotes and stock info in one batch call
       const stocksWithQuotes: Array<[StockInfo, StockQuote | null]> = await invoke("get_all_favorites_quotes");
-      const stocksWithTagsAndQuotes: StockWithTags[] = await Promise.all(
-        stocksWithQuotes.map(async ([stock, quote]) => {
-          try {
-            const tags: TagInfo[] = await invoke("get_stock_tags", { symbol: stock.symbol });
-            return { ...stock, tags, quote };
-          } catch {
-            return { ...stock, tags: [], quote };
-          }
-        })
-      );
+      
+      // 2. Fetch all tags for all stocks in one batch call
+      const allTagsMap: Record<string, string[]> = await invoke("get_all_stock_tags_map");
+      const allTagInfos: TagInfo[] = await invoke("get_all_tags");
+      const tagInfoMap = new Map<string, TagInfo>();
+      allTagInfos.forEach(t => tagInfoMap.set(t.name, t));
+
+      // 3. Merge data locally
+      const stocksWithTagsAndQuotes: StockWithTags[] = stocksWithQuotes.map(([stock, quote]) => {
+        const tagNames = allTagsMap[stock.symbol] || [];
+        const tags = tagNames.map(name => tagInfoMap.get(name)).filter((t): t is TagInfo => !!t);
+        return { ...stock, tags, quote };
+      });
+      
       setAllStocks(stocksWithTagsAndQuotes);
     } catch (err) {
       console.error("Error loading stocks:", err);
       try {
         const stocks: StockInfo[] = await invoke("get_stocks_by_group", { groupName: null });
-        const stocksWithTags: StockWithTags[] = await Promise.all(
-          stocks.map(async (stock) => {
-            try {
-              const tags: TagInfo[] = await invoke("get_stock_tags", { symbol: stock.symbol });
-              return { ...stock, tags };
-            } catch {
-              return { ...stock, tags: [] };
-            }
-          })
-        );
+        const allTagsMap: Record<string, string[]> = await invoke("get_all_stock_tags_map");
+        const allTagInfos: TagInfo[] = await invoke("get_all_tags");
+        const tagInfoMap = new Map<string, TagInfo>();
+        allTagInfos.forEach(t => tagInfoMap.set(t.name, t));
+
+        const stocksWithTags: StockWithTags[] = stocks.map(stock => {
+           const tagNames = allTagsMap[stock.symbol] || [];
+           const tags = tagNames.map(name => tagInfoMap.get(name)).filter((t): t is TagInfo => !!t);
+           return { ...stock, tags };
+        });
+        
         setAllStocks(stocksWithTags);
       } catch (fallbackErr) {
         console.error("Error loading stocks (fallback):", fallbackErr);
@@ -62,22 +68,23 @@ export const useSidebarData = (ungroupedGroup: string) => {
       stocksWithQuotes.forEach(([stock, quote]) => {
         quotesMap.set(stock.symbol, quote);
       });
+      
+      // Batch fetch tags
+      const allTagsMap: Record<string, string[]> = await invoke("get_all_stock_tags_map");
+      const allTagInfos: TagInfo[] = await invoke("get_all_tags");
+      const tagInfoMap = new Map<string, TagInfo>();
+      allTagInfos.forEach(t => tagInfoMap.set(t.name, t));
 
       const newGroupsData: GroupData[] = await Promise.all(
         allGroupNames.map(async (groupName) => {
           const stocks: StockInfo[] = await invoke("get_stocks_by_group", { groupName });
-          const stocksWithTags: StockWithTags[] = await Promise.all(
-            stocks.map(async (stock) => {
-              try {
-                const tags: TagInfo[] = await invoke("get_stock_tags", { symbol: stock.symbol });
-                const quote = quotesMap.get(stock.symbol);
-                return { ...stock, tags, quote };
-              } catch {
-                const quote = quotesMap.get(stock.symbol);
-                return { ...stock, tags: [], quote };
-              }
-            })
-          );
+          const stocksWithTags: StockWithTags[] = stocks.map(stock => {
+             const tagNames = allTagsMap[stock.symbol] || [];
+             const tags = tagNames.map(name => tagInfoMap.get(name)).filter((t): t is TagInfo => !!t);
+             const quote = quotesMap.get(stock.symbol);
+             return { ...stock, tags, quote };
+          });
+          
           return { name: groupName, stocks: stocksWithTags, expanded: false, quotes: quotesMap };
         })
       );
@@ -88,20 +95,21 @@ export const useSidebarData = (ungroupedGroup: string) => {
       try {
         const groupList: string[] = await invoke("get_stock_groups");
         const allGroupNames = [ungroupedGroup, ...groupList];
+        
+        // Batch fetch tags
+        const allTagsMap: Record<string, string[]> = await invoke("get_all_stock_tags_map");
+        const allTagInfos: TagInfo[] = await invoke("get_all_tags");
+        const tagInfoMap = new Map<string, TagInfo>();
+        allTagInfos.forEach(t => tagInfoMap.set(t.name, t));
 
         const newGroupsData: GroupData[] = await Promise.all(
           allGroupNames.map(async (groupName) => {
             const stocks: StockInfo[] = await invoke("get_stocks_by_group", { groupName });
-            const stocksWithTags: StockWithTags[] = await Promise.all(
-              stocks.map(async (stock) => {
-                try {
-                  const tags: TagInfo[] = await invoke("get_stock_tags", { symbol: stock.symbol });
-                  return { ...stock, tags };
-                } catch {
-                  return { ...stock, tags: [] };
-                }
-              })
-            );
+            const stocksWithTags: StockWithTags[] = stocks.map(stock => {
+               const tagNames = allTagsMap[stock.symbol] || [];
+               const tags = tagNames.map(name => tagInfoMap.get(name)).filter((t): t is TagInfo => !!t);
+               return { ...stock, tags };
+            });
             return { name: groupName, stocks: stocksWithTags, expanded: false };
           })
         );

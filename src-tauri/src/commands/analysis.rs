@@ -3,7 +3,7 @@ use crate::stock_api::{
     predict_stock_price as api_predict_stock_price,
     predict_stock_price_with_config as api_predict_stock_price_with_config,
     ai_analyze_stock as api_ai_analyze_stock, 
-    backtest::{run_backtest as api_run_backtest, BacktestConfig, BacktestResult},
+    backtest::{run_backtest as api_run_backtest, run_optimization as api_run_optimization, BacktestConfig, BacktestResult, OptimizationResult},
     analysis_intraday::{analyze_intraday_data, IntradayAnalysisResult},
     StockData, StockQuote, TechnicalIndicators, PredictionConfig
 };
@@ -11,6 +11,11 @@ use crate::stock_api::{
 #[tauri::command]
 pub fn run_backtest_command(data: Vec<StockData>, config: BacktestConfig) -> Result<BacktestResult, String> {
     api_run_backtest(&data, config)
+}
+
+#[tauri::command]
+pub fn run_optimization_command(data: Vec<StockData>, config: BacktestConfig) -> Result<Vec<OptimizationResult>, String> {
+    api_run_optimization(&data, config)
 }
 
 #[tauri::command]

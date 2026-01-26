@@ -1,14 +1,12 @@
 use rusqlite::{Connection, Result, params};
 use chrono::Utc;
-use std::sync::Mutex;
 
 pub fn create_price_alert(
-    conn: &Mutex<Connection>,
+    conn: &Connection,
     symbol: &str,
     threshold_price: f64,
     direction: &str,
 ) -> Result<i64> {
-    let conn = conn.lock().unwrap();
     let now = Utc::now().to_rfc3339();
     
     conn.execute(
@@ -20,9 +18,7 @@ pub fn create_price_alert(
     Ok(conn.last_insert_rowid())
 }
 
-pub fn get_price_alerts(conn: &Mutex<Connection>, symbol: Option<&str>) -> Result<Vec<(i64, String, f64, String, bool, bool)>> {
-    let conn = conn.lock().unwrap();
-    
+pub fn get_price_alerts(conn: &Connection, symbol: Option<&str>) -> Result<Vec<(i64, String, f64, String, bool, bool)>> {
     let mut alerts = Vec::new();
     
     if let Some(sym) = symbol {
@@ -74,13 +70,12 @@ pub fn get_price_alerts(conn: &Mutex<Connection>, symbol: Option<&str>) -> Resul
 }
 
 pub fn update_price_alert(
-    conn: &Mutex<Connection>,
+    conn: &Connection,
     alert_id: i64,
     threshold_price: Option<f64>,
     direction: Option<&str>,
     enabled: Option<bool>,
 ) -> Result<()> {
-    let conn = conn.lock().unwrap();
     let now = Utc::now().to_rfc3339();
     
     if let Some(price) = threshold_price {
@@ -107,9 +102,7 @@ pub fn update_price_alert(
     Ok(())
 }
 
-pub fn delete_price_alert(conn: &Mutex<Connection>, alert_id: i64) -> Result<()> {
-    let conn = conn.lock().unwrap();
-    
+pub fn delete_price_alert(conn: &Connection, alert_id: i64) -> Result<()> {
     conn.execute(
         "DELETE FROM price_alerts WHERE id = ?1",
         params![alert_id],
@@ -118,9 +111,7 @@ pub fn delete_price_alert(conn: &Mutex<Connection>, alert_id: i64) -> Result<()>
     Ok(())
 }
 
-pub fn get_active_price_alerts(conn: &Mutex<Connection>) -> Result<Vec<(i64, String, f64, String)>> {
-    let conn = conn.lock().unwrap();
-    
+pub fn get_active_price_alerts(conn: &Connection) -> Result<Vec<(i64, String, f64, String)>> {
     let mut stmt = conn.prepare(
         "SELECT id, symbol, threshold_price, direction 
          FROM price_alerts 
@@ -144,9 +135,7 @@ pub fn get_active_price_alerts(conn: &Mutex<Connection>) -> Result<Vec<(i64, Str
     Ok(alerts)
 }
 
-pub fn mark_alert_triggered(conn: &Mutex<Connection>, alert_id: i64) -> Result<()> {
-    let conn = conn.lock().unwrap();
-    
+pub fn mark_alert_triggered(conn: &Connection, alert_id: i64) -> Result<()> {
     conn.execute(
         "UPDATE price_alerts SET triggered = 1 WHERE id = ?1",
         params![alert_id],
@@ -155,9 +144,7 @@ pub fn mark_alert_triggered(conn: &Mutex<Connection>, alert_id: i64) -> Result<(
     Ok(())
 }
 
-pub fn reset_alert_triggered(conn: &Mutex<Connection>, alert_id: i64) -> Result<()> {
-    let conn = conn.lock().unwrap();
-    
+pub fn reset_alert_triggered(conn: &Connection, alert_id: i64) -> Result<()> {
     conn.execute(
         "UPDATE price_alerts SET triggered = 0 WHERE id = ?1",
         params![alert_id],
@@ -166,9 +153,7 @@ pub fn reset_alert_triggered(conn: &Mutex<Connection>, alert_id: i64) -> Result<
     Ok(())
 }
 
-pub fn reset_all_triggered_alerts(conn: &Mutex<Connection>) -> Result<usize> {
-    let conn = conn.lock().unwrap();
-    
+pub fn reset_all_triggered_alerts(conn: &Connection) -> Result<usize> {
     let updated = conn.execute(
         "UPDATE price_alerts SET triggered = 0 WHERE triggered = 1",
         [],

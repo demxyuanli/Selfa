@@ -186,6 +186,107 @@ export function usePortfolio() {
     await loadPortfolio(true);
   }, [loadPortfolio]);
 
+  const refreshSymbol = useCallback(async (symbol: string) => {
+    try {
+      const [positionsData, transactionsData] = await Promise.all([
+        invoke<Array<[number, string, string, number, number, number | null]>>("get_portfolio_positions"),
+        invoke<Array<[number, string, string, number, number, number, number, string, string | null]>>("get_portfolio_transactions", { symbol: null })
+      ]);
+
+      const symbolToNameMap = new Map<string, string>();
+      positionsData.forEach(([_, sym, name]) => {
+        symbolToNameMap.set(sym, name);
+      });
+
+      const existingPositionsMap = new Map(positionsRef.current.map(p => [p.symbol, p]));
+      const updatedPositions = positionsData.map(([id, sym, name, quantity, avgCost, currentPrice]) => {
+        const existing = existingPositionsMap.get(sym);
+        const price = existing?.currentPrice || currentPrice || avgCost;
+        const validPrice = price && price > 0 ? price : avgCost;
+        const marketValue = quantity * validPrice;
+        const profit = (validPrice - avgCost) * quantity;
+        const profitPercent = avgCost > 0 ? ((validPrice - avgCost) / avgCost) * 100 : 0;
+
+        return {
+          id,
+          symbol: sym,
+          name,
+          quantity,
+          avgCost,
+          currentPrice: price,
+          marketValue,
+          profit,
+          profitPercent,
+          change_percent: existing?.change_percent,
+        } as PortfolioPosition;
+      });
+
+      const loadedTransactions = transactionsData.map(
+        ([id, sym, transactionType, quantity, price, amount, commission, transactionDate, notes]) => ({
+          id,
+          symbol: sym,
+          name: symbolToNameMap.get(sym),
+          transactionType: transactionType as "buy" | "sell",
+          quantity,
+          price,
+          amount,
+          commission,
+          transactionDate,
+          notes: notes || undefined,
+        } as PortfolioTransaction)
+      );
+
+      setPositions(updatedPositions);
+      setTransactions(loadedTransactions);
+
+      const affectedPosition = updatedPositions.find(p => p.symbol === symbol);
+      if (affectedPosition) {
+        stockDataManager.getBatchStockData([symbol]).then((stockBundles) => {
+          const bundle = stockBundles.get(symbol);
+          let price = affectedPosition.currentPrice;
+          let change_percent: number | undefined = affectedPosition.change_percent;
+
+          if (bundle?.quote) {
+            if (bundle.quote.price && bundle.quote.price > 0) {
+              price = bundle.quote.price;
+            } else if (bundle.quote.previous_close && bundle.quote.previous_close > 0) {
+              price = bundle.quote.previous_close;
+            }
+            change_percent = bundle.quote.change_percent;
+          }
+
+          if ((!price || price <= 0) && bundle?.time_series && bundle.time_series.length > 0) {
+            const latestData = bundle.time_series[bundle.time_series.length - 1];
+            if (latestData.close && latestData.close > 0) {
+              price = latestData.close;
+            }
+          }
+
+          const validPrice = price && price > 0 ? price : affectedPosition.avgCost;
+          const marketValue = affectedPosition.quantity * validPrice;
+          const profit = (validPrice - affectedPosition.avgCost) * affectedPosition.quantity;
+          const profitPercent = affectedPosition.avgCost > 0 ? ((validPrice - affectedPosition.avgCost) / affectedPosition.avgCost) * 100 : 0;
+
+          setPositions(prev => prev.map(p => 
+            p.symbol === symbol ? {
+              ...p,
+              currentPrice: validPrice,
+              marketValue,
+              profit,
+              profitPercent,
+              change_percent,
+            } : p
+          ));
+        }).catch(err => {
+          console.error("Error refreshing price for symbol:", err);
+        });
+      }
+    } catch (err) {
+      console.error("Error refreshing symbol data:", err);
+      await loadPortfolio(true);
+    }
+  }, [loadPortfolio]);
+
   const isInitializedRef = useRef(false);
   useEffect(() => {
     if (!isInitializedRef.current) {
@@ -201,5 +302,6 @@ export function usePortfolio() {
     loadPortfolio,
     refreshPrices,
     quickRefresh,
+    refreshSymbol,
   };
 }

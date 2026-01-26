@@ -1,10 +1,8 @@
 use rusqlite::{Connection, Result, params};
 use chrono::Utc;
-use std::sync::Mutex;
 use crate::stock_api::StockInfo;
 
-pub fn update_stock_cache(conn: &Mutex<Connection>, stocks: &[StockInfo]) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn update_stock_cache(conn: &Connection, stocks: &[StockInfo]) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     
     conn.execute("DELETE FROM stock_cache", [])?;
@@ -20,8 +18,7 @@ pub fn update_stock_cache(conn: &Mutex<Connection>, stocks: &[StockInfo]) -> Res
     Ok(())
 }
 
-pub fn search_stocks_from_cache(conn: &Mutex<Connection>, query: &str, limit: usize) -> Result<Vec<StockInfo>> {
-    let conn = conn.lock().unwrap();
+pub fn search_stocks_from_cache(conn: &Connection, query: &str, limit: usize) -> Result<Vec<StockInfo>> {
     let search_pattern = format!("%{}%", query);
     let mut stmt = conn.prepare(
         "SELECT symbol, name, exchange FROM stock_cache 
@@ -54,8 +51,7 @@ pub fn search_stocks_from_cache(conn: &Mutex<Connection>, query: &str, limit: us
     Ok(results)
 }
 
-pub fn get_stock_cache_count(conn: &Mutex<Connection>) -> Result<i64> {
-    let conn = conn.lock().unwrap();
+pub fn get_stock_cache_count(conn: &Connection) -> Result<i64> {
     let mut stmt = conn.prepare("SELECT COUNT(*) FROM stock_cache")?;
     let count: i64 = stmt.query_row([], |row| row.get(0))?;
     Ok(count)

@@ -1,20 +1,18 @@
 use rusqlite::{Connection, Result, params};
 use chrono::Utc;
-use std::sync::Mutex;
 use super::utils::ensure_stock_exists_with_name;
 
 pub fn add_portfolio_position(
-    conn: &Mutex<Connection>,
+    conn: &Connection,
     symbol: &str,
     name: &str,
     quantity: i64,
     avg_cost: f64,
     current_price: Option<f64>,
 ) -> Result<i64> {
-    let conn = conn.lock().unwrap();
     let now = Utc::now().to_rfc3339();
 
-    ensure_stock_exists_with_name(&conn, symbol, Some(name))?;
+    ensure_stock_exists_with_name(conn, symbol, Some(name))?;
 
     let mut stmt = conn.prepare("SELECT id, quantity, avg_cost FROM portfolio_positions WHERE symbol = ?1")?;
     let mut existing = stmt.query_map(params![symbol], |row| {
@@ -47,8 +45,7 @@ pub fn add_portfolio_position(
     }
 }
 
-pub fn update_portfolio_position_price(conn: &Mutex<Connection>, symbol: &str, current_price: f64) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn update_portfolio_position_price(conn: &Connection, symbol: &str, current_price: f64) -> Result<()> {
     let now = Utc::now().to_rfc3339();
 
     conn.execute(
@@ -59,8 +56,7 @@ pub fn update_portfolio_position_price(conn: &Mutex<Connection>, symbol: &str, c
     Ok(())
 }
 
-pub fn update_portfolio_position(conn: &Mutex<Connection>, id: i64, quantity: i64, avg_cost: f64) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn update_portfolio_position(conn: &Connection, id: i64, quantity: i64, avg_cost: f64) -> Result<()> {
     let now = Utc::now().to_rfc3339();
 
     conn.execute(
@@ -71,8 +67,7 @@ pub fn update_portfolio_position(conn: &Mutex<Connection>, id: i64, quantity: i6
     Ok(())
 }
 
-pub fn get_portfolio_positions(conn: &Mutex<Connection>) -> Result<Vec<(i64, String, String, i64, f64, Option<f64>)>> {
-    let conn = conn.lock().unwrap();
+pub fn get_portfolio_positions(conn: &Connection) -> Result<Vec<(i64, String, String, i64, f64, Option<f64>)>> {
     let mut stmt = conn.prepare(
         "SELECT id, symbol, name, quantity, avg_cost, current_price FROM portfolio_positions ORDER BY updated_at DESC"
     )?;
@@ -94,14 +89,13 @@ pub fn get_portfolio_positions(conn: &Mutex<Connection>) -> Result<Vec<(i64, Str
     Ok(positions)
 }
 
-pub fn delete_portfolio_position(conn: &Mutex<Connection>, id: i64) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn delete_portfolio_position(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM portfolio_positions WHERE id = ?1", params![id])?;
     Ok(())
 }
 
 pub fn add_portfolio_transaction(
-    conn: &Mutex<Connection>,
+    conn: &Connection,
     symbol: &str,
     transaction_type: &str,
     quantity: i64,
@@ -111,11 +105,9 @@ pub fn add_portfolio_transaction(
     notes: Option<&str>,
     stock_name: Option<&str>,
 ) -> Result<i64> {
-    let conn = conn.lock().unwrap();
     let now = Utc::now().to_rfc3339();
 
-    use super::utils::ensure_stock_exists_with_name;
-    ensure_stock_exists_with_name(&conn, symbol, stock_name)?;
+    ensure_stock_exists_with_name(conn, symbol, stock_name)?;
     
     let mut stmt = conn.prepare("SELECT visible FROM stocks WHERE symbol = ?1")?;
     let is_visible: Option<i64> = stmt.query_row(params![symbol], |row| row.get(0)).ok();
@@ -192,9 +184,7 @@ pub fn add_portfolio_transaction(
     Ok(conn.last_insert_rowid())
 }
 
-pub fn get_portfolio_transactions(conn: &Mutex<Connection>, symbol: Option<&str>) -> Result<Vec<(i64, String, String, i64, f64, f64, f64, String, Option<String>)>> {
-    let conn = conn.lock().unwrap();
-    
+pub fn get_portfolio_transactions(conn: &Connection, symbol: Option<&str>) -> Result<Vec<(i64, String, String, i64, f64, f64, f64, String, Option<String>)>> {
     let mut positions = Vec::new();
     if let Some(sym) = symbol {
         let mut stmt = conn.prepare(
@@ -246,12 +236,10 @@ pub fn get_portfolio_transactions(conn: &Mutex<Connection>, symbol: Option<&str>
 }
 
 pub fn update_portfolio_transaction(
-    conn: &Mutex<Connection>,
+    conn: &Connection,
     id: i64,
     quantity: i64,
 ) -> Result<()> {
-    let conn = conn.lock().unwrap();
-    
     let mut stmt = conn.prepare("SELECT symbol, transaction_type, price, commission FROM portfolio_transactions WHERE id = ?1")?;
     let (symbol, _transaction_type, price, commission): (String, String, f64, f64) = stmt.query_row(params![id], |row| {
         Ok((
@@ -269,14 +257,12 @@ pub fn update_portfolio_transaction(
         params![quantity, amount, id],
     )?;
     
-    recalculate_position_from_transactions(&conn, &symbol)?;
+    recalculate_position_from_transactions(conn, &symbol)?;
     
     Ok(())
 }
 
-pub fn delete_portfolio_transaction(conn: &Mutex<Connection>, id: i64) -> Result<()> {
-    let conn = conn.lock().unwrap();
-    
+pub fn delete_portfolio_transaction(conn: &Connection, id: i64) -> Result<()> {
     let mut stmt = conn.prepare("SELECT symbol, transaction_type, quantity FROM portfolio_transactions WHERE id = ?1")?;
     let transaction_info: Option<(String, String, i64)> = stmt.query_row(params![id], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?))
@@ -285,7 +271,7 @@ pub fn delete_portfolio_transaction(conn: &Mutex<Connection>, id: i64) -> Result
     conn.execute("DELETE FROM portfolio_transactions WHERE id = ?1", params![id])?;
     
     if let Some((symbol, _transaction_type, _quantity)) = transaction_info {
-        recalculate_position_from_transactions(&conn, &symbol)?;
+        recalculate_position_from_transactions(conn, &symbol)?;
     }
     
     Ok(())
@@ -370,16 +356,14 @@ fn recalculate_position_from_transactions(conn: &Connection, symbol: &str) -> Re
     Ok(())
 }
 
-pub fn recalculate_all_positions_from_transactions(conn: &Mutex<Connection>) -> Result<()> {
-    let conn = conn.lock().unwrap();
-    
+pub fn recalculate_all_positions_from_transactions(conn: &Connection) -> Result<()> {
     let mut stmt = conn.prepare("SELECT DISTINCT symbol FROM portfolio_transactions")?;
     let symbols: Vec<String> = stmt.query_map([], |row| {
         Ok(row.get::<_, String>(0)?)
     })?.collect::<Result<Vec<_>, _>>()?;
     
     for symbol in symbols {
-        recalculate_position_from_transactions(&conn, &symbol)?;
+        recalculate_position_from_transactions(conn, &symbol)?;
     }
     
     conn.execute(

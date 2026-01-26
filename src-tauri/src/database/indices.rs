@@ -1,6 +1,5 @@
 use rusqlite::{Connection, Result, params};
 use chrono::Utc;
-use std::sync::Mutex;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -12,8 +11,7 @@ pub struct IndexInfo {
     pub secid: Option<String>,
 }
 
-pub fn add_index(conn: &Mutex<Connection>, index: &IndexInfo) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn add_index(conn: &Connection, index: &IndexInfo) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     
     conn.execute(
@@ -28,8 +26,7 @@ pub fn add_index(conn: &Mutex<Connection>, index: &IndexInfo) -> Result<()> {
 }
 
 #[allow(dead_code)]
-pub fn get_all_indices(conn: &Mutex<Connection>) -> Result<Vec<IndexInfo>> {
-    let conn = conn.lock().unwrap();
+pub fn get_all_indices(conn: &Connection) -> Result<Vec<IndexInfo>> {
     let mut stmt = conn.prepare("SELECT symbol, name, exchange, sector_type, secid FROM indices ORDER BY name")?;
     
     let indices = stmt.query_map([], |row| {
@@ -46,8 +43,7 @@ pub fn get_all_indices(conn: &Mutex<Connection>) -> Result<Vec<IndexInfo>> {
     Ok(indices)
 }
 
-pub fn get_index_by_symbol(conn: &Mutex<Connection>, symbol: &str) -> Result<Option<IndexInfo>> {
-    let conn = conn.lock().unwrap();
+pub fn get_index_by_symbol(conn: &Connection, symbol: &str) -> Result<Option<IndexInfo>> {
     let mut stmt = conn.prepare("SELECT symbol, name, exchange, sector_type, secid FROM indices WHERE symbol = ?1")?;
     
     let mut rows = stmt.query_map(params![symbol], |row| {
@@ -67,8 +63,7 @@ pub fn get_index_by_symbol(conn: &Mutex<Connection>, symbol: &str) -> Result<Opt
     }
 }
 
-pub fn add_stock_index_relation(conn: &Mutex<Connection>, stock_symbol: &str, index_symbol: &str) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn add_stock_index_relation(conn: &Connection, stock_symbol: &str, index_symbol: &str) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     
     conn.execute(
@@ -81,8 +76,7 @@ pub fn add_stock_index_relation(conn: &Mutex<Connection>, stock_symbol: &str, in
 }
 
 #[allow(dead_code)]
-pub fn get_indices_for_stock(conn: &Mutex<Connection>, stock_symbol: &str) -> Result<Vec<IndexInfo>> {
-    let conn = conn.lock().unwrap();
+pub fn get_indices_for_stock(conn: &Connection, stock_symbol: &str) -> Result<Vec<IndexInfo>> {
     let mut stmt = conn.prepare(
         "SELECT i.symbol, i.name, i.exchange, i.sector_type, i.secid
          FROM indices i
@@ -105,12 +99,10 @@ pub fn get_indices_for_stock(conn: &Mutex<Connection>, stock_symbol: &str) -> Re
     Ok(indices)
 }
 
-pub fn get_indices_for_stocks(conn: &Mutex<Connection>, stock_symbols: &[String]) -> Result<Vec<IndexInfo>> {
+pub fn get_indices_for_stocks(conn: &Connection, stock_symbols: &[String]) -> Result<Vec<IndexInfo>> {
     if stock_symbols.is_empty() {
         return Ok(Vec::new());
     }
-    
-    let conn = conn.lock().unwrap();
     
     // Build query with placeholders
     let placeholders = stock_symbols.iter().map(|_| "?").collect::<Vec<_>>().join(",");
@@ -142,8 +134,7 @@ pub fn get_indices_for_stocks(conn: &Mutex<Connection>, stock_symbols: &[String]
     Ok(indices)
 }
 
-pub fn clear_stock_index_relations(conn: &Mutex<Connection>, stock_symbol: &str) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn clear_stock_index_relations(conn: &Connection, stock_symbol: &str) -> Result<()> {
     conn.execute(
         "DELETE FROM stock_index_relations WHERE stock_symbol = ?1",
         params![stock_symbol],
@@ -151,8 +142,7 @@ pub fn clear_stock_index_relations(conn: &Mutex<Connection>, stock_symbol: &str)
     Ok(())
 }
 
-pub fn get_index_count(conn: &Mutex<Connection>) -> Result<i64> {
-    let conn = conn.lock().unwrap();
+pub fn get_index_count(conn: &Connection) -> Result<i64> {
     let count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM indices",
         [],

@@ -1,6 +1,7 @@
 use crate::cache::StockCache;
-use crate::database::Database;
+use crate::database::{Database, run_blocking_db};
 use crate::stock_api::{fetch_stock_history, fetch_stock_quote, fetch_time_series, get_related_sectors, StockData, StockDataBundle, StockQuote, utils::is_trading_hours};
+use tokio::sync::Semaphore;
 use crate::stock_api::prediction_similarity::{find_similar_patterns, SimilarityPredictionResponse, TargetPattern};
 use crate::stock_api::chip_analysis::{calculate_chip_distribution, ChipAnalysisResult};
 use chrono::Local;
@@ -52,51 +53,98 @@ pub async fn get_stock_sectors(
 pub async fn get_stock_quote(
     symbol: String,
     cache: State<'_, Arc<StockCache>>,
-    _db: State<'_, Arc<Database>>,
+    db: State<'_, Arc<Database>>,
 ) -> Result<StockQuote, String> {
     if let Some(cached_quote) = cache.get_quote(&symbol).await {
         return Ok(cached_quote);
     }
-    
+
+    let in_trading = is_trading_hours();
+    let min_interval_seconds = if in_trading { 60 } else { 24 * 60 * 60 };
+    let should_fetch = cache
+        .should_fetch_from_network_with_policy(&symbol, "quote", min_interval_seconds, in_trading)
+        .await;
+    if !should_fetch {
+        let db_clone = db.inner().clone();
+        let sym = symbol.clone();
+        if let Ok(Some(q)) = run_blocking_db(move || db_clone.get_quote(&sym)) {
+            cache.set_quote(symbol, q.clone()).await;
+            return Ok(q);
+        }
+    }
+
     let quote = fetch_stock_quote(&symbol).await?;
+    cache.record_fetch_time(&symbol, "quote").await;
     cache.set_quote(symbol, quote.clone()).await;
-    
     Ok(quote)
 }
+
+const MAX_CONCURRENT_FETCHES: usize = 8;
 
 #[tauri::command]
 pub async fn get_all_favorites_quotes(
     cache: State<'_, Arc<StockCache>>,
     db: State<'_, Arc<Database>>,
 ) -> Result<Vec<(crate::stock_api::StockInfo, Option<StockQuote>)>, String> {
-    let stocks = db.get_stocks_by_group(None)
+    let db_clone = db.inner().clone();
+    let stocks = run_blocking_db(move || db_clone.get_stocks_by_group(None))
         .map_err(|e| format!("Failed to get stocks: {}", e))?;
-    
     let excluded_symbols = ["000001", "399001", "399006"];
-    
     let filtered_stocks: Vec<_> = stocks
         .into_iter()
         .filter(|stock| !excluded_symbols.contains(&stock.symbol.as_str()))
         .collect();
-    
     let mut quotes_map = std::collections::HashMap::new();
     let mut symbols_to_fetch = Vec::new();
-    
+    let mut symbols_to_read_db = Vec::new();
+    let in_trading = is_trading_hours();
     for stock in &filtered_stocks {
         if let Some(cached_quote) = cache.get_quote(&stock.symbol).await {
             quotes_map.insert(stock.symbol.clone(), Some(cached_quote));
         } else {
-            symbols_to_fetch.push(stock.symbol.clone());
+            let should_fetch = cache
+                .should_fetch_from_network_with_policy(
+                    &stock.symbol,
+                    "quote",
+                    if in_trading { 60 } else { 24 * 60 * 60 },
+                    in_trading,
+                )
+                .await;
+            if should_fetch {
+                symbols_to_fetch.push(stock.symbol.clone());
+            } else {
+                symbols_to_read_db.push(stock.symbol.clone());
+            }
         }
     }
-    
+    if !symbols_to_read_db.is_empty() {
+        let db_clone = db.inner().clone();
+        let symbols = symbols_to_read_db.clone();
+        let db_quotes = run_blocking_db(move || {
+            let mut m = std::collections::HashMap::new();
+            for s in symbols {
+                if let Ok(Some(q)) = db_clone.get_quote(&s) {
+                    m.insert(s, q);
+                }
+            }
+            m
+        });
+        for (symbol, quote) in db_quotes {
+            cache.set_quote(symbol.clone(), quote.clone()).await;
+            quotes_map.insert(symbol, Some(quote));
+        }
+    }
+    let sem = Arc::new(Semaphore::new(MAX_CONCURRENT_FETCHES));
     let mut tasks = Vec::new();
     for symbol in symbols_to_fetch {
-        let symbol_clone: String = symbol.clone();
+        let symbol_clone = symbol.clone();
         let cache_clone = cache.inner().clone();
+        let sem_clone = sem.clone();
         let task = tokio::spawn(async move {
+            let _permit = sem_clone.acquire().await;
             match fetch_stock_quote(&symbol_clone).await {
                 Ok(quote) => {
+                    cache_clone.record_fetch_time(&symbol_clone, "quote").await;
                     cache_clone.set_quote(symbol_clone.clone(), quote.clone()).await;
                     (symbol_clone, Some(quote))
                 }
@@ -108,24 +156,17 @@ pub async fn get_all_favorites_quotes(
         });
         tasks.push(task);
     }
-    
     for task in tasks {
         match task.await {
-            Ok((symbol, quote)) => {
-                quotes_map.insert(symbol, quote);
-            }
-            Err(err) => {
-                eprintln!("Task error: {}", err);
-            }
+            Ok((symbol, quote)) => { quotes_map.insert(symbol, quote); }
+            Err(e) => eprintln!("Quote fetch task error: {}", e),
         }
     }
-    
     let mut result = Vec::new();
     for stock in filtered_stocks {
         let quote = quotes_map.remove(&stock.symbol);
         result.push((stock, quote.flatten()));
     }
-
     Ok(result)
 }
 
@@ -158,18 +199,28 @@ pub async fn get_chip_analysis(
         _ => DistributionType::Uniform,
     };
     
-    // Try cache first
     let history = if let Some(cached) = cache.get_history(&symbol, &period).await {
         cached
     } else {
-        // Try DB
-        let db_data = db.get_kline(&symbol, &period, None).unwrap_or_default();
-        let latest_date = db.get_latest_kline_date(&symbol, &period).unwrap_or(None);
-        
+        let symbol_ref = symbol.clone();
+        let period_ref = period.clone();
+        let db_clone = db.inner().clone();
+        let (db_data, latest_date) = run_blocking_db(move || {
+            let d = db_clone.get_kline(&symbol_ref, &period_ref, None).unwrap_or_default();
+            let l = db_clone.get_latest_kline_date(&symbol_ref, &period_ref).unwrap_or(None);
+            (d, l)
+        });
         let should_fetch = if db_data.is_empty() {
             true
         } else {
-            cache.should_fetch_from_network(&symbol, &period, 600).await
+            cache
+                .should_fetch_from_network_with_policy(
+                    &symbol,
+                    &period,
+                    if is_trading_hours() { 600 } else { 24 * 60 * 60 },
+                    false,
+                )
+                .await
         };
         
         if should_fetch {
@@ -278,18 +329,24 @@ pub async fn get_stock_history(
     if let Some(cached_data) = cache.get_history(&symbol, &period).await {
         return Ok(cached_data);
     }
+    let db_clone = db.inner().clone();
+    let sym = symbol.clone();
+    let per = period.clone();
+    let (latest_date, cached) = run_blocking_db(move || {
+        let latest = db_clone.get_latest_kline_date(&sym, &per).map_err(|e| e.to_string())?;
+        let c = db_clone.get_kline(&sym, &per, None).map_err(|e| e.to_string())?;
+        Ok::<_, String>((latest, c))
+    }).map_err(|e| format!("Database error: {}", e))?;
 
-    let latest_date = db
-        .get_latest_kline_date(&symbol, &period)
-        .map_err(|e| format!("Database error: {}", e))?;
-
-    let cached = db
-        .get_kline(&symbol, &period, None)
-        .map_err(|e| format!("Database error: {}", e))?;
-
+    let in_trading = is_trading_hours();
     let skip_network = !cached.is_empty()
         && !cache
-            .should_fetch_from_network(&symbol, &period, 600)
+            .should_fetch_from_network_with_policy(
+                &symbol,
+                &period,
+                if in_trading { 600 } else { 24 * 60 * 60 },
+                false,
+            )
             .await;
 
     if skip_network {
@@ -299,40 +356,55 @@ pub async fn get_stock_history(
         return Ok(cached);
     }
 
-    let fetched = fetch_stock_history(&symbol, &period).await?;
-    cache.record_fetch_time(&symbol, &period).await;
+    // Try to fetch from network, fallback to DB on error
+    match fetch_stock_history(&symbol, &period).await {
+        Ok(fetched) => {
+            cache.record_fetch_time(&symbol, &period).await;
 
-    let result = if let Some(ref latest) = latest_date {
-        let new_data: Vec<StockData> = fetched
-            .into_iter()
-            .filter(|d| d.date > *latest)
-            .collect();
+            let result = if let Some(ref latest) = latest_date {
+                let new_data: Vec<StockData> = fetched
+                    .into_iter()
+                    .filter(|d| d.date > *latest)
+                    .collect();
 
-        if !new_data.is_empty() {
-            let mut data = cached;
-            data.extend(new_data);
-            data.sort_by(|a, b| a.date.cmp(&b.date));
-            let final_data = data.clone();
-            cache
-                .set_history(symbol.clone(), period.clone(), final_data)
-                .await;
-            data
-        } else {
+                if !new_data.is_empty() {
+                    let mut data = cached;
+                    data.extend(new_data);
+                    data.sort_by(|a, b| a.date.cmp(&b.date));
+                    let final_data = data.clone();
+                    cache
+                        .set_history(symbol.clone(), period.clone(), final_data)
+                        .await;
+                    data
+                } else {
+                    if !cached.is_empty() {
+                        cache
+                            .set_history(symbol.clone(), period.clone(), cached.clone())
+                            .await;
+                    }
+                    cached
+                }
+            } else {
+                cache
+                    .set_history(symbol.clone(), period.clone(), fetched.clone())
+                    .await;
+                fetched
+            };
+
+            Ok(result)
+        }
+        Err(e) => {
+            // Fallback to database data on network error
             if !cached.is_empty() {
                 cache
                     .set_history(symbol.clone(), period.clone(), cached.clone())
                     .await;
+                Ok(cached)
+            } else {
+                Err(format!("Network error: {}; No cached data available", e))
             }
-            cached
         }
-    } else {
-        cache
-            .set_history(symbol.clone(), period.clone(), fetched.clone())
-            .await;
-        fetched
-    };
-
-    Ok(result)
+    }
 }
 
 #[tauri::command]
@@ -344,34 +416,43 @@ pub async fn get_time_series(
     if let Some(cached_data) = cache.get_time_series(&symbol).await {
         return Ok(cached_data);
     }
-    
-    let fetched = fetch_time_series(&symbol).await;
-    
-    match fetched {
-        Ok(fetched_data) if !fetched_data.is_empty() => {
-            cache.set_time_series(symbol, fetched_data.clone()).await;
-            Ok(fetched_data)
-        }
-        Err(e) => {
-            let cached = db.get_time_series(&symbol, None)
-                .map_err(|_| format!("API error: {}; Database error", e))?;
-            if !cached.is_empty() {
-                cache.set_time_series(symbol, cached.clone()).await;
-                Ok(cached)
-            } else {
-                Err(format!("API error: {}; No cached data available", e))
+
+    let db_clone = db.inner().clone();
+    let sym = symbol.clone();
+    let db_data = run_blocking_db(move || db_clone.get_time_series(&sym, None))
+        .map_err(|e| format!("Database error: {}", e))?;
+
+    let in_trading = is_trading_hours();
+    let min_interval_seconds = if in_trading { 60 } else { 24 * 60 * 60 };
+    let should_fetch = if db_data.is_empty() {
+        true
+    } else {
+        cache
+            .should_fetch_from_network_with_policy(&symbol, "time_series", min_interval_seconds, in_trading)
+            .await
+    };
+
+    if should_fetch {
+        match fetch_time_series(&symbol).await {
+            Ok(fetched_data) if !fetched_data.is_empty() => {
+                cache.record_fetch_time(&symbol, "time_series").await;
+                cache.set_time_series(symbol, fetched_data.clone()).await;
+                return Ok(fetched_data);
             }
-        }
-        _ => {
-            let cached = db.get_time_series(&symbol, None)
-                .map_err(|e| format!("Database error: {}", e))?;
-            if !cached.is_empty() {
-                cache.set_time_series(symbol, cached.clone()).await;
-                Ok(cached)
-            } else {
-                Ok(vec![])
+            Err(e) => {
+                if db_data.is_empty() {
+                    return Err(format!("API error: {}; No cached data available", e));
+                }
             }
+            _ => {}
         }
+    }
+
+    if !db_data.is_empty() {
+        cache.set_time_series(symbol, db_data.clone()).await;
+        Ok(db_data)
+    } else {
+        Ok(vec![])
     }
 }
 
@@ -396,8 +477,9 @@ pub async fn get_batch_time_series(
     if symbols_to_fetch.is_empty() {
         return Ok(result);
     }
-    
-    let db_data = db.get_batch_time_series(&symbols_to_fetch, None)
+    let db_clone = db.inner().clone();
+    let to_fetch = symbols_to_fetch.clone();
+    let db_data = run_blocking_db(move || db_clone.get_batch_time_series(&to_fetch, None))
         .map_err(|e| format!("Database error: {}", e))?;
     
     for (symbol, data) in db_data {
@@ -428,16 +510,21 @@ pub async fn get_intraday_time_series(
         }
     }
     
-    let cached = db.get_kline(&symbol, "1m", None)
-        .map_err(|e| format!("Database error: {}", e))?;
-    
-    let latest_date = db.get_latest_kline_date(&symbol, "1m")
-        .map_err(|e| format!("Database error: {}", e))?;
-    
-    let should_fetch = if is_trading_hours() {
+    let db_clone = db.inner().clone();
+    let sym = symbol.clone();
+    let (cached, latest_date) = run_blocking_db(move || {
+        let c = db_clone.get_kline(&sym, "1m", None).map_err(|e| e.to_string())?;
+        let l = db_clone.get_latest_kline_date(&sym, "1m").map_err(|e| e.to_string())?;
+        Ok::<_, String>((c, l))
+    }).map_err(|e| format!("Database error: {}", e))?;
+    let in_trading = is_trading_hours();
+    let min_interval_seconds = if in_trading { 60 } else { 24 * 60 * 60 };
+    let should_fetch = if cached.is_empty() {
         true
     } else {
-        cache.should_fetch_from_network(&symbol, "1m", 600).await
+        cache
+            .should_fetch_from_network_with_policy(&symbol, "1m", min_interval_seconds, in_trading)
+            .await
     };
     
     let result = if should_fetch {
@@ -480,8 +567,11 @@ pub async fn get_intraday_time_series(
         .collect();
     
     if today_data.is_empty() {
-        let cached_all = cache.get_history(&symbol, "1m").await
-            .unwrap_or_else(|| db.get_kline(&symbol, "1m", None).unwrap_or_default());
+        let cached_all = cache.get_history(&symbol, "1m").await.unwrap_or_else(|| {
+            let db_clone = db.inner().clone();
+            let sym = symbol.clone();
+            run_blocking_db(move || db_clone.get_kline(&sym, "1m", None).unwrap_or_default())
+        });
         
         if !cached_all.is_empty() {
             let final_data = get_latest_day_data(&cached_all);
@@ -500,31 +590,77 @@ pub async fn get_stock_data_bundle(
     cache: State<'_, Arc<StockCache>>,
     db: State<'_, Arc<Database>>,
 ) -> Result<StockDataBundle, String> {
+    let in_trading = is_trading_hours();
+
     let quote = match cache.get_quote(&symbol).await {
         Some(q) => Some(q),
         None => {
-            match fetch_stock_quote(&symbol).await {
-                Ok(q) => {
+            let min_interval_seconds = if in_trading { 60 } else { 24 * 60 * 60 };
+            let should_fetch = cache
+                .should_fetch_from_network_with_policy(&symbol, "quote", min_interval_seconds, in_trading)
+                .await;
+            if !should_fetch {
+                let db_clone = db.inner().clone();
+                let sym = symbol.clone();
+                if let Ok(Some(q)) = run_blocking_db(move || db_clone.get_quote(&sym)) {
                     cache.set_quote(symbol.clone(), q.clone()).await;
                     Some(q)
+                } else {
+                    None
                 }
-                Err(_) => None,
+            } else {
+                None
             }
         }
+    }
+    .or_else(|| None);
+
+    let quote = match quote {
+        Some(q) => Some(q),
+        None => match fetch_stock_quote(&symbol).await {
+            Ok(q) => {
+                cache.record_fetch_time(&symbol, "quote").await;
+                cache.set_quote(symbol.clone(), q.clone()).await;
+                Some(q)
+            }
+            Err(_) => None,
+        },
     };
 
     let time_series = match cache.get_time_series(&symbol).await {
         Some(data) => data,
         None => {
-            match fetch_time_series(&symbol).await {
-                Ok(data) if !data.is_empty() => {
-                    cache.set_time_series(symbol.clone(), data.clone()).await;
-                    data
+            let db_clone = db.inner().clone();
+            let sym = symbol.clone();
+            let db_data = run_blocking_db(move || db_clone.get_time_series(&sym, None)).unwrap_or_default();
+            let min_interval_seconds = if in_trading { 60 } else { 24 * 60 * 60 };
+            let should_fetch = if db_data.is_empty() {
+                true
+            } else {
+                cache
+                    .should_fetch_from_network_with_policy(&symbol, "time_series", min_interval_seconds, in_trading)
+                    .await
+            };
+
+            if should_fetch {
+                match fetch_time_series(&symbol).await {
+                    Ok(data) if !data.is_empty() => {
+                        cache.record_fetch_time(&symbol, "time_series").await;
+                        cache.set_time_series(symbol.clone(), data.clone()).await;
+                        data
+                    }
+                    _ => {
+                        if !db_data.is_empty() {
+                            cache.set_time_series(symbol.clone(), db_data.clone()).await;
+                        }
+                        db_data
+                    }
                 }
-                _ => {
-                    db.get_time_series(&symbol, None)
-                        .unwrap_or_default()
+            } else {
+                if !db_data.is_empty() {
+                    cache.set_time_series(symbol.clone(), db_data.clone()).await;
                 }
+                db_data
             }
         }
     };
@@ -535,12 +671,7 @@ pub async fn get_stock_data_bundle(
             .filter(|d| d.date.starts_with(&today))
             .cloned()
             .collect();
-        
-        if !today_data.is_empty() {
-            today_data
-        } else {
-            get_latest_day_data(&time_series)
-        }
+        if !today_data.is_empty() { today_data } else { get_latest_day_data(&time_series) }
     };
 
     Ok(StockDataBundle {
@@ -561,59 +692,126 @@ pub async fn get_batch_stock_data_bundle(
         return Ok(std::collections::HashMap::new());
     }
     
-    let mut result = std::collections::HashMap::new();
+    // Concurrency limit
+    let sem = Arc::new(Semaphore::new(MAX_CONCURRENT_FETCHES));
+    let mut tasks = Vec::new();
     let today = Local::now().format("%Y-%m-%d").to_string();
-    
+
     for symbol in symbols {
-        let quote = match cache.get_quote(&symbol).await {
-            Some(q) => Some(q),
-            None => {
-                match fetch_stock_quote(&symbol).await {
-                    Ok(q) => {
-                        cache.set_quote(symbol.clone(), q.clone()).await;
-                        Some(q)
-                    }
-                    Err(_) => None,
-                }
-            }
-        };
+        let cache_clone = cache.inner().clone();
+        let db_clone = db.inner().clone();
+        let today_clone = today.clone();
+        let sem_clone = sem.clone();
         
-        let time_series = match cache.get_time_series(&symbol).await {
-            Some(data) => data,
-            None => {
-                match fetch_time_series(&symbol).await {
-                    Ok(data) if !data.is_empty() => {
-                        cache.set_time_series(symbol.clone(), data.clone()).await;
-                        data
-                    }
-                    _ => {
-                        db.get_time_series(&symbol, None).unwrap_or_default()
+        let task = tokio::spawn(async move {
+            let _permit = sem_clone.acquire().await;
+
+            let in_trading = is_trading_hours();
+            let quote = match cache_clone.get_quote(&symbol).await {
+                Some(q) => Some(q),
+                None => {
+                    let min_interval_seconds = if in_trading { 60 } else { 24 * 60 * 60 };
+                    let should_fetch = cache_clone
+                        .should_fetch_from_network_with_policy(&symbol, "quote", min_interval_seconds, in_trading)
+                        .await;
+                    if !should_fetch {
+                        let sym = symbol.clone();
+                        let db_for_quote = db_clone.clone();
+                        if let Ok(Some(q)) = run_blocking_db(move || db_for_quote.get_quote(&sym)) {
+                            cache_clone.set_quote(symbol.clone(), q.clone()).await;
+                            Some(q)
+                        } else {
+                            match fetch_stock_quote(&symbol).await {
+                                Ok(q) => {
+                                    cache_clone.record_fetch_time(&symbol, "quote").await;
+                                    cache_clone.set_quote(symbol.clone(), q.clone()).await;
+                                    Some(q)
+                                }
+                                Err(_) => None,
+                            }
+                        }
+                    } else {
+                        match fetch_stock_quote(&symbol).await {
+                            Ok(q) => {
+                                cache_clone.record_fetch_time(&symbol, "quote").await;
+                                cache_clone.set_quote(symbol.clone(), q.clone()).await;
+                                Some(q)
+                            }
+                            Err(_) => None,
+                        }
                     }
                 }
-            }
-        };
-        
-        let intraday = {
-            let today_data: Vec<StockData> = time_series.iter()
-                .filter(|d| d.date.starts_with(&today))
-                .cloned()
-                .collect();
+            };
             
-            if !today_data.is_empty() {
-                today_data
-            } else {
-                get_latest_day_data(&time_series)
-            }
-        };
-        
-        result.insert(symbol.clone(), StockDataBundle {
-            symbol: symbol.clone(),
-            quote,
-            time_series,
-            intraday,
+            let time_series = match cache_clone.get_time_series(&symbol).await {
+                Some(data) => data,
+                None => {
+                    let sym = symbol.clone();
+                    let db_for_ts = db_clone.clone();
+                    let db_data = run_blocking_db(move || db_for_ts.get_time_series(&sym, None)).unwrap_or_default();
+                    let min_interval_seconds = if in_trading { 60 } else { 24 * 60 * 60 };
+                    let should_fetch = if db_data.is_empty() {
+                        true
+                    } else {
+                        cache_clone
+                            .should_fetch_from_network_with_policy(&symbol, "time_series", min_interval_seconds, in_trading)
+                            .await
+                    };
+
+                    if should_fetch {
+                        match fetch_time_series(&symbol).await {
+                            Ok(data) if !data.is_empty() => {
+                                cache_clone.record_fetch_time(&symbol, "time_series").await;
+                                cache_clone.set_time_series(symbol.clone(), data.clone()).await;
+                                data
+                            }
+                            _ => {
+                                if !db_data.is_empty() {
+                                    cache_clone.set_time_series(symbol.clone(), db_data.clone()).await;
+                                }
+                                db_data
+                            }
+                        }
+                    } else {
+                        if !db_data.is_empty() {
+                            cache_clone.set_time_series(symbol.clone(), db_data.clone()).await;
+                        }
+                        db_data
+                    }
+                }
+            };
+            
+            let intraday = {
+                let today_data: Vec<StockData> = time_series.iter()
+                    .filter(|d| d.date.starts_with(&today_clone))
+                    .cloned()
+                    .collect();
+                
+                if !today_data.is_empty() {
+                    today_data
+                } else {
+                    get_latest_day_data(&time_series)
+                }
+            };
+            
+            (symbol.clone(), StockDataBundle {
+                symbol,
+                quote,
+                time_series,
+                intraday,
+            })
         });
-        
-        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+        tasks.push(task);
+    }
+
+    let mut result = std::collections::HashMap::new();
+    for task in tasks {
+        match task.await {
+            Ok((symbol, bundle)) => {
+                result.insert(symbol, bundle);
+            }
+            Err(e) => eprintln!("Batch fetch task error: {}", e),
+        }
     }
     
     Ok(result)
@@ -654,16 +852,21 @@ pub async fn get_batch_intraday_time_series(
     }
     
     for symbol in need_fetch {
-        let latest_date = db.get_latest_kline_date(&symbol, "1m")
-            .map_err(|e| format!("Database error: {}", e))?;
-        
-        let cached = db.get_kline(&symbol, "1m", None)
-            .map_err(|e| format!("Database error: {}", e))?;
-        
-        let should_fetch = if is_trading_hours() {
+        let db_clone = db.inner().clone();
+        let sym = symbol.clone();
+        let (latest_date, cached) = run_blocking_db(move || {
+            let l = db_clone.get_latest_kline_date(&sym, "1m").map_err(|e| e.to_string())?;
+            let c = db_clone.get_kline(&sym, "1m", None).map_err(|e| e.to_string())?;
+            Ok::<_, String>((l, c))
+        }).map_err(|e| format!("Database error: {}", e))?;
+        let in_trading = is_trading_hours();
+        let min_interval_seconds = if in_trading { 60 } else { 24 * 60 * 60 };
+        let should_fetch = if cached.is_empty() {
             true
         } else {
-            cache.should_fetch_from_network(&symbol, "1m", 600).await
+            cache
+                .should_fetch_from_network_with_policy(&symbol, "1m", min_interval_seconds, in_trading)
+                .await
         };
         
         let merged_data = if should_fetch {

@@ -57,6 +57,79 @@
     "helpAbout": "About",
     "helpDocumentation": "Documentation"
   },
+  "help": {
+    "introduction": "Intro & Quick Start",
+    "interface": "Interface Guide",
+    "indicators": "Technical Indicators",
+    "analysis": "AI & Advanced Analysis",
+    "portfolio": "Portfolio Management",
+    "about": "About",
+    
+    "introDesc": "Stock Analyzer is a professional-grade stock data analysis tool for individual investors. It integrates real-time market monitoring, in-depth technical indicator analysis, AI intelligent price prediction, similarity matching, and portfolio management to assist your investment decisions with data-driven insights.",
+    "mainFeatures": "Core Features",
+    "feature1": "Real-time Quotes & Multi-dim Charts: Supports intraday, daily/weekly/monthly K-lines, and adjusted prices.",
+    "feature2": "Professional Indicators: Built-in MA, MACD, RSI, KDJ, Bollinger Bands, etc., with customizable parameters.",
+    "feature3": "AI Prediction: Uses LSTM, ARIMA, and other algorithms to forecast future price trends.",
+    "feature4": "Similarity Matching: Searches historical big data for patterns most similar to recent trends to deduce future paths.",
+    "feature5": "Chip Distribution: Visualizes profit/loss chips to accurately identify support and resistance levels.",
+    "feature6": "Portfolio Management: Tracks transaction details, automatically calculates P&L, and generates asset distribution charts.",
+    
+    "gettingStarted": "Quick Start",
+    "gettingStartedDesc": "1. Search Stock: Enter stock code or name in the search box at the top of the left sidebar, click result to add to favorites.\n2. View Details: Click a stock in the favorites list to open its detailed analysis page in the workspace.\n3. Switch Period: Toggle between Daily, Weekly, Monthly, or Intraday charts using the toolbar above the K-line chart.\n4. Add Indicators: Click the 'Settings' icon or right analysis panel to enable MACD, RSI, etc.\n5. AI Analysis: Click the 'AI Analysis' tab on the right to view price predictions and risk assessment reports.",
+
+    "interfaceSidebar": "Left Sidebar",
+    "interfaceSidebarDesc": "The left sidebar is your stock management center. Here you can search/add stocks, create custom groups (e.g., 'Core Holdings', 'Watchlist'), and drag-and-drop to sort. Right-click a stock to delete or move it.",
+    "interfaceWorkspace": "Central Workspace",
+    "interfaceWorkspaceDesc": "The workspace supports multi-tab display. You can open analysis pages for multiple stocks simultaneously and switch quickly via top tabs. Each page includes the main K-line chart, sub-indicator area, and volume chart.",
+    "interfaceToolbar": "Top Toolbar",
+    "interfaceToolbarDesc": "Provides global function access, including view toggles (sidebar show/hide), fullscreen mode, global refresh, and system settings.",
+    "interfaceRightPanel": "Right Analysis Panel",
+    "interfaceRightPanelDesc": "Offers in-depth analysis tools, including:\n- Basic Info: Real-time data like Open, Close, High, Low, Volume.\n- AI Prediction: Shows prediction results and confidence levels from multiple models.\n- Chip Distribution: Visualizes chip peaks to analyze main cost areas.",
+
+    "maTitle": "Moving Average (MA)",
+    "maDetail": "MA smooths out price data by creating a constantly updated average price to identify the trend direction.\n- SMA (Simple Moving Average): Equal weight to all prices.\n- EMA (Exponential Moving Average): More weight to recent prices, more responsive.\n- Usage: Short-term MA crossing above long-term MA is a 'Golden Cross' (Buy); otherwise 'Death Cross' (Sell). Bullish alignment (Short>Medium>Long) indicates an uptrend.",
+    
+    "macdTitle": "MACD",
+    "macdDetail": "MACD reveals changes in the strength, direction, momentum, and duration of a trend.\n- Components: DIF (Fast), DEA (Slow), MACD Histogram.\n- Usage: DIF crossing above DEA is a Golden Cross. Histogram turning from green to red indicates strengthening bullish momentum. Divergence (price high, MACD low) signals potential reversal.",
+    
+    "rsiTitle": "Relative Strength Index (RSI)",
+    "rsiDetail": "RSI measures the speed and change of price movements to analyze market sentiment.\n- Range: 0-100.\n- Usage: RSI > 70 is considered Overbought (Risk); RSI < 30 is Oversold (Opportunity). Hovering around 50 indicates a sideways market.",
+    
+    "kdjTitle": "Stochastic Oscillator (KDJ)",
+    "kdjDetail": "KDJ combines momentum, relative strength, and moving averages to study the relationship between high/low and closing prices.\n- Components: K, D, J lines.\n- Usage: J > 100 Overbought, J < 0 Oversold. K crossing above D is a Golden Cross. KDJ is very sensitive to short-term fluctuations.",
+    
+    "bollingerTitle": "Bollinger Bands",
+    "bollingerDetail": "Consists of a middle band (20-day MA) and two outer bands (standard deviations).\n- Usage: Price touching upper band suggests pullback pressure; lower band suggests support. Bands narrowing (squeeze) predicts high volatility ahead.",
+    
+    "chipTitle": "Chip Distribution",
+    "chipDetail": "Shows the volume of shares held at different price levels.\n- Single Peak: High concentration, often marks end of accumulation or distribution. Low-level single peak is a strong buy signal.\n- Multi Peak: Trapped supply above, profit below; price often oscillates between peaks.\n- Profit Ratio: Percentage of chips held below current price.",
+
+    "aiPredictionTitle": "AI Intelligent Prediction",
+    "aiPredictionDetail": "Integrates advanced algorithms for price forecasting:\n- LSTM: Captures long-term non-linear dependencies in time series.\n- ARIMA: Classic statistical model for linear trends and seasonality.\n- Linear/Polynomial Regression: Identifies basic trend directions.\nNote: Predictions are for reference. The confidence interval (shaded area) shows the probable range.",
+    
+    "similarityTitle": "Similarity Matching",
+    "similarityDetail": "Searches historical database for patterns most similar to recent trends (e.g., last 20 days).\n- Principle: 'History repeats itself'. Infers potential future paths based on how similar historical patterns played out.\n- Fan Chart: Shows a collection of subsequent trends from matched history to assess probability distribution.",
+    
+    "backtestTitle": "Strategy Backtest",
+    "backtestDetail": "Validates trading strategies using historical data.\n- Settings: Configure initial capital, commission, stop loss/take profit, and strategy parameters.\n- Report: Generates metrics like Total Return, Max Drawdown (Risk), Win Rate, Sharpe Ratio to help optimize strategies.",
+
+    "portfolioTitle": "Portfolio Management",
+    "portfolioDetail": "Full-featured asset management module.\n- Positions: Manually log buy/sell trades; auto-calculates avg cost and quantity.\n- P&L Analysis: Real-time floating P&L and return calculations.\n- Cash Flow: Records deposits/withdrawals to track net asset value.\n- Visualization: Pie charts for asset allocation.",
+
+    "shortcuts": "Keyboard Shortcuts",
+    "action": "Action",
+    "key": "Key",
+    "searchStock": "Search Stock",
+    "switchTab": "Switch Tab",
+    "closeTab": "Close Tab",
+    "refreshData": "Refresh Data",
+    "toggleFullscreen": "Toggle Fullscreen",
+    "toggleLeftSidebar": "Toggle Left Sidebar",
+    "toggleRightSidebar": "Toggle Right Sidebar",
+    "saveSettings": "Save Settings",
+    "openHelp": "Open Help",
+    "aboutDesc": "Professional-grade data analysis tool for individual investors. Open source project, contributions welcome."
+  },
   "settings": {
     "title": "Settings",
     "autoRefresh": "Auto Refresh",
@@ -422,6 +495,16 @@
   },
   "analysis": {
     "prediction": "Prediction",
+    "backtestError": "Backtest Error",
+    "optimization": "Optimization",
+    "runOptimization": "Run Optimization",
+    "optimizationResults": "Optimization Results (Top 20)",
+    "optimizationError": "Optimization Error",
+    "optimizationHint": "Select a strategy and click 'Run Optimization' to find the best parameters.",
+    "optimizationDesc": "The system will test various parameter combinations and show the top performing sets based on Sharpe Ratio.",
+    "turtleStrategy": "Turtle Trading",
+    "entryPeriod": "Entry Period",
+    "exitPeriod": "Exit Period",
     "title": "Technical Analysis",
     "loadingChart": "Loading chart...",
     "indicators": "Indicators",
@@ -879,7 +962,19 @@
     "sortinoRatio": "Sortino Ratio",
     "nextSignal": "Next Signal",
     "stdDev": "Std Dev",
-    "equityCurve": "Equity Curve"
+    "equityCurve": "Equity Curve",
+    "equity": "Equity",
+    "buySignals": "Buy",
+    "sellSignals": "Sell",
+    "hold": "Hold",
+    "inPosition": "In Position",
+    "flat": "Flat",
+    "reason": "Reason",
+    "positionValue": "Position Value",
+    "sectionMode": "Mode & Run",
+    "sectionCapital": "Capital",
+    "sectionStrategy": "Strategy",
+    "sectionRisk": "Risk (Optional)"
   },
   "aiAgent": {
     "connectionError": "Unable to connect to backend service. Please ensure you are running in the Tauri app window, not in a browser.",

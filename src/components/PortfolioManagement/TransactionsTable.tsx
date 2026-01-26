@@ -13,6 +13,7 @@ interface TransactionsTableProps {
   selectedTransactionSymbol: string | null;
   onSymbolSelect: (symbol: string | null) => void;
   onReload: () => void;
+  onRefreshSymbol?: (symbol: string) => void;
 }
 
 const TransactionsTable: React.FC<TransactionsTableProps> = ({
@@ -23,6 +24,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
   selectedTransactionSymbol,
   onSymbolSelect,
   onReload,
+  onRefreshSymbol,
 }) => {
   const { t } = useTranslation();
   const { showAlert, showConfirm } = useAlert();
@@ -32,9 +34,15 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
   const handleDeleteTransaction = async (id: number) => {
     const ok = await showConfirm(t("portfolio.confirmDelete"));
     if (!ok) return;
+    const transaction = transactions.find(t => t.id === id);
+    const symbol = transaction?.symbol;
     try {
       await invoke("delete_portfolio_transaction", { id });
-      await onReload();
+      if (symbol && onRefreshSymbol) {
+        await onRefreshSymbol(symbol);
+      } else {
+        await onReload();
+      }
     } catch (err) {
       console.error("Error deleting transaction:", err);
       showAlert(t("portfolio.deleteError"));
@@ -47,12 +55,18 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
 
   const handleQuantityUpdate = async (transactionId: number, newQuantity: number, oldQuantity: number) => {
     if (newQuantity > 0 && newQuantity !== oldQuantity) {
+      const transaction = transactions.find(t => t.id === transactionId);
+      const symbol = transaction?.symbol;
       try {
         await invoke("update_portfolio_transaction", {
           id: transactionId,
           quantity: newQuantity,
         });
-        await onReload();
+        if (symbol && onRefreshSymbol) {
+          await onRefreshSymbol(symbol);
+        } else {
+          await onReload();
+        }
       } catch (err) {
         console.error("Error updating transaction:", err);
         showAlert(t("portfolio.updateError") + ": " + (err instanceof Error ? err.message : String(err)));

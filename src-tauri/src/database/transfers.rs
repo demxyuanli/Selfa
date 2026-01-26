@@ -1,15 +1,13 @@
 use rusqlite::{Connection, Result, params};
 use chrono::Utc;
-use std::sync::Mutex;
 
 pub fn add_capital_transfer(
-    conn: &Mutex<Connection>,
+    conn: &Connection,
     transfer_type: &str,
     amount: f64,
     transfer_date: &str,
     notes: Option<&str>,
 ) -> Result<i64> {
-    let conn = conn.lock().unwrap();
     let now = Utc::now().to_rfc3339();
 
     conn.execute(
@@ -21,9 +19,7 @@ pub fn add_capital_transfer(
     Ok(conn.last_insert_rowid())
 }
 
-pub fn get_capital_transfers(conn: &Mutex<Connection>) -> Result<Vec<(i64, String, f64, String, Option<String>)>> {
-    let conn = conn.lock().unwrap();
-    
+pub fn get_capital_transfers(conn: &Connection) -> Result<Vec<(i64, String, f64, String, Option<String>)>> {
     let mut transfers = Vec::new();
     let mut stmt = conn.prepare(
         "SELECT id, transfer_type, amount, transfer_date, notes 
@@ -49,15 +45,13 @@ pub fn get_capital_transfers(conn: &Mutex<Connection>) -> Result<Vec<(i64, Strin
 }
 
 pub fn update_capital_transfer(
-    conn: &Mutex<Connection>,
+    conn: &Connection,
     id: i64,
     transfer_type: Option<&str>,
     amount: Option<f64>,
     transfer_date: Option<&str>,
     notes: Option<&str>,
 ) -> Result<()> {
-    let conn = conn.lock().unwrap();
-    
     let mut updates = Vec::new();
     
     if transfer_type.is_some() {
@@ -133,15 +127,12 @@ pub fn update_capital_transfer(
     Ok(())
 }
 
-pub fn delete_capital_transfer(conn: &Mutex<Connection>, id: i64) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn delete_capital_transfer(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM capital_transfers WHERE id = ?1", params![id])?;
     Ok(())
 }
 
-pub fn get_total_capital(conn: &Mutex<Connection>) -> Result<f64> {
-    let conn = conn.lock().unwrap();
-    
+pub fn get_total_capital(conn: &Connection) -> Result<f64> {
     let mut stmt = conn.prepare(
         "SELECT 
             COALESCE(SUM(CASE WHEN transfer_type = 'deposit' THEN amount ELSE 0 END), 0) -

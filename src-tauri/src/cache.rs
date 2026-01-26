@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use moka::future::Cache;
 use crate::stock_api::{StockData, StockQuote};
@@ -14,22 +14,22 @@ pub struct StockCache {
     time_series_write_queue: Arc<RwLock<HashMap<String, Vec<StockData>>>>,
     history_write_queue: Arc<RwLock<HashMap<String, (String, Vec<StockData>)>>>,
     
-    // Track last network fetch time for each symbol (for non-trading hours rate limiting)
-    last_fetch_time: Arc<RwLock<HashMap<String, Instant>>>,
+    last_fetch_ts: Arc<RwLock<HashMap<String, u64>>>,
+    fetch_state_write_queue: Arc<RwLock<HashMap<String, u64>>>,
 }
 
 impl StockCache {
     pub fn new() -> Self {
         let quotes_cache = Cache::builder()
-            .time_to_live(Duration::from_secs(30))
+            .time_to_live(Duration::from_secs(65))
             .build();
         
         let time_series_cache = Cache::builder()
-            .time_to_live(Duration::from_secs(10))
+            .time_to_live(Duration::from_secs(65))
             .build();
         
         let history_cache = Cache::builder()
-            .time_to_live(Duration::from_secs(300))
+            .time_to_live(Duration::from_secs(6 * 60 * 60))
             .build();
         
         Self {
@@ -39,7 +39,8 @@ impl StockCache {
             quote_write_queue: Arc::new(RwLock::new(HashMap::new())),
             time_series_write_queue: Arc::new(RwLock::new(HashMap::new())),
             history_write_queue: Arc::new(RwLock::new(HashMap::new())),
-            last_fetch_time: Arc::new(RwLock::new(HashMap::new())),
+            last_fetch_ts: Arc::new(RwLock::new(HashMap::new())),
+            fetch_state_write_queue: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -103,30 +104,62 @@ impl StockCache {
         std::mem::take(&mut *queue)
     }
 
+    pub async fn get_pending_fetch_state_updates(&self) -> HashMap<String, u64> {
+        let mut queue = self.fetch_state_write_queue.write().await;
+        std::mem::take(&mut *queue)
+    }
+
+    pub async fn initialize_fetch_state(&self, state: HashMap<String, u64>) {
+        let mut last_fetch = self.last_fetch_ts.write().await;
+        for (k, v) in state {
+            last_fetch.insert(k, v);
+        }
+    }
+
     pub async fn cleanup_expired(&self) {
         // moka automatically handles expired entries, so this is a no-op
         // Kept for API compatibility
     }
 
-    // Check if enough time has passed since last fetch (for non-trading hours rate limiting)
-    pub async fn should_fetch_from_network(&self, symbol: &str, period: &str, min_interval_seconds: u64) -> bool {
+    fn now_unix_seconds() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0)
+    }
+
+    fn is_minute_boundary(now_ts: u64) -> bool {
+        let s = now_ts % 60;
+        s == 0 || s == 1
+    }
+
+    pub async fn should_fetch_from_network_with_policy(
+        &self,
+        symbol: &str,
+        period: &str,
+        min_interval_seconds: u64,
+        require_minute_boundary: bool,
+    ) -> bool {
         let key = format!("{}:{}", symbol, period);
-        let last_fetch = self.last_fetch_time.read().await;
-        
-        if let Some(last_time) = last_fetch.get(&key) {
-            let elapsed = last_time.elapsed();
-            elapsed.as_secs() >= min_interval_seconds
-        } else {
-            // First fetch, allow immediately
-            true
+        let now_ts = Self::now_unix_seconds();
+        if require_minute_boundary && !Self::is_minute_boundary(now_ts) {
+            return false;
+        }
+        let last_fetch = self.last_fetch_ts.read().await;
+        match last_fetch.get(&key) {
+            Some(last_ts) => now_ts.saturating_sub(*last_ts) >= min_interval_seconds,
+            None => true,
         }
     }
 
     // Record network fetch time
     pub async fn record_fetch_time(&self, symbol: &str, period: &str) {
         let key = format!("{}:{}", symbol, period);
-        let mut last_fetch = self.last_fetch_time.write().await;
-        last_fetch.insert(key, Instant::now());
+        let now_ts = Self::now_unix_seconds();
+        let mut last_fetch = self.last_fetch_ts.write().await;
+        last_fetch.insert(key.clone(), now_ts);
+        let mut queue = self.fetch_state_write_queue.write().await;
+        queue.insert(key, now_ts);
     }
 }
 

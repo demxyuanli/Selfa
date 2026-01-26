@@ -1,10 +1,7 @@
 use rusqlite::{Connection, Result, params};
 use chrono::Utc;
-use std::sync::Mutex;
 
-pub fn get_initial_balance(conn: &Mutex<Connection>) -> Result<Option<f64>> {
-    let conn = conn.lock().unwrap();
-    
+pub fn get_initial_balance(conn: &Connection) -> Result<Option<f64>> {
     let mut stmt = conn.prepare(
         "SELECT value FROM portfolio_settings WHERE key = 'initial_balance'"
     )?;
@@ -19,8 +16,7 @@ pub fn get_initial_balance(conn: &Mutex<Connection>) -> Result<Option<f64>> {
     }
 }
 
-pub fn set_initial_balance(conn: &Mutex<Connection>, balance: f64) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn set_initial_balance(conn: &Connection, balance: f64) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     
     conn.execute(

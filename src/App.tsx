@@ -13,6 +13,7 @@ import Workspace from "./components/Workspace";
 import StatusBar from "./components/StatusBar";
 import SettingsDialog from "./components/SettingsDialog";
 import PriceAlertDialog from "./components/PriceAlertDialog";
+import HelpDialog from "./components/HelpDialog";
 import "./App.css";
 
 interface StockQuote {
@@ -48,6 +49,7 @@ function AppContent() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [priceAlertOpen, setPriceAlertOpen] = useState(false);
 
   // Helper to check if running in Tauri
@@ -309,6 +311,9 @@ function AppContent() {
       case "portfolio:open":
         handlePortfolioClick();
         break;
+      case "help:documentation":
+        setHelpOpen(true);
+        break;
       case "help:about":
         showAlert("Stock Analyzer v0.4.0\nA multi-language stock data viewer and analyzer");
         break;
@@ -422,6 +427,7 @@ function AppContent() {
       </div>
       <StatusBar />
       <SettingsDialog isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <HelpDialog isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
       <PriceAlertDialog
         isOpen={priceAlertOpen}
         onClose={() => setPriceAlertOpen(false)}

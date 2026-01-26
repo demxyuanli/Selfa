@@ -1,12 +1,10 @@
 use rusqlite::{Connection, Result, params};
 use chrono::Utc;
-use std::sync::Mutex;
 use crate::stock_api::StockData;
 use super::utils::ensure_stock_exists_with_name_from_quote;
 
-pub fn save_time_series(conn: &Mutex<Connection>, symbol: &str, data: &[StockData]) -> Result<usize> {
-    let conn = conn.lock().unwrap();
-    ensure_stock_exists_with_name_from_quote(&conn, symbol)?;
+pub fn save_time_series(conn: &Connection, symbol: &str, data: &[StockData]) -> Result<usize> {
+    ensure_stock_exists_with_name_from_quote(conn, symbol)?;
     
     let now = Utc::now().to_rfc3339();
     let mut count = 0;
@@ -34,8 +32,7 @@ pub fn save_time_series(conn: &Mutex<Connection>, symbol: &str, data: &[StockDat
     Ok(count)
 }
 
-pub fn get_time_series(conn: &Mutex<Connection>, symbol: &str, limit: Option<i32>) -> Result<Vec<StockData>> {
-    let conn = conn.lock().unwrap();
+pub fn get_time_series(conn: &Connection, symbol: &str, limit: Option<i32>) -> Result<Vec<StockData>> {
     let limit = limit.unwrap_or(240);
     
     let mut stmt = conn.prepare(
@@ -67,8 +64,7 @@ pub fn get_time_series(conn: &Mutex<Connection>, symbol: &str, limit: Option<i32
     Ok(data)
 }
 
-pub fn get_batch_time_series(conn: &Mutex<Connection>, symbols: &[String], limit: Option<i32>) -> Result<std::collections::HashMap<String, Vec<StockData>>> {
-    let conn = conn.lock().unwrap();
+pub fn get_batch_time_series(conn: &Connection, symbols: &[String], limit: Option<i32>) -> Result<std::collections::HashMap<String, Vec<StockData>>> {
     let limit = limit.unwrap_or(240);
     
     if symbols.is_empty() {
@@ -133,8 +129,7 @@ pub fn get_batch_time_series(conn: &Mutex<Connection>, symbols: &[String], limit
 }
 
 #[allow(dead_code)]
-pub fn get_latest_time_series_date(conn: &Mutex<Connection>, symbol: &str) -> Result<Option<String>> {
-    let conn = conn.lock().unwrap();
+pub fn get_latest_time_series_date(conn: &Connection, symbol: &str) -> Result<Option<String>> {
     let mut stmt = conn.prepare(
         "SELECT date FROM stock_time_series 
          WHERE symbol = ?1 

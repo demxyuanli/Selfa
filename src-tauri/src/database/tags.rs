@@ -1,11 +1,8 @@
 use rusqlite::{Connection, Result, params};
 use chrono::Utc;
-use std::sync::Mutex;
 use crate::stock_api::StockInfo;
 
-pub fn create_tag(conn: &Mutex<Connection>, name: &str, color: &str) -> Result<i64> {
-    let conn = conn.lock().unwrap();
-    
+pub fn create_tag(conn: &Connection, name: &str, color: &str) -> Result<i64> {
     let mut stmt = conn.prepare("SELECT id FROM stock_tags WHERE name = ?1")?;
     let mut rows = stmt.query_map(params![name], |row| {
         Ok(row.get::<_, i64>(0)?)
@@ -24,8 +21,7 @@ pub fn create_tag(conn: &Mutex<Connection>, name: &str, color: &str) -> Result<i
     Ok(conn.last_insert_rowid())
 }
 
-pub fn get_all_tags(conn: &Mutex<Connection>) -> Result<Vec<(i64, String, String)>> {
-    let conn = conn.lock().unwrap();
+pub fn get_all_tags(conn: &Connection) -> Result<Vec<(i64, String, String)>> {
     let mut stmt = conn.prepare("SELECT id, name, color FROM stock_tags ORDER BY name")?;
     let rows = stmt.query_map([], |row| {
         Ok((
@@ -42,8 +38,7 @@ pub fn get_all_tags(conn: &Mutex<Connection>) -> Result<Vec<(i64, String, String
     Ok(tags)
 }
 
-pub fn update_tag(conn: &Mutex<Connection>, tag_id: i64, name: &str, color: &str) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn update_tag(conn: &Connection, tag_id: i64, name: &str, color: &str) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     
     conn.execute(
@@ -54,9 +49,7 @@ pub fn update_tag(conn: &Mutex<Connection>, tag_id: i64, name: &str, color: &str
     Ok(())
 }
 
-pub fn delete_tag(conn: &Mutex<Connection>, tag_id: i64) -> Result<()> {
-    let conn = conn.lock().unwrap();
-    
+pub fn delete_tag(conn: &Connection, tag_id: i64) -> Result<()> {
     conn.execute(
         "DELETE FROM stock_tag_relations WHERE tag_id = ?1",
         params![tag_id],
@@ -70,8 +63,7 @@ pub fn delete_tag(conn: &Mutex<Connection>, tag_id: i64) -> Result<()> {
     Ok(())
 }
 
-pub fn add_tag_to_stock(conn: &Mutex<Connection>, symbol: &str, tag_id: i64) -> Result<()> {
-    let conn = conn.lock().unwrap();
+pub fn add_tag_to_stock(conn: &Connection, symbol: &str, tag_id: i64) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     
     conn.execute(
@@ -82,9 +74,7 @@ pub fn add_tag_to_stock(conn: &Mutex<Connection>, symbol: &str, tag_id: i64) -> 
     Ok(())
 }
 
-pub fn remove_tag_from_stock(conn: &Mutex<Connection>, symbol: &str, tag_id: i64) -> Result<()> {
-    let conn = conn.lock().unwrap();
-    
+pub fn remove_tag_from_stock(conn: &Connection, symbol: &str, tag_id: i64) -> Result<()> {
     conn.execute(
         "DELETE FROM stock_tag_relations WHERE symbol = ?1 AND tag_id = ?2",
         params![symbol, tag_id],
@@ -93,10 +83,9 @@ pub fn remove_tag_from_stock(conn: &Mutex<Connection>, symbol: &str, tag_id: i64
     Ok(())
 }
 
-pub fn get_stock_tags(conn: &Mutex<Connection>, symbol: &str) -> Result<Vec<(i64, String, String)>> {
-    let conn = conn.lock().unwrap();
+pub fn get_stock_tags(conn: &Connection, symbol: &str) -> Result<Vec<String>> {
     let mut stmt = conn.prepare(
-        "SELECT t.id, t.name, t.color 
+        "SELECT t.name
          FROM stock_tags t 
          JOIN stock_tag_relations r ON t.id = r.tag_id 
          WHERE r.symbol = ?1 
@@ -104,11 +93,7 @@ pub fn get_stock_tags(conn: &Mutex<Connection>, symbol: &str) -> Result<Vec<(i64
     )?;
     
     let rows = stmt.query_map(params![symbol], |row| {
-        Ok((
-            row.get::<_, i64>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, String>(2)?,
-        ))
+        Ok(row.get::<_, String>(0)?)
     })?;
     
     let mut tags = Vec::new();
@@ -118,8 +103,32 @@ pub fn get_stock_tags(conn: &Mutex<Connection>, symbol: &str) -> Result<Vec<(i64
     Ok(tags)
 }
 
-pub fn get_stocks_by_tag(conn: &Mutex<Connection>, tag_id: i64) -> Result<Vec<StockInfo>> {
-    let conn = conn.lock().unwrap();
+pub fn get_all_stock_tags_map(conn: &Connection) -> Result<std::collections::HashMap<String, Vec<String>>> {
+    let mut stmt = conn.prepare(
+        "SELECT r.symbol, t.name 
+         FROM stock_tags t 
+         JOIN stock_tag_relations r ON t.id = r.tag_id 
+         ORDER BY r.symbol, t.name"
+    )?;
+    
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+        ))
+    })?;
+    
+    let mut result: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    for row in rows {
+        let (symbol, tag_name) = row?;
+        result.entry(symbol).or_insert_with(Vec::new).push(tag_name);
+    }
+    
+    Ok(result)
+}
+
+
+pub fn get_stocks_by_tag(conn: &Connection, tag_id: i64) -> Result<Vec<StockInfo>> {
     let mut stmt = conn.prepare(
         "SELECT s.symbol, s.name, s.exchange 
          FROM stocks s 
@@ -144,9 +153,7 @@ pub fn get_stocks_by_tag(conn: &Mutex<Connection>, tag_id: i64) -> Result<Vec<St
 }
 
 #[allow(dead_code)]
-pub fn get_stocks_with_tags(conn: &Mutex<Connection>) -> Result<Vec<(StockInfo, Vec<(i64, String, String)>)>> {
-    let conn = conn.lock().unwrap();
-    
+pub fn get_stocks_with_tags(conn: &Connection) -> Result<Vec<(StockInfo, Vec<(i64, String, String)>)>> {
     let mut stmt = conn.prepare("SELECT symbol, name, exchange FROM stocks WHERE visible = 1 ORDER BY sort_order, symbol")?;
     let stock_rows = stmt.query_map([], |row| {
         Ok(StockInfo {

@@ -10,7 +10,7 @@
   padding: 12px;
   background: var(--bg-tertiary, #252526);
   border-radius: 3px;
-  margin-top: 8px;
+  margin-top: 16px;
 }
 
 .result-title {
@@ -76,4 +76,104 @@
 
 .param-btn.primary:hover:not(:disabled) {
   background-color: #0066aa;
+}
+
+/* ============= Params layout sections ============= */
+.backtest-params-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.backtest-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.backtest-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary, #858585);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.backtest-strategy-params {
+  padding: 8px 0 0 10px;
+  border-left: 2px solid var(--border-color, #3c3c3c);
+  margin-left: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.backtest-mode-selector {
+  display: flex;
+  gap: 6px;
+}
+
+.backtest-mode-selector .param-btn {
+  flex: 1;
+  width: auto;
+  font-size: 10px;
+  padding: 6px 8px;
+  background-color: var(--bg-tertiary, #252526);
+  color: var(--text-secondary, #858585);
+  border: 1px solid var(--border-color, #3c3c3c);
+}
+
+.backtest-mode-selector .param-btn:hover:not(:disabled) {
+  background-color: var(--bg-secondary, #2d2d30);
+  color: var(--text-primary, #cccccc);
+  border-color: var(--text-secondary, #858585);
+}
+
+.backtest-mode-selector .param-btn.primary {
+  background-color: var(--accent-color, #007acc);
+  color: white;
+  border-color: var(--accent-color, #007acc);
+  font-weight: 600;
+}
+
+.backtest-mode-selector .param-btn.primary:hover:not(:disabled) {
+  background-color: #0066aa;
+  border-color: #0066aa;
+}
+
+.backtest-run-row {
+  margin-top: 4px;
+}
+
+.backtest-run-row .param-btn {
+  width: 100%;
+}
+
+.backtest-param-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: end;
+}
+
+.backtest-param-row .param-section {
+  margin-bottom: 0;
+}
+
+.input-with-unit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.input-with-unit .param-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.input-with-unit .unit {
+  font-size: 10px;
+  color: var(--text-secondary, #858585);
+  flex-shrink: 0;
 }
