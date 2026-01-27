@@ -407,9 +407,19 @@ const StockComparisonChart: React.FC<StockComparisonChartProps> = ({
         if (bundle?.quote) {
           const quoteName = bundle.quote.name || "";
           const isCorrectIndex = (() => {
-            if (symbol === "000001") return quoteName.includes("上证") || quoteName.includes("指数");
-            if (symbol === "399001") return quoteName.includes("深证") || quoteName.includes("指数");
-            if (symbol === "000688") return quoteName.includes("科创") || quoteName.includes("指数");
+            // Check both Chinese and English keywords since API may return Chinese names
+            if (symbol === "000001") {
+              return quoteName.includes("上证") || quoteName.includes("Shanghai") || 
+                     quoteName.includes("指数") || quoteName.includes("Index");
+            }
+            if (symbol === "399001") {
+              return quoteName.includes("深证") || quoteName.includes("Shenzhen") || 
+                     quoteName.includes("指数") || quoteName.includes("Index");
+            }
+            if (symbol === "000688") {
+              return quoteName.includes("科创") || quoteName.includes("STAR") || 
+                     quoteName.includes("指数") || quoteName.includes("Index");
+            }
             return true;
           })();
 

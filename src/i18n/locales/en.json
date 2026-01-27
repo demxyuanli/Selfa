@@ -421,7 +421,11 @@
     "shenzhen": "Shenzhen Index",
     "chuangye": "ChiNext Index",
     "timeSeries": "Time Series",
-    "dailyK": "Daily K-Line"
+    "dailyK": "Daily K-Line",
+    "shanghaiKeyword": "Shanghai",
+    "shenzhenKeyword": "Shenzhen",
+    "starKeyword": "STAR",
+    "indexKeyword": "Index"
   },
   "kline": {
     "1d": "Daily",
@@ -985,6 +989,8 @@
     "apiKey": "API Key",
     "apiKeyPlaceholder": "Enter API key (optional for free APIs)",
     "model": "Model",
+    "modelFree": "Free",
+    "modelRecommended": "Recommended",
     "freeModels": "Free Models",
     "paidModels": "Paid Models",
     "freeApiInfo": "Free APIs: Get Gemini key from https://makersuite.google.com/app/apikey",

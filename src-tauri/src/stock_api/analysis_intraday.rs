@@ -34,17 +34,45 @@ pub struct IntradayAnalysisResult {
     pub volume_profile: Vec<VolumeProfileBin>,
     pub large_orders: Vec<LargeOrder>,
     pub buying_pressure: BuyingPressure,
+    pub vwap: Vec<f64>,
+    pub vwap_deviation: Vec<f64>,
+    pub relative_volume: Vec<f64>,
+    pub momentum: Vec<f64>,
+    pub volatility: Vec<f64>,
+    pub opening_range_high: f64,
+    pub opening_range_low: f64,
+    pub opening_range_breakout: String,
+    pub trend_slope: f64,
+    pub trend_r2: f64,
 }
 
 pub fn analyze_intraday_data(data: &[StockData]) -> IntradayAnalysisResult {
     let volume_profile = calculate_volume_profile(data, 20);
     let large_orders = detect_large_orders(data, 3.0);
     let buying_pressure = calculate_buying_pressure(data);
+    let vwap = calculate_vwap_series(data);
+    let vwap_deviation = calculate_vwap_deviation(data, &vwap);
+    let relative_volume = calculate_relative_volume(data, 20);
+    let momentum = calculate_momentum(data, 5);
+    let volatility = calculate_volatility(data, 20);
+    let (opening_range_high, opening_range_low) = calculate_opening_range(data, 30);
+    let opening_range_breakout = calculate_opening_range_breakout(data, opening_range_high, opening_range_low);
+    let (trend_slope, trend_r2) = calculate_trend_strength(data, 60);
 
     IntradayAnalysisResult {
         volume_profile,
         large_orders,
         buying_pressure,
+        vwap,
+        vwap_deviation,
+        relative_volume,
+        momentum,
+        volatility,
+        opening_range_high,
+        opening_range_low,
+        opening_range_breakout,
+        trend_slope,
+        trend_r2,
     }
 }
 
@@ -191,4 +219,159 @@ fn calculate_buying_pressure(data: &[StockData]) -> BuyingPressure {
         cumulative_delta,
         delta_result: Some(delta_result),
     }
+}
+
+fn calculate_vwap_series(data: &[StockData]) -> Vec<f64> {
+    let mut vwap = Vec::with_capacity(data.len());
+    let mut cumulative_volume = 0.0;
+    let mut cumulative_value = 0.0;
+
+    for d in data {
+        let volume = d.volume as f64;
+        if volume <= 0.0 {
+            vwap.push(if cumulative_volume > 0.0 { cumulative_value / cumulative_volume } else { d.close });
+            continue;
+        }
+        let typical_price = (d.high + d.low + d.close) / 3.0;
+        cumulative_volume += volume;
+        cumulative_value += typical_price * volume;
+        vwap.push(cumulative_value / cumulative_volume);
+    }
+
+    vwap
+}
+
+fn calculate_vwap_deviation(data: &[StockData], vwap: &[f64]) -> Vec<f64> {
+    data.iter()
+        .zip(vwap.iter())
+        .map(|(d, v)| d.close - v)
+        .collect()
+}
+
+fn calculate_relative_volume(data: &[StockData], window: usize) -> Vec<f64> {
+    if data.is_empty() {
+        return Vec::new();
+    }
+    let mut result = Vec::with_capacity(data.len());
+    for i in 0..data.len() {
+        let start = i.saturating_sub(window);
+        let slice = &data[start..i];
+        let avg = if slice.is_empty() {
+            data[i].volume as f64
+        } else {
+            slice.iter().map(|d| d.volume as f64).sum::<f64>() / slice.len() as f64
+        };
+        let ratio = if avg > 0.0 { data[i].volume as f64 / avg } else { 0.0 };
+        result.push(ratio);
+    }
+    result
+}
+
+fn calculate_momentum(data: &[StockData], window: usize) -> Vec<f64> {
+    if data.is_empty() {
+        return Vec::new();
+    }
+    let mut result = Vec::with_capacity(data.len());
+    for i in 0..data.len() {
+        if i < window {
+            result.push(0.0);
+            continue;
+        }
+        let prev = data[i - window].close;
+        let momentum = if prev != 0.0 { (data[i].close - prev) / prev } else { 0.0 };
+        result.push(momentum);
+    }
+    result
+}
+
+fn calculate_volatility(data: &[StockData], window: usize) -> Vec<f64> {
+    if data.is_empty() {
+        return Vec::new();
+    }
+    let mut result = Vec::with_capacity(data.len());
+    let mut returns: Vec<f64> = Vec::with_capacity(data.len());
+    for i in 0..data.len() {
+        if i == 0 {
+            returns.push(0.0);
+        } else {
+            let prev = data[i - 1].close;
+            let ret = if prev != 0.0 { (data[i].close - prev) / prev } else { 0.0 };
+            returns.push(ret);
+        }
+    }
+    for i in 0..returns.len() {
+        let start = i.saturating_sub(window);
+        let slice = &returns[start..=i];
+        let mean = slice.iter().sum::<f64>() / slice.len() as f64;
+        let variance = slice.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / slice.len() as f64;
+        result.push(variance.sqrt());
+    }
+    result
+}
+
+fn calculate_opening_range(data: &[StockData], window: usize) -> (f64, f64) {
+    if data.is_empty() {
+        return (0.0, 0.0);
+    }
+    let end = window.min(data.len());
+    let slice = &data[..end];
+    let high = slice.iter().map(|d| d.high).fold(f64::NEG_INFINITY, f64::max);
+    let low = slice.iter().map(|d| d.low).fold(f64::INFINITY, f64::min);
+    (high, low)
+}
+
+fn calculate_opening_range_breakout(data: &[StockData], high: f64, low: f64) -> String {
+    if data.is_empty() {
+        return "unknown".to_string();
+    }
+    let last_close = data.last().map(|d| d.close).unwrap_or(0.0);
+    if last_close > high {
+        "up".to_string()
+    } else if last_close < low {
+        "down".to_string()
+    } else {
+        "inside".to_string()
+    }
+}
+
+fn calculate_trend_strength(data: &[StockData], window: usize) -> (f64, f64) {
+    if data.len() < 2 {
+        return (0.0, 0.0);
+    }
+    let start = data.len().saturating_sub(window);
+    let slice = &data[start..];
+    let n = slice.len() as f64;
+    if n < 2.0 {
+        return (0.0, 0.0);
+    }
+    let mut sum_x = 0.0;
+    let mut sum_y = 0.0;
+    let mut sum_xy = 0.0;
+    let mut sum_x2 = 0.0;
+    for (idx, d) in slice.iter().enumerate() {
+        let x = idx as f64;
+        let y = d.close;
+        sum_x += x;
+        sum_y += y;
+        sum_xy += x * y;
+        sum_x2 += x * x;
+    }
+    let denom = n * sum_x2 - sum_x * sum_x;
+    if denom == 0.0 {
+        return (0.0, 0.0);
+    }
+    let slope = (n * sum_xy - sum_x * sum_y) / denom;
+    let intercept = (sum_y - slope * sum_x) / n;
+    let mut ss_tot = 0.0;
+    let mut ss_res = 0.0;
+    let mean_y = sum_y / n;
+    for (idx, d) in slice.iter().enumerate() {
+        let x = idx as f64;
+        let y = d.close;
+        let y_pred = slope * x + intercept;
+        ss_tot += (y - mean_y).powi(2);
+        ss_res += (y - y_pred).powi(2);
+    }
+    let r2 = if ss_tot > 0.0 { 1.0 - ss_res / ss_tot } else { 0.0 };
+    (slope, r2)
 }

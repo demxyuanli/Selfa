@@ -45,11 +45,12 @@ interface AIAnalysisResult {
 
 interface AIAgentAnalysisProps {
   klineData: StockData[];
+  intradayData: StockData[];
   symbol: string;
   quote?: any;
 }
 
-const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, quote }) => {
+const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, intradayData, symbol, quote }) => {
   const { t } = useTranslation();
   const [analysisResult, setAnalysisResult] = useState<AIAnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -57,6 +58,7 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
   const [isChartDialogOpen, setIsChartDialogOpen] = useState(false);
   const chartRef = useRef<ReactECharts>(null);
   const [apiKey, setApiKey] = useState<string>("");
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const [model, setModel] = useState<string>("gemini:gemini-2.5-flash");
   const [useLocalFallback, setUseLocalFallback] = useState(false);
 
@@ -65,6 +67,7 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
     const modelMap: Record<string, string> = {
       "groq:llama-3.1-70b-versatile": "Groq Llama 3.1 70B",
       "groq:mixtral-8x7b-32768": "Groq Mixtral 8x7B",
+      "grok:grok-4": "Grok 4",
       "gemini:gemini-3-flash-preview": "Gemini 3 Flash Preview",
       "gemini:gemini-2.5-flash": "Gemini 2.5 Flash",
       "gemini:gemini-1.5-flash": "Gemini 1.5 Flash",
@@ -79,10 +82,30 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
     return modelMap[modelValue] || modelValue;
   };
 
+  const getProviderFromModel = (modelValue: string): string => {
+    if (modelValue.startsWith("gpt")) return "openai";
+    if (modelValue.startsWith("claude")) return "anthropic";
+    if (modelValue.startsWith("groq") || modelValue.startsWith("llama") || modelValue.startsWith("mixtral")) return "groq";
+    if (modelValue.startsWith("grok")) return "xai";
+    if (modelValue.startsWith("gemini")) return "gemini";
+    if (modelValue.startsWith("huggingface") || modelValue.includes("/")) return "huggingface";
+    return "unknown";
+  };
+
   useEffect(() => {
     if (klineData.length > 0) {
       const savedApiKey = localStorage.getItem("ai_api_key") || "";
       setApiKey(savedApiKey);
+      
+      const savedApiKeys = localStorage.getItem("ai_api_keys");
+      if (savedApiKeys) {
+        try {
+          const keys = JSON.parse(savedApiKeys);
+          setApiKeys(keys);
+        } catch (e) {
+          console.error("Failed to parse saved API keys:", e);
+        }
+      }
     }
   }, [klineData]);
 
@@ -149,16 +172,30 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
     setLoading(true);
     setError(null);
     try {
-      // Check if running in Tauri environment
       if (typeof window !== "undefined" && !(window as any).__TAURI__) {
         console.warn("Warning: Not running in Tauri environment. Some features may not work.");
       }
       
-      const result: AIAnalysisResult = await invoke("ai_analyze_stock", {
+      const provider = getProviderFromModel(model);
+      const providerKey = apiKeys[provider] || apiKey || "";
+      
+      const apiKeysMap: Record<string, string> = {};
+      Object.keys(apiKeys).forEach(key => {
+        if (apiKeys[key]) {
+          apiKeysMap[key] = apiKeys[key];
+        }
+      });
+      if (providerKey && !apiKeysMap[provider]) {
+        apiKeysMap[provider] = providerKey;
+      }
+      
+      const result: AIAnalysisResult = await invoke("ai_analyze_stock_with_keys", {
         symbol,
         data: klineData,
+        intradayData: intradayData.length > 0 ? intradayData.slice(-480) : null,
         quote: quote || null,
-        apiKey: apiKey || null,
+        apiKey: providerKey || null,
+        apiKeys: Object.keys(apiKeysMap).length > 0 ? apiKeysMap : null,
         model,
         useLocalFallback,
       });
@@ -167,7 +204,6 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
       console.error("Error generating AI analysis:", err);
       const errorMsg = err?.toString() || err?.message || t("aiAgent.error");
       
-      // Provide more helpful error messages
       if (errorMsg.includes("Failed to fetch") || errorMsg.includes("ERR_CONNECTION_REFUSED")) {
         setError(t("aiAgent.connectionError"));
       } else if (errorMsg.includes("IPC")) {
@@ -183,6 +219,17 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
   const handleApiKeyChange = (key: string) => {
     setApiKey(key);
     localStorage.setItem("ai_api_key", key);
+  };
+
+  const handleProviderApiKeyChange = (provider: string, key: string) => {
+    const newApiKeys = { ...apiKeys, [provider]: key };
+    setApiKeys(newApiKeys);
+    localStorage.setItem("ai_api_keys", JSON.stringify(newApiKeys));
+  };
+
+  const getCurrentProviderKey = (): string => {
+    const provider = getProviderFromModel(model);
+    return apiKeys[provider] || apiKey || "";
   };
 
   const chartOption = useMemo(() => {
@@ -375,16 +422,6 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
               <label className="param-section-label">{t("aiAgent.apiSettings")}</label>
               <div className="param-inputs">
                 <div className="param-item">
-                  <span className="param-item-label">{t("aiAgent.apiKey")}</span>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => handleApiKeyChange(e.target.value)}
-                    placeholder={t("aiAgent.apiKeyPlaceholder")}
-                    className="param-input"
-                  />
-                </div>
-                <div className="param-item">
                   <span className="param-item-label">{t("aiAgent.model")}</span>
                   <select
                     value={model}
@@ -402,6 +439,7 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
                       <option value="huggingface:mistralai/Mistral-7B-Instruct-v0.2">Hugging Face Mistral {t("aiAgent.modelFree")}</option>
                     </optgroup>
                     <optgroup label={t("aiAgent.paidModels")}>
+                      <option value="grok:grok-4">Grok 4</option>
                       <option value="gpt-4o-mini">GPT-4o Mini</option>
                       <option value="gpt-4o">GPT-4o</option>
                       <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
@@ -409,6 +447,31 @@ const AIAgentAnalysis: React.FC<AIAgentAnalysisProps> = ({ klineData, symbol, qu
                       <option value="claude-3-sonnet">Claude 3 Sonnet</option>
                     </optgroup>
                   </select>
+                </div>
+                <div className="param-item">
+                  <span className="param-item-label">
+                    {getProviderFromModel(model) === "openai" && "OpenAI API Key"}
+                    {getProviderFromModel(model) === "anthropic" && "Anthropic API Key"}
+                    {getProviderFromModel(model) === "groq" && "Groq API Key"}
+                    {getProviderFromModel(model) === "xai" && "X.AI API Key"}
+                    {getProviderFromModel(model) === "gemini" && "Gemini API Key"}
+                    {getProviderFromModel(model) === "huggingface" && "HuggingFace API Key"}
+                    {getProviderFromModel(model) === "unknown" && t("aiAgent.apiKey")}
+                  </span>
+                  <input
+                    type="password"
+                    value={getCurrentProviderKey()}
+                    onChange={(e) => {
+                      const provider = getProviderFromModel(model);
+                      if (provider !== "unknown") {
+                        handleProviderApiKeyChange(provider, e.target.value);
+                      } else {
+                        handleApiKeyChange(e.target.value);
+                      }
+                    }}
+                    placeholder={t("aiAgent.apiKeyPlaceholder")}
+                    className="param-input"
+                  />
                 </div>
                 <div className="param-item" style={{ marginTop: "4px" }}>
                   <div className="api-info">

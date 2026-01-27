@@ -1,4 +1,5 @@
 use crate::stock_api::types::StockData;
+use crate::stock_api::http_client::http_client;
 use crate::stock_api::utils::parse_symbol;
 
 pub async fn fetch_time_series(symbol: &str) -> Result<Vec<StockData>, String> {
@@ -8,38 +9,46 @@ pub async fn fetch_time_series(symbol: &str) -> Result<Vec<StockData>, String> {
         "http://push2his.eastmoney.com/api/qt/stock/kline/get?secid={}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f61&klt=1&fqt=1&beg=0&end=20500000&lmt=1200",
         secid
     );
+    let client = http_client().await?;
     
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Client error: {}", e))?;
+    eprintln!("=== Network Request Debug ===");
+    eprintln!("Fetching time series data for symbol: {}", symbol);
+    eprintln!("Endpoint: {}", url);
     
     // Retry up to 3 times for network errors
     let mut last_error = None;
     for attempt in 0..3 {
+        eprintln!("Attempt {}: Sending request...", attempt + 1);
+        let start_time = std::time::Instant::now();
         let response_result = client
             .get(&url)
             .timeout(std::time::Duration::from_secs(15))
             .send()
             .await;
+        let elapsed = start_time.elapsed();
+        eprintln!("Request completed in {:?}", elapsed);
         
         match response_result {
             Ok(response) => {
+                eprintln!("Response Status: {}", response.status());
                 if !response.status().is_success() {
+                    eprintln!("API error: {}", response.status());
                     return Err(format!("API error: {}", response.status()));
                 }
                 
                 match response.json::<serde_json::Value>().await {
                     Ok(json) => {
+                        eprintln!("Successfully parsed JSON response");
                         let data = &json["data"];
                         if data.is_null() {
+                            eprintln!("No data returned in response");
                             return Err("No data returned".to_string());
                         }
                         
                         let klines = data["klines"]
                             .as_array()
                             .ok_or("No kline data")?;
+                        eprintln!("Found {} kline data points", klines.len());
                         
                         let mut result = Vec::new();
                         
@@ -118,12 +127,7 @@ pub async fn fetch_stock_history(symbol: &str, period: &str) -> Result<Vec<Stock
         "http://push2his.eastmoney.com/api/qt/stock/kline/get?secid={}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f61&klt={}&fqt=1&beg=0&end=20500000&lmt={}",
         secid, klt, limit
     );
-    
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0")
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .map_err(|e| format!("Client error: {}", e))?;
+    let client = http_client().await?;
     
     // Helper function to parse response
     let parse_response = |json: serde_json::Value| -> Result<Vec<StockData>, String> {

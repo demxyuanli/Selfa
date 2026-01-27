@@ -1,5 +1,6 @@
 pub mod types;
 pub mod utils;
+pub mod http_client;
 pub mod data;
 pub mod technical_indicators;
 pub mod candlestick_patterns;
@@ -12,6 +13,7 @@ pub mod prediction_arima;
 pub mod ai_analysis;
 pub mod ai_analysis_json;
 pub mod ai_analysis_local;
+pub mod ai_api_config;
 pub mod backtest;
 pub mod chip_analysis;
 

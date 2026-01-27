@@ -1,6 +1,6 @@
 use crate::cache::StockCache;
 use crate::database::{Database, run_blocking_db};
-use crate::stock_api::{fetch_stock_history, fetch_stock_quote, fetch_time_series, get_related_sectors, StockData, StockDataBundle, StockQuote, utils::is_trading_hours};
+use crate::stock_api::{fetch_stock_history, fetch_stock_quote, fetch_time_series, get_related_sectors, StockData, StockDataBundle, StockQuote, utils::{is_trading_hours, parse_date}};
 use tokio::sync::Semaphore;
 use crate::stock_api::prediction_similarity::{find_similar_patterns, SimilarityPredictionResponse, TargetPattern};
 use crate::stock_api::chip_analysis::{calculate_chip_distribution, ChipAnalysisResult};
@@ -42,6 +42,28 @@ fn get_latest_day_data(data: &[StockData]) -> Vec<StockData> {
     }
 }
 
+fn is_day_period(period: &str) -> bool {
+    matches!(period, "1d" | "1w" | "1mo" | "1y" | "2y" | "5y")
+}
+
+fn kline_limit_for_period(period: &str) -> i32 {
+    match period {
+        "1m" => 240,
+        "5m" => 240,
+        "30m" => 240,
+        "60m" => 240,
+        "120m" => 240,
+        "5d" => 1200,
+        "1d" => 240,
+        "1w" => 240,
+        "1mo" => 240,
+        "1y" => 365,
+        "2y" => 24,
+        "5y" => 60,
+        _ => 240,
+    }
+}
+
 #[tauri::command]
 pub async fn get_stock_sectors(
     symbol: String,
@@ -72,11 +94,37 @@ pub async fn get_stock_quote(
             return Ok(q);
         }
     }
+    let fetch_result = if in_trading {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(4),
+            fetch_stock_quote(&symbol),
+        )
+        .await
+        {
+            Ok(r) => r,
+            Err(_) => Err("Network timeout".to_string()),
+        }
+    } else {
+        fetch_stock_quote(&symbol).await
+    };
 
-    let quote = fetch_stock_quote(&symbol).await?;
-    cache.record_fetch_time(&symbol, "quote").await;
-    cache.set_quote(symbol, quote.clone()).await;
-    Ok(quote)
+    match fetch_result {
+        Ok(quote) => {
+            cache.record_fetch_time(&symbol, "quote").await;
+            cache.set_quote(symbol, quote.clone()).await;
+            Ok(quote)
+        }
+        Err(err) => {
+            let db_clone = db.inner().clone();
+            let sym = symbol.clone();
+            if let Ok(Some(q)) = run_blocking_db(move || db_clone.get_quote(&sym)) {
+                cache.set_quote(symbol, q.clone()).await;
+                Ok(q)
+            } else {
+                Err(err)
+            }
+        }
+    }
 }
 
 const MAX_CONCURRENT_FETCHES: usize = 8;
@@ -140,9 +188,24 @@ pub async fn get_all_favorites_quotes(
         let symbol_clone = symbol.clone();
         let cache_clone = cache.inner().clone();
         let sem_clone = sem.clone();
+        let in_trading_clone = in_trading;
         let task = tokio::spawn(async move {
             let _permit = sem_clone.acquire().await;
-            match fetch_stock_quote(&symbol_clone).await {
+            let fetch_result = if in_trading_clone {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(4),
+                    fetch_stock_quote(&symbol_clone),
+                )
+                .await
+                {
+                    Ok(r) => r,
+                    Err(_) => Err("Network timeout".to_string()),
+                }
+            } else {
+                fetch_stock_quote(&symbol_clone).await
+            };
+
+            match fetch_result {
                 Ok(quote) => {
                     cache_clone.record_fetch_time(&symbol_clone, "quote").await;
                     cache_clone.set_quote(symbol_clone.clone(), quote.clone()).await;
@@ -231,14 +294,16 @@ pub async fn get_chip_analysis(
                     if let Some(ref latest) = latest_date {
                         let new_data: Vec<StockData> = fetched
                             .into_iter()
-                            .filter(|d| d.date > *latest)
+                            .filter(|d| d.date >= *latest)
                             .collect();
                         
                         if !new_data.is_empty() {
-                            let mut data = db_data;
+                            let mut data: Vec<StockData> = db_data
+                                .into_iter()
+                                .filter(|d| d.date < *latest)
+                                .collect();
                             data.extend(new_data);
                             data.sort_by(|a, b| a.date.cmp(&b.date));
-                            // Update cache
                             cache.set_history(symbol.clone(), period.clone(), data.clone()).await;
                             data
                         } else {
@@ -326,28 +391,41 @@ pub async fn get_stock_history(
     cache: State<'_, Arc<StockCache>>,
     db: State<'_, Arc<Database>>,
 ) -> Result<Vec<StockData>, String> {
-    if let Some(cached_data) = cache.get_history(&symbol, &period).await {
-        return Ok(cached_data);
-    }
+    let cached_data = cache.get_history(&symbol, &period).await;
     let db_clone = db.inner().clone();
     let sym = symbol.clone();
     let per = period.clone();
-    let (latest_date, cached) = run_blocking_db(move || {
+    let db_limit = kline_limit_for_period(&period);
+    let (latest_date_db, db_cached) = run_blocking_db(move || {
         let latest = db_clone.get_latest_kline_date(&sym, &per).map_err(|e| e.to_string())?;
-        let c = db_clone.get_kline(&sym, &per, None).map_err(|e| e.to_string())?;
+        let c = db_clone.get_kline(&sym, &per, Some(db_limit)).map_err(|e| e.to_string())?;
         Ok::<_, String>((latest, c))
     }).map_err(|e| format!("Database error: {}", e))?;
+    let cached = cached_data.unwrap_or(db_cached.clone());
+    let latest_date = latest_date_db.or_else(|| cached.iter().map(|d| d.date.clone()).max());
 
     let in_trading = is_trading_hours();
-    let skip_network = !cached.is_empty()
-        && !cache
+    let latest_day = latest_date
+        .as_ref()
+        .and_then(|d| parse_date(d).ok());
+    let today = Local::now().date_naive();
+    let day_period = is_day_period(&period);
+    let force_fetch = day_period && latest_day.map(|d| d < today).unwrap_or(false);
+    let latest_is_today = day_period && latest_day.map(|d| d == today).unwrap_or(false);
+    let min_interval_seconds = if latest_is_today { 60 } else if in_trading { 60 } else { 24 * 60 * 60 };
+    let should_fetch = if force_fetch {
+        true
+    } else {
+        cache
             .should_fetch_from_network_with_policy(
                 &symbol,
                 &period,
-                if in_trading { 600 } else { 24 * 60 * 60 },
+                min_interval_seconds,
                 false,
             )
-            .await;
+            .await
+    };
+    let skip_network = !cached.is_empty() && !should_fetch;
 
     if skip_network {
         cache
@@ -364,11 +442,14 @@ pub async fn get_stock_history(
             let result = if let Some(ref latest) = latest_date {
                 let new_data: Vec<StockData> = fetched
                     .into_iter()
-                    .filter(|d| d.date > *latest)
+                    .filter(|d| d.date >= *latest)
                     .collect();
 
                 if !new_data.is_empty() {
-                    let mut data = cached;
+                    let mut data: Vec<StockData> = cached
+                        .into_iter()
+                        .filter(|d| d.date < *latest)
+                        .collect();
                     data.extend(new_data);
                     data.sort_by(|a, b| a.date.cmp(&b.date));
                     let final_data = data.clone();
@@ -433,7 +514,21 @@ pub async fn get_time_series(
     };
 
     if should_fetch {
-        match fetch_time_series(&symbol).await {
+        let fetch_result = if in_trading {
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(6),
+                fetch_time_series(&symbol),
+            )
+            .await
+            {
+                Ok(r) => r,
+                Err(_) => Err("Network timeout".to_string()),
+            }
+        } else {
+            fetch_time_series(&symbol).await
+        };
+
+        match fetch_result {
             Ok(fetched_data) if !fetched_data.is_empty() => {
                 cache.record_fetch_time(&symbol, "time_series").await;
                 cache.set_time_series(symbol, fetched_data.clone()).await;
@@ -535,11 +630,14 @@ pub async fn get_intraday_time_series(
         if let Some(ref latest) = latest_date {
             let new_data: Vec<StockData> = fetched
                 .into_iter()
-                .filter(|d| d.date > *latest)
+                .filter(|d| d.date >= *latest)
                 .collect();
             
             if !new_data.is_empty() {
-                let mut data = cached;
+                let mut data: Vec<StockData> = cached
+                    .into_iter()
+                    .filter(|d| d.date < *latest)
+                    .collect();
                 data.extend(new_data);
                 data.sort_by(|a, b| a.date.cmp(&b.date));
                 let final_data = data.clone();
@@ -617,14 +715,30 @@ pub async fn get_stock_data_bundle(
 
     let quote = match quote {
         Some(q) => Some(q),
-        None => match fetch_stock_quote(&symbol).await {
-            Ok(q) => {
-                cache.record_fetch_time(&symbol, "quote").await;
-                cache.set_quote(symbol.clone(), q.clone()).await;
-                Some(q)
+        None => {
+            let fetch_result = if in_trading {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(4),
+                    fetch_stock_quote(&symbol),
+                )
+                .await
+                {
+                    Ok(r) => r,
+                    Err(_) => Err("Network timeout".to_string()),
+                }
+            } else {
+                fetch_stock_quote(&symbol).await
+            };
+
+            match fetch_result {
+                Ok(q) => {
+                    cache.record_fetch_time(&symbol, "quote").await;
+                    cache.set_quote(symbol.clone(), q.clone()).await;
+                    Some(q)
+                }
+                Err(_) => None,
             }
-            Err(_) => None,
-        },
+        }
     };
 
     let time_series = match cache.get_time_series(&symbol).await {
@@ -643,7 +757,21 @@ pub async fn get_stock_data_bundle(
             };
 
             if should_fetch {
-                match fetch_time_series(&symbol).await {
+                let fetch_result = if in_trading {
+                    match tokio::time::timeout(
+                        std::time::Duration::from_secs(6),
+                        fetch_time_series(&symbol),
+                    )
+                    .await
+                    {
+                        Ok(r) => r,
+                        Err(_) => Err("Network timeout".to_string()),
+                    }
+                } else {
+                    fetch_time_series(&symbol).await
+                };
+
+                match fetch_result {
                     Ok(data) if !data.is_empty() => {
                         cache.record_fetch_time(&symbol, "time_series").await;
                         cache.set_time_series(symbol.clone(), data.clone()).await;
@@ -721,7 +849,21 @@ pub async fn get_batch_stock_data_bundle(
                             cache_clone.set_quote(symbol.clone(), q.clone()).await;
                             Some(q)
                         } else {
-                            match fetch_stock_quote(&symbol).await {
+                            let fetch_result = if in_trading {
+                                match tokio::time::timeout(
+                                    std::time::Duration::from_secs(4),
+                                    fetch_stock_quote(&symbol),
+                                )
+                                .await
+                                {
+                                    Ok(r) => r,
+                                    Err(_) => Err("Network timeout".to_string()),
+                                }
+                            } else {
+                                fetch_stock_quote(&symbol).await
+                            };
+
+                            match fetch_result {
                                 Ok(q) => {
                                     cache_clone.record_fetch_time(&symbol, "quote").await;
                                     cache_clone.set_quote(symbol.clone(), q.clone()).await;
@@ -731,7 +873,21 @@ pub async fn get_batch_stock_data_bundle(
                             }
                         }
                     } else {
-                        match fetch_stock_quote(&symbol).await {
+                        let fetch_result = if in_trading {
+                            match tokio::time::timeout(
+                                std::time::Duration::from_secs(4),
+                                fetch_stock_quote(&symbol),
+                            )
+                            .await
+                            {
+                                Ok(r) => r,
+                                Err(_) => Err("Network timeout".to_string()),
+                            }
+                        } else {
+                            fetch_stock_quote(&symbol).await
+                        };
+
+                        match fetch_result {
                             Ok(q) => {
                                 cache_clone.record_fetch_time(&symbol, "quote").await;
                                 cache_clone.set_quote(symbol.clone(), q.clone()).await;
@@ -759,7 +915,21 @@ pub async fn get_batch_stock_data_bundle(
                     };
 
                     if should_fetch {
-                        match fetch_time_series(&symbol).await {
+                        let fetch_result = if in_trading {
+                            match tokio::time::timeout(
+                                std::time::Duration::from_secs(6),
+                                fetch_time_series(&symbol),
+                            )
+                            .await
+                            {
+                                Ok(r) => r,
+                                Err(_) => Err("Network timeout".to_string()),
+                            }
+                        } else {
+                            fetch_time_series(&symbol).await
+                        };
+
+                        match fetch_result {
                             Ok(data) if !data.is_empty() => {
                                 cache_clone.record_fetch_time(&symbol, "time_series").await;
                                 cache_clone.set_time_series(symbol.clone(), data.clone()).await;
@@ -877,11 +1047,14 @@ pub async fn get_batch_intraday_time_series(
                     if let Some(ref latest) = latest_date {
                         let new_data: Vec<StockData> = fetched
                             .into_iter()
-                            .filter(|d| d.date > *latest)
+                            .filter(|d| d.date >= *latest)
                             .collect();
                         
                         if !new_data.is_empty() {
-                            let mut data = cached;
+                            let mut data: Vec<StockData> = cached
+                                .into_iter()
+                                .filter(|d| d.date < *latest)
+                                .collect();
                             data.extend(new_data);
                             data.sort_by(|a, b| a.date.cmp(&b.date));
                             let final_data = data.clone();

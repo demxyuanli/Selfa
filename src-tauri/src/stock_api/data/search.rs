@@ -101,20 +101,34 @@ pub async fn search_stocks_by_query(query: &str) -> Result<Vec<StockInfo>, Strin
         encoded_query
     );
     
+    eprintln!("=== Network Request Debug ===");
+    eprintln!("Searching stocks with query: {}", query);
+    eprintln!("Endpoint: {}", url);
+    
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0")
         .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| format!("Client error: {}", e))?;
 
-    let response = client
+    eprintln!("Sending request...");
+    let start_time = std::time::Instant::now();
+    let response_result = client
         .get(&url)
         .timeout(std::time::Duration::from_secs(8))
         .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
+        .await;
+    let elapsed = start_time.elapsed();
+    eprintln!("Request completed in {:?}", elapsed);
 
+    let response = response_result.map_err(|e| {
+        eprintln!("Network error: {}", e);
+        format!("Network error: {}", e)
+    })?;
+
+    eprintln!("Response Status: {}", response.status());
     if !response.status().is_success() {
+        eprintln!("API error: {}", response.status());
         return Err(format!("API error: {}", response.status()));
     }
 

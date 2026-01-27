@@ -331,7 +331,7 @@ const StockTab: React.FC<StockTabProps> = ({ tab }) => {
         );
       case "aiagent":
         return (
-          <AIAgentAnalysis klineData={klineData} symbol={tab.symbol} quote={tab.quote} />
+          <AIAgentAnalysis klineData={klineData} intradayData={timeSeriesData} symbol={tab.symbol} quote={tab.quote} />
         );
       case "customIndicator":
         return (

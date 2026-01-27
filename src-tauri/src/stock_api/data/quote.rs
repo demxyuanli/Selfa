@@ -1,4 +1,5 @@
 use crate::stock_api::types::StockQuote;
+use crate::stock_api::http_client::http_client;
 use crate::stock_api::utils::parse_symbol;
 
 pub async fn fetch_stock_quote(symbol: &str) -> Result<StockQuote, String> {
@@ -12,35 +13,50 @@ pub async fn fetch_stock_quote(symbol: &str) -> Result<StockQuote, String> {
         "http://push2.eastmoney.com/api/qt/stock/get?secid={}&fields={}",
         secid, fields
     );
+    let client = http_client().await?;
 
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
-        .map_err(|e| format!("Client error: {}", e))?;
+    eprintln!("=== Network Request Debug ===");
+    eprintln!("Fetching stock quote for symbol: {}", symbol);
+    eprintln!("Endpoint: {}", url);
 
     let mut last_error = String::new();
     let mut json_result: Option<serde_json::Value> = None;
 
     for attempt in 0..3 {
-        match client.get(&url).timeout(std::time::Duration::from_secs(10)).send().await {
+        eprintln!("Attempt {}: Sending request...", attempt + 1);
+        let start_time = std::time::Instant::now();
+        let response_result = client.get(&url).timeout(std::time::Duration::from_secs(10)).send().await;
+        let elapsed = start_time.elapsed();
+        eprintln!("Request completed in {:?}", elapsed);
+        
+        match response_result {
             Ok(response) => {
+                eprintln!("Response Status: {}", response.status());
                 if !response.status().is_success() {
                     last_error = format!("API error: {}", response.status());
+                    eprintln!("API error: {}", last_error);
                 } else {
                     match response.json::<serde_json::Value>().await {
                         Ok(val) => {
+                            eprintln!("Successfully parsed JSON response");
                             json_result = Some(val);
                             break;
                         }
-                        Err(e) => last_error = format!("Parse error: {}", e),
+                        Err(e) => {
+                            last_error = format!("Parse error: {}", e);
+                            eprintln!("Parse error: {}", e);
+                        }
                     }
                 }
             }
-            Err(e) => last_error = format!("Network error: {}", e),
+            Err(e) => {
+                last_error = format!("Network error: {}", e);
+                eprintln!("Network error: {}", e);
+            }
         }
         
         if attempt < 2 {
+            eprintln!("Retrying in {}ms...", 500 * (attempt + 1));
             tokio::time::sleep(tokio::time::Duration::from_millis(500 * (attempt + 1) as u64)).await;
         }
     }

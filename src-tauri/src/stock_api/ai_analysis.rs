@@ -4,12 +4,37 @@ use super::prediction::{predict_linear_regression, predict_moving_average, predi
 use super::prediction_advanced::predict_ensemble;
 use super::ai_analysis_json::{extract_json_from_text, find_json_in_text, extract_analysis_text, patch_incomplete_ai_result, fix_json_common_issues, truncate_string_safe};
 use super::ai_analysis_local::{generate_local_ai_analysis, create_fallback_analysis, format_recent_data};
+use super::ai_api_config::{detect_api_provider, get_api_provider_config};
+use std::collections::HashMap;
 
 pub async fn ai_analyze_stock(
     symbol: &str,
     data: &[StockData],
+    intraday_data: Option<&[StockData]>,
     quote: Option<&StockQuote>,
     api_key: Option<&str>,
+    model: &str,
+    use_local_fallback: bool,
+) -> Result<AIAnalysisResult, String> {
+    ai_analyze_stock_with_keys(
+        symbol,
+        data,
+        intraday_data,
+        quote,
+        api_key,
+        None,
+        model,
+        use_local_fallback,
+    ).await
+}
+
+pub async fn ai_analyze_stock_with_keys(
+    symbol: &str,
+    data: &[StockData],
+    intraday_data: Option<&[StockData]>,
+    quote: Option<&StockQuote>,
+    api_key: Option<&str>,
+    api_keys: Option<&HashMap<String, String>>,
     model: &str,
     use_local_fallback: bool,
 ) -> Result<AIAnalysisResult, String> {
@@ -17,38 +42,60 @@ pub async fn ai_analyze_stock(
         return Err("Insufficient data for AI analysis".to_string());
     }
 
-    // Check if model is free (Groq and Gemini are free but still need API key)
+    let provider = detect_api_provider(model);
+    if provider == "unknown" {
+        return Err("Unsupported model".to_string());
+    }
+
     let is_free_model = model.starts_with("groq:") || 
                        model.starts_with("llama") || 
                        model.starts_with("mixtral") ||
                        model.starts_with("gemini");
     
-    // For models that require API key but none provided, use local analysis
-    if (api_key.is_none() && !is_free_model) || use_local_fallback {
-        return generate_local_ai_analysis(symbol, data, quote);
-    }
-    
-    // For free models, still need API key (but it's free to get)
-    // If no key provided for free model, fall back to local analysis
-    let api_key_to_use = if is_free_model {
-        api_key.unwrap_or_else(|| {
-            // Free APIs require API key - user needs to get free API key
-            return "";
-        })
+    let api_key_to_use = if let Some(keys_map) = api_keys {
+        keys_map.get(provider).cloned()
+    } else if let Some(key) = api_key {
+        Some(key.to_string())
     } else {
-        api_key.unwrap_or("")
+        None
     };
-    
-    if api_key_to_use.is_empty() && is_free_model {
+
+    if api_key_to_use.is_none() && !is_free_model {
+        if use_local_fallback {
+            return generate_local_ai_analysis(symbol, data, quote);
+        } else {
+            return Err(format!("API key required for {} provider", provider));
+        }
+    }
+
+    if api_key_to_use.is_none() && is_free_model {
         let error_msg = if model.starts_with("gemini") {
             "Gemini API requires a free API key. Please get one from https://makersuite.google.com/app/apikey".to_string()
         } else {
             "Free API models require a free API key. Please get one from the provider's website".to_string()
         };
-        return Err(error_msg);
+        if use_local_fallback {
+            return generate_local_ai_analysis(symbol, data, quote);
+        } else {
+            return Err(error_msg);
+        }
     }
 
-    match call_ai_api(symbol, data, quote, api_key_to_use, model).await {
+    let key = api_key_to_use.unwrap_or_default();
+    if key.is_empty() && is_free_model {
+        let error_msg = if model.starts_with("gemini") {
+            "Gemini API requires a free API key. Please get one from https://makersuite.google.com/app/apikey".to_string()
+        } else {
+            "Free API models require a free API key. Please get one from the provider's website".to_string()
+        };
+        if use_local_fallback {
+            return generate_local_ai_analysis(symbol, data, quote);
+        } else {
+            return Err(error_msg);
+        }
+    }
+
+    match call_ai_api(symbol, data, intraday_data, quote, &key, model).await {
         Ok(result) => Ok(result),
         Err(e) => {
             eprintln!("AI API call failed: {}", e);
@@ -64,6 +111,7 @@ pub async fn ai_analyze_stock(
 async fn call_ai_api(
     symbol: &str,
     data: &[StockData],
+    intraday_data: Option<&[StockData]>,
     _quote: Option<&StockQuote>,
     api_key: &str,
     model: &str,
@@ -177,8 +225,55 @@ async fn call_ai_api(
     let recent_volume = volumes.iter().rev().take(5).sum::<f64>() / 5.0;
     let volume_ratio = if avg_volume > 0.0 { recent_volume / avg_volume } else { 1.0 };
 
+    let (intraday_summary, intraday_metrics) = if let Some(intraday) = intraday_data {
+        if intraday.len() >= 5 {
+            let intraday_closes: Vec<f64> = intraday.iter().map(|d| d.close).collect();
+            let intraday_last_price = *intraday_closes.last().unwrap_or(&last_price);
+            let intraday_change = if intraday_closes.len() >= 2 {
+                ((intraday_last_price - intraday_closes[intraday_closes.len() - 2]) / intraday_closes[intraday_closes.len() - 2]) * 100.0
+            } else {
+                0.0
+            };
+            let intraday_last_date = intraday.last().map(|d| d.date.as_str()).unwrap_or("");
+            let intraday_volumes: Vec<f64> = intraday.iter().map(|d| d.volume as f64).collect();
+            let intraday_avg_volume = intraday_volumes.iter().sum::<f64>() / intraday_volumes.len() as f64;
+            let intraday_recent_count = intraday_volumes.len().min(10) as f64;
+            let intraday_recent_volume = if intraday_recent_count > 0.0 {
+                intraday_volumes.iter().rev().take(intraday_recent_count as usize).sum::<f64>() / intraday_recent_count
+            } else {
+                0.0
+            };
+            let intraday_volume_ratio = if intraday_avg_volume > 0.0 { intraday_recent_volume / intraday_avg_volume } else { 1.0 };
+            let intraday_recent = {
+                let start = intraday.len().saturating_sub(20);
+                format_recent_data(&intraday[start..])
+            };
+            let intraday_slope = if intraday_closes.len() >= 20 {
+                let recent = &intraday_closes[intraday_closes.len() - 20..];
+                let first = recent[0];
+                let last = recent[recent.len() - 1];
+                if first.abs() > 0.0 { ((last - first) / first) * 100.0 } else { 0.0 }
+            } else {
+                0.0
+            };
+            let metrics = format!(
+                "Intraday Last Time: {}\nIntraday Last Price: {:.2}\nIntraday Change: {:.2}%\nIntraday Volume Ratio (recent/avg): {:.2}x\nIntraday Trend (last 20 pts): {:.2}%",
+                intraday_last_date,
+                intraday_last_price,
+                intraday_change,
+                intraday_volume_ratio,
+                intraday_slope
+            );
+            (intraday_recent, metrics)
+        } else {
+            ("N/A".to_string(), "Intraday data insufficient".to_string())
+        }
+    } else {
+        ("N/A".to_string(), "No intraday data provided".to_string())
+    };
+
     let prompt = format!(
-        r#"Please analyze the following stock data and provide a comprehensive analysis in JSON format. IMPORTANT: All text content must be in Chinese (Simplified Chinese).
+        r#"Analyze the following stock data and return a STRICT JSON object. IMPORTANT: All text content in the JSON values must be in Simplified Chinese.
 
 Stock Symbol: {}
 Current Price: {:.2}
@@ -187,8 +282,14 @@ Price Change: {:.2}%
 Recent Price Data (last 10 days):
 {}
 
+Intraday Data (last 20 points):
+{}
+
+Intraday Metrics:
+{}
+
 Technical Indicators:
-- RSI (14): {:.2} (??>70, ??<30)
+- RSI (14): {:.2} (>70 overbought, <30 oversold)
 - MACD: {:.2}, Signal: {:.2}
 - MA20: {:.2}, MA50: {:.2}
 - EMA12: {:.2}, EMA26: {:.2}
@@ -197,65 +298,53 @@ Technical Indicators:
 - Bollinger Bands: Upper={:.2}, Lower={:.2}, Position={:.1}%
 - Volume Ratio (recent/avg): {:.2}x
 
-Multiple Prediction Methods Results (????????):
+Multiple Prediction Methods Results:
 {}
 Average Prediction: {:.2}
 Prediction Range: {:.2} - {:.2} (range: {:.2})
 
-CRITICAL REQUIREMENTS - YOU MUST RETURN ALL REQUIRED FIELDS:
-
-Please provide analysis in the following JSON format. ALL FIELDS ARE REQUIRED - DO NOT OMIT ANY FIELD:
-
+RESPONSE TEMPLATE (ALL FIELDS REQUIRED, DO NOT OMIT):
 {{
-  "analysis": "????????-5????????",
+  "analysis": "<string, 3-6 sentences>",
   "prediction": {{
-    "price": <predicted_price>,
-    "confidence": <confidence_0_100>,
+    "price": <number>,
+    "confidence": <0-100>,
     "trend": "bullish|bearish|neutral",
-    "reasoning": "??????????"
+    "reasoning": "<string>"
   }},
   "risk_assessment": {{
     "level": "low|medium|high",
-    "factors": ["????1????", "????2????"]
+    "factors": ["<string>", "<string>"]
   }},
-  "recommendations": ["????1????", "????2????", "????3????"],
+  "recommendations": ["<string>", "<string>", "<string>"],
   "technical_summary": {{
     "indicators": [
-      {{"name": "RSI", "value": <value>, "signal": "buy|sell|hold"}},
-      {{"name": "MACD", "value": <value>, "signal": "buy|sell|hold"}},
-      {{"name": "MA20", "value": <value>, "signal": "buy|sell|hold"}},
-      {{"name": "MA50", "value": <value>, "signal": "buy|sell|hold"}}
+      {{"name": "RSI", "value": <number>, "signal": "buy|sell|hold"}},
+      {{"name": "MACD", "value": <number>, "signal": "buy|sell|hold"}},
+      {{"name": "MA20", "value": <number>, "signal": "buy|sell|hold"}},
+      {{"name": "MA50", "value": <number>, "signal": "buy|sell|hold"}}
     ],
     "overall_signal": "buy|sell|hold"
   }},
   "price_targets": [
-    {{"period": "1??", "target": <price>, "probability": <0_100>}},
-    {{"period": "1??", "target": <price>, "probability": <0_100>}},
-    {{"period": "3??", "target": <price>, "probability": <0_100>}}
+    {{"period": "1w", "target": <number>, "probability": <0-100>}},
+    {{"period": "1m", "target": <number>, "probability": <0-100>}},
+    {{"period": "3m", "target": <number>, "probability": <0-100>}}
   ]
 }}
 
-REQUIRED FIELDS CHECKLIST (ALL MUST BE PRESENT):
-??"analysis" - string (required)
-??"prediction" - object with "price", "confidence", "trend", "reasoning" (all required)
-??"risk_assessment" - object with "level", "factors" (both required)
-??"recommendations" - array with at least 2 items (required)
-??"technical_summary" - object with "indicators" (array) and "overall_signal" (both required)
-??"price_targets" - array with at least 2 items (required)
-
-IMPORTANT INSTRUCTIONS: 
-1. ALL FIELDS ABOVE ARE MANDATORY - DO NOT SKIP ANY FIELD
-2. Consider all prediction methods when making your prediction - use the average and range as reference
-3. Analyze the consistency between different methods - if they converge, confidence should be higher
-4. Consider technical indicators, volume patterns, and prediction convergence together
-5. All text content in the JSON response must be in Simplified Chinese
-6. Respond ONLY with valid, complete JSON containing ALL required fields
-7. DO NOT include any text before or after the JSON object
-8. Ensure the JSON is properly formatted and complete before responding."#,
+STRICT RULES:
+1) Output must be valid JSON only, no markdown or extra text.
+2) All fields above are mandatory, arrays must meet minimum lengths.
+3) Use numeric values for price/confidence/probability.
+4) Keep all text values in Simplified Chinese.
+5) If unsure, provide conservative, neutral output but keep the schema intact."#,
         symbol,
         last_price,
         price_change,
         format_recent_data(data),
+        intraday_summary,
+        intraday_metrics,
         last_rsi,
         last_macd,
         last_signal,
@@ -276,39 +365,40 @@ IMPORTANT INSTRUCTIONS:
         prediction_range,
     );
 
-    let (api_url, api_provider) = if model.starts_with("gpt") {
-        ("https://api.openai.com/v1/chat/completions", "openai")
-    } else if model.starts_with("claude") {
-        ("https://api.anthropic.com/v1/messages", "anthropic")
-    } else if model.starts_with("groq") || model.starts_with("llama") || model.starts_with("mixtral") {
-        ("https://api.groq.com/openai/v1/chat/completions", "groq")
-    } else if model.starts_with("gemini") {
-        ("https://generativelanguage.googleapis.com/v1/models", "gemini") // Will try v1 first, fallback to v1beta
-    } else if model.starts_with("huggingface") || model.contains("/") {
-        ("https://api-inference.huggingface.co/models", "huggingface")
-    } else {
+    let provider = detect_api_provider(model);
+    if provider == "unknown" {
         return Err("Unsupported model".to_string());
-    };
+    }
+
+    let api_config = get_api_provider_config(provider);
+    let api_url = &api_config.endpoint;
+    let api_provider = provider;
 
     let client = reqwest::Client::builder()
         .user_agent("StockAnalyzer/1.0")
         .build()
         .map_err(|e| format!("Client error: {}", e))?;
 
-    let response = if api_provider == "openai" || api_provider == "groq" {
-        // OpenAI-compatible API (OpenAI, Groq)
-        let groq_model = if model.starts_with("groq:") {
-            model.strip_prefix("groq:").unwrap_or(model)
-        } else if model.starts_with("llama") {
-            "llama-3.1-70b-versatile"
-        } else if model.starts_with("mixtral") {
-            "mixtral-8x7b-32768"
+    let response = if api_provider == "openai" || api_provider == "groq" || api_provider == "xai" {
+        let mapped_model = if let Some(mapper) = api_config.model_mapping {
+            mapper(model)
         } else {
-            model
+            model.to_string()
         };
         
+        eprintln!("=== Network Request Debug ===");
+        eprintln!("API Provider: {}", api_provider);
+        eprintln!("Endpoint: {}", api_url);
+        eprintln!("Model: {} (mapped from: {})", mapped_model, model);
+        eprintln!("Request Body Size: {} bytes", serde_json::to_string(&serde_json::json!({
+            "model": mapped_model,
+            "messages": [{"role": "system", "content": "..."}, {"role": "user", "content": format!("{}...", &prompt[..prompt.len().min(100)])}],
+            "temperature": 0.3,
+            "response_format": {"type": "json_object"}
+        })).unwrap_or_default().len());
+        
         let body = serde_json::json!({
-            "model": groq_model,
+            "model": mapped_model,
             "messages": [
                 {"role": "system", "content": "You are a professional stock market analyst. Provide accurate, data-driven analysis in JSON format. CRITICAL: You MUST return ALL required fields including 'analysis', 'prediction', 'risk_assessment', 'recommendations', 'technical_summary', and 'price_targets'. Do NOT omit any field. All text content must be in Simplified Chinese (??)."},
                 {"role": "user", "content": prompt}
@@ -317,16 +407,40 @@ IMPORTANT INSTRUCTIONS:
             "response_format": {"type": "json_object"}
         });
 
-        client
-            .post(api_url)
-            .header("Authorization", format!("Bearer {}", api_key))
+        let mut request = client.post(api_url);
+        if api_config.auth_header == "Authorization" {
+            let auth_header = format!("{} {}", api_config.auth_header_value, api_key);
+            eprintln!("Auth Header: {} {}", api_config.auth_header_value, if api_key.len() > 10 { format!("{}...", &api_key[..10]) } else { "***".to_string() });
+            request = request.header("Authorization", auth_header);
+        }
+        eprintln!("Sending request...");
+        let start_time = std::time::Instant::now();
+        let response_result = request
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
-            .await
-            .map_err(|e| format!("Network error: {}", e))?
+            .await;
+        let elapsed = start_time.elapsed();
+        eprintln!("Request completed in {:?}", elapsed);
+        
+        match &response_result {
+            Ok(resp) => {
+                eprintln!("Response Status: {}", resp.status());
+                eprintln!("Response Headers: {:?}", resp.headers().iter().map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string())).collect::<Vec<_>>());
+            }
+            Err(e) => {
+                eprintln!("Request failed: {}", e);
+            }
+        }
+        
+        response_result.map_err(|e| format!("Network error: {}", e))?
     } else if api_provider == "anthropic" {
         // Claude API
+        eprintln!("=== Network Request Debug ===");
+        eprintln!("API Provider: {}", api_provider);
+        eprintln!("Endpoint: {}", api_url);
+        eprintln!("Model: {}", model);
+        
         let claude_prompt = format!(
             "You are a professional stock market analyst. Provide accurate, data-driven analysis in JSON format. CRITICAL: You MUST return ALL required fields including 'analysis', 'prediction', 'risk_assessment', 'recommendations', 'technical_summary', and 'price_targets'. Do NOT omit any field. All text content must be in Simplified Chinese (??).\n\n{}",
             prompt
@@ -338,35 +452,40 @@ IMPORTANT INSTRUCTIONS:
                 {"role": "user", "content": claude_prompt}
             ]
         });
+        eprintln!("Request Body Size: {} bytes", serde_json::to_string(&body).unwrap_or_default().len());
 
-        client
-            .post(api_url)
-            .header("x-api-key", api_key)
+        let mut request = client.post(api_url);
+        if api_config.auth_header == "x-api-key" {
+            eprintln!("Auth Header: x-api-key: {}...", if api_key.len() > 10 { &api_key[..10] } else { "***" });
+            request = request.header("x-api-key", api_key);
+        }
+        eprintln!("Sending request...");
+        let start_time = std::time::Instant::now();
+        let response_result = request
             .header("anthropic-version", "2023-06-01")
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
-            .await
-            .map_err(|e| format!("Network error: {}", e))?
+            .await;
+        let elapsed = start_time.elapsed();
+        eprintln!("Request completed in {:?}", elapsed);
+        
+        match &response_result {
+            Ok(resp) => {
+                eprintln!("Response Status: {}", resp.status());
+            }
+            Err(e) => {
+                eprintln!("Request failed: {}", e);
+            }
+        }
+        
+        response_result.map_err(|e| format!("Network error: {}", e))?
     } else if api_provider == "gemini" {
         // Google Gemini API
-        // Map user selection to actual API model names
-        let gemini_model = if model.starts_with("gemini:") {
-            let model_name = model.strip_prefix("gemini:").unwrap_or("gemini-2.5-flash");
-            // Map to correct API model names
-            match model_name {
-                "gemini-3-flash-preview" => "gemini-3-flash-preview",
-                "gemini-1.5-flash" => "gemini-1.5-flash",
-                "gemini-1.5-pro" => "gemini-1.5-pro",
-                "gemini-2.5-flash" => "gemini-2.5-flash",
-                "gemini-2.5-pro" => "gemini-2.5-pro",
-                "gemini-pro" => "gemini-2.5-flash", // Fallback to 2.5-flash
-                _ => "gemini-2.5-flash"
-            }
-        } else if model == "gemini" {
-            "gemini-2.5-flash"
+        let gemini_model = if let Some(mapper) = api_config.model_mapping {
+            mapper(model)
         } else {
-            "gemini-2.5-flash"
+            "gemini-2.5-flash".to_string()
         };
         
         // Build the prompt with system instruction (Chinese output required)
@@ -383,7 +502,7 @@ IMPORTANT INSTRUCTIONS:
             }],
             "generationConfig": {
                 "temperature": 0.3,
-                "maxOutputTokens": 4000,
+                "maxOutputTokens": 8192,
                 "responseMimeType": "application/json"
             }
         });
@@ -391,20 +510,25 @@ IMPORTANT INSTRUCTIONS:
         // Try different API endpoints and model name variations
         let mut response = None;
         let mut last_error = String::new();
-        let mut tried_models = vec![gemini_model.to_string()];
+        let mut tried_models: Vec<String> = vec![gemini_model.clone()];
         
         // List of models to try in order (removed deprecated models)
-        let models_to_try = vec![
-            gemini_model,
-            "gemini-2.5-flash",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro",
+        let models_to_try: Vec<String> = vec![
+            gemini_model.clone(),
+            "gemini-2.5-flash".to_string(),
+            "gemini-1.5-flash".to_string(),
+            "gemini-1.5-pro".to_string(),
         ];
+        
+        eprintln!("=== Network Request Debug ===");
+        eprintln!("API Provider: {}", api_provider);
+        eprintln!("Model: {} (mapped from: {})", gemini_model, model);
+        eprintln!("Request Body Size: {} bytes", serde_json::to_string(&body).unwrap_or_default().len());
         
         // Try v1 API first (for newer models)
         let mut api_key_invalid = false;
         let mut quota_exceeded = false;
-        for model_name in &models_to_try {
+        for model_name in models_to_try.iter() {
             if response.is_some() {
                 break;
             }
@@ -417,22 +541,32 @@ IMPORTANT INSTRUCTIONS:
             
             let url_v1 = format!("https://generativelanguage.googleapis.com/v1/models/{}:generateContent?key={}", 
                 model_name, api_key);
-            match client
+            eprintln!("Trying Gemini API v1 with model: {}", model_name);
+            eprintln!("Endpoint: {}...", &url_v1[..url_v1.find('?').unwrap_or(url_v1.len())]);
+            eprintln!("Sending request...");
+            let start_time = std::time::Instant::now();
+            let response_result = client
                 .post(&url_v1)
                 .header("Content-Type", "application/json")
                 .json(&body)
                 .send()
-                .await
-            {
+                .await;
+            let elapsed = start_time.elapsed();
+            eprintln!("Request completed in {:?}", elapsed);
+            
+            match response_result {
                 Ok(resp) => {
+                    eprintln!("Response Status: {}", resp.status());
                     if resp.status().is_success() {
+                        eprintln!("Successfully received response from Gemini API v1");
                         response = Some(resp);
                         break;
                     } else {
                         let status = resp.status();
                         let error_text = resp.text().await.unwrap_or_default();
-                        if !tried_models.contains(&model_name.to_string()) {
-                            tried_models.push(model_name.to_string());
+                        eprintln!("API error: {} - {}", status, &error_text[..error_text.len().min(200)]);
+                        if !tried_models.contains(model_name) {
+                            tried_models.push(model_name.clone());
                         }
                         
                         // Check if error is related to invalid or expired API key
@@ -474,7 +608,7 @@ IMPORTANT INSTRUCTIONS:
         
         // If v1 failed and API key is valid and quota not exceeded, try v1beta
         if response.is_none() && !api_key_invalid && !quota_exceeded {
-            for model_name in &models_to_try {
+            for model_name in models_to_try.iter() {
                 if response.is_some() {
                     break;
                 }
@@ -487,20 +621,31 @@ IMPORTANT INSTRUCTIONS:
                 
                 let url_v1beta = format!("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}", 
                     model_name, api_key);
-                match client
+                eprintln!("Trying Gemini API v1beta with model: {}", model_name);
+                eprintln!("Endpoint: {}...", &url_v1beta[..url_v1beta.find('?').unwrap_or(url_v1beta.len())]);
+                eprintln!("Sending request...");
+                let start_time = std::time::Instant::now();
+                let response_result = client
                     .post(&url_v1beta)
                     .header("Content-Type", "application/json")
                     .json(&body)
                     .send()
-                    .await
+                    .await;
+                let elapsed = start_time.elapsed();
+                eprintln!("Request completed in {:?}", elapsed);
+                
+                match response_result
                 {
                     Ok(resp) => {
+                        eprintln!("Response Status: {}", resp.status());
                         if resp.status().is_success() {
+                            eprintln!("Successfully received response from Gemini API v1beta");
                             response = Some(resp);
                             break;
                         } else {
                             let status = resp.status();
                             let error_text = resp.text().await.unwrap_or_default();
+                            eprintln!("API error: {} - {}", status, &error_text[..error_text.len().min(200)]);
                             if !tried_models.contains(&model_name.to_string()) {
                                 tried_models.push(model_name.to_string());
                             }
@@ -534,8 +679,8 @@ IMPORTANT INSTRUCTIONS:
                         }
                     }
                     Err(e) => {
-                        if !tried_models.contains(&model_name.to_string()) {
-                            tried_models.push(model_name.to_string());
+                        if !tried_models.contains(model_name) {
+                            tried_models.push(model_name.clone());
                         }
                         last_error = format!("v1beta API network error for {}: {}", model_name, e);
                     }
@@ -553,13 +698,23 @@ IMPORTANT INSTRUCTIONS:
         })?
     } else if api_provider == "huggingface" {
         // Hugging Face Inference API
-        let hf_model = if model.starts_with("huggingface:") {
-            model.strip_prefix("huggingface:").unwrap_or(model)
+        eprintln!("=== Network Request Debug ===");
+        eprintln!("API Provider: {}", api_provider);
+        
+        let hf_model = if let Some(mapper) = api_config.model_mapping {
+            mapper(model)
         } else {
-            model
+            if model.starts_with("huggingface:") {
+                model.strip_prefix("huggingface:").unwrap_or(model).to_string()
+            } else {
+                model.to_string()
+            }
         };
         
         let url = format!("{}/{}", api_url, hf_model);
+        eprintln!("Endpoint: {}", url);
+        eprintln!("Model: {} (mapped from: {})", hf_model, model);
+        
         let body = serde_json::json!({
             "inputs": format!("You are a professional stock market analyst. Provide accurate, data-driven analysis in JSON format. CRITICAL: You MUST return ALL required fields including 'analysis', 'prediction', 'risk_assessment', 'recommendations', 'technical_summary', and 'price_targets'. Do NOT omit any field. All text content must be in Simplified Chinese (??).\n\n{}", prompt),
             "parameters": {
@@ -568,15 +723,33 @@ IMPORTANT INSTRUCTIONS:
                 "return_full_text": false
             }
         });
+        eprintln!("Request Body Size: {} bytes", serde_json::to_string(&body).unwrap_or_default().len());
 
-        client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", api_key))
+        let mut request = client.post(&url);
+        if api_config.auth_header == "Authorization" {
+            eprintln!("Auth Header: {} {}...", api_config.auth_header_value, if api_key.len() > 10 { &api_key[..10] } else { "***" });
+            request = request.header("Authorization", format!("{} {}", api_config.auth_header_value, api_key));
+        }
+        eprintln!("Sending request...");
+        let start_time = std::time::Instant::now();
+        let response_result = request
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
-            .await
-            .map_err(|e| format!("Network error: {}", e))?
+            .await;
+        let elapsed = start_time.elapsed();
+        eprintln!("Request completed in {:?}", elapsed);
+        
+        match &response_result {
+            Ok(resp) => {
+                eprintln!("Response Status: {}", resp.status());
+            }
+            Err(e) => {
+                eprintln!("Request failed: {}", e);
+            }
+        }
+        
+        response_result.map_err(|e| format!("Network error: {}", e))?
     } else {
         return Err("Unsupported API provider".to_string());
     };
@@ -592,14 +765,16 @@ IMPORTANT INSTRUCTIONS:
         .await
         .map_err(|e| format!("Parse error: {}", e))?;
 
-    let content = if api_provider == "openai" || api_provider == "groq" {
+    let content: String = if api_provider == "openai" || api_provider == "groq" || api_provider == "xai" {
         json["choices"][0]["message"]["content"]
             .as_str()
             .ok_or("No content in response")?
+            .to_string()
     } else if api_provider == "anthropic" {
         json["content"][0]["text"]
             .as_str()
             .ok_or("No content in response")?
+            .to_string()
     } else if api_provider == "gemini" {
         // Check for errors first
         if let Some(error) = json.get("error") {
@@ -609,29 +784,63 @@ IMPORTANT INSTRUCTIONS:
             return Err(format!("Gemini API error: {}", error_msg));
         }
         
-        // Extract text from candidates
-        let text = json["candidates"][0]["content"]["parts"][0]["text"]
-            .as_str()
-            .ok_or("No content in Gemini response")?;
-        
-        // Gemini may return text wrapped in markdown code blocks, extract JSON
-        let text_clean = if text.trim_start().starts_with("```json") {
-            text.trim_start()
-                .strip_prefix("```json")
-                .and_then(|s| s.strip_suffix("```"))
-                .map(|s| s.trim())
-                .unwrap_or(text)
-        } else if text.trim_start().starts_with("```") {
-            text.trim_start()
-                .strip_prefix("```")
-                .and_then(|s| s.strip_suffix("```"))
-                .map(|s| s.trim())
-                .unwrap_or(text)
+        // Check if response was truncated
+        if let Some(candidates) = json.get("candidates").and_then(|c| c.as_array()) {
+            if let Some(first_candidate) = candidates.first() {
+                if let Some(finish_reason) = first_candidate.get("finishReason").and_then(|r| r.as_str()) {
+                    if finish_reason == "MAX_TOKENS" || finish_reason == "OTHER" {
+                        eprintln!("Warning: Gemini response may be truncated. finishReason: {}", finish_reason);
+                    }
+                }
+                
+                // Extract text from all parts (Gemini may return multiple parts)
+                let mut text_parts = Vec::new();
+                if let Some(content) = first_candidate.get("content") {
+                    if let Some(parts) = content.get("parts").and_then(|p| p.as_array()) {
+                        for part in parts {
+                            if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                                text_parts.push(text);
+                            }
+                        }
+                    }
+                }
+                
+                if text_parts.is_empty() {
+                    return Err("No text content in Gemini response".to_string());
+                }
+                
+                // Combine all parts
+                let text = text_parts.join("");
+                
+                // Gemini may return text wrapped in markdown code blocks, extract JSON
+                let text_clean = if text.trim_start().starts_with("```json") {
+                    text.trim_start()
+                        .strip_prefix("```json")
+                        .and_then(|s| s.strip_suffix("```"))
+                        .map(|s| s.trim().to_string())
+                        .unwrap_or_else(|| text.clone())
+                } else if text.trim_start().starts_with("```") {
+                    text.trim_start()
+                        .strip_prefix("```")
+                        .and_then(|s| s.strip_suffix("```"))
+                        .map(|s| s.trim().to_string())
+                        .unwrap_or_else(|| text.clone())
+                } else {
+                    text.clone()
+                };
+                
+                eprintln!("Gemini response: {} parts, total length: {} chars, finishReason: {:?}", 
+                    text_parts.len(), 
+                    text_clean.len(),
+                    first_candidate.get("finishReason").and_then(|r| r.as_str()));
+                
+                text_clean
+            } else {
+                return Err("No candidates in Gemini response".to_string());
+            }
         } else {
-            text
-        };
-        
-        text_clean
+            return Err("Invalid Gemini response format: no candidates".to_string());
+        }
     } else if api_provider == "huggingface" {
         // Hugging Face returns array of generated text
         if let Some(text_array) = json.as_array() {
@@ -639,6 +848,7 @@ IMPORTANT INSTRUCTIONS:
                 first_item["generated_text"]
                     .as_str()
                     .ok_or("No generated text in response")?
+                    .to_string()
             } else {
                 return Err("Empty response from Hugging Face".to_string());
             }
@@ -646,6 +856,7 @@ IMPORTANT INSTRUCTIONS:
             json["generated_text"]
                 .as_str()
                 .ok_or("No generated text in response")?
+                .to_string()
         } else {
             return Err("Unexpected Hugging Face response format".to_string());
         }
@@ -658,10 +869,10 @@ IMPORTANT INSTRUCTIONS:
     eprintln!("API Provider: {}", api_provider);
     eprintln!("Raw Content Length: {} chars", content.len());
     eprintln!("Raw Content (first 500 chars): {}", 
-        truncate_string_safe(content, 500));
+        truncate_string_safe(&content, 500));
     
     // Clean and extract JSON from content
-    let cleaned_content = extract_json_from_text(content);
+    let cleaned_content = extract_json_from_text(&content);
     eprintln!("Cleaned Content Length: {} chars", cleaned_content.len());
     eprintln!("Cleaned Content (first 1000 chars): {}", 
         truncate_string_safe(&cleaned_content, 1000));

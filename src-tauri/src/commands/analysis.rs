@@ -44,6 +44,7 @@ pub fn predict_stock_price_with_config(
 pub async fn ai_analyze_stock(
     symbol: String,
     data: Vec<StockData>,
+    intraday_data: Option<Vec<StockData>>,
     quote: Option<StockQuote>,
     api_key: Option<String>,
     model: String,
@@ -52,8 +53,34 @@ pub async fn ai_analyze_stock(
     api_ai_analyze_stock(
         &symbol,
         &data,
+        intraday_data.as_deref(),
         quote.as_ref(),
         api_key.as_deref(),
+        &model,
+        use_local_fallback,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn ai_analyze_stock_with_keys(
+    symbol: String,
+    data: Vec<StockData>,
+    intraday_data: Option<Vec<StockData>>,
+    quote: Option<StockQuote>,
+    api_key: Option<String>,
+    api_keys: Option<std::collections::HashMap<String, String>>,
+    model: String,
+    use_local_fallback: bool,
+) -> Result<crate::stock_api::AIAnalysisResult, String> {
+    use crate::stock_api::ai_analysis::ai_analyze_stock_with_keys as api_ai_analyze_stock_with_keys;
+    api_ai_analyze_stock_with_keys(
+        &symbol,
+        &data,
+        intraday_data.as_deref(),
+        quote.as_ref(),
+        api_key.as_deref(),
+        api_keys.as_ref(),
         &model,
         use_local_fallback,
     )

@@ -225,12 +225,12 @@ pub fn patch_incomplete_ai_result(
     
     let last_rsi = rsi.last().copied().unwrap_or(50.0);
     let last_macd = macd_result.macd.last().copied().unwrap_or(0.0);
-    let _last_signal = macd_result.signal.last().copied().unwrap_or(0.0);
+    let last_signal = macd_result.signal.last().copied().unwrap_or(0.0);
     let last_ma20 = ma20.iter().rev().find(|&&x| x > 0.0).copied().unwrap_or(last_price);
 
     let analysis = partial_json.get("analysis")
         .and_then(|v| v.as_str())
-        .unwrap_or("基于技术指标的分析")
+        .unwrap_or("Technical indicator based analysis")
         .to_string();
 
     let prediction = if let Some(pred_obj) = partial_json.get("prediction") {
@@ -263,11 +263,11 @@ pub fn patch_incomplete_ai_result(
             price: last_price * (1.0 + price_change / 100.0 * 0.1),
             confidence: 60.0,
             trend: trend.to_string(),
-            reasoning: format!("基于技术指标计算：RSI={:.1}, MACD={:.2}", last_rsi, last_macd),
+            reasoning: format!("Technical indicators: RSI={:.1}, MACD={:.2}", last_rsi, last_macd),
         }
     };
 
-    let risk_assessment = if let Some(risk_obj) = partial_json.get("risk_assessment") {
+    let mut risk_assessment = if let Some(risk_obj) = partial_json.get("risk_assessment") {
         AIRiskAssessment {
             level: risk_obj.get("level")
                 .and_then(|v| v.as_str())
@@ -278,23 +278,37 @@ pub fn patch_incomplete_ai_result(
                 .map(|arr| arr.iter()
                     .filter_map(|v| v.as_str().map(|s| s.to_string()))
                     .collect())
-                .unwrap_or_else(|| vec!["数据不完整".to_string()]),
+                .unwrap_or_else(|| vec!["Incomplete risk factors".to_string()]),
         }
     } else {
         AIRiskAssessment {
             level: if last_rsi > 70.0 || last_rsi < 30.0 { "high" } else { "medium" }.to_string(),
-            factors: vec!["技术指标分析".to_string()],
+            factors: vec!["Technical indicator evaluation".to_string()],
         }
     };
 
-    let recommendations = partial_json.get("recommendations")
+    if risk_assessment.factors.len() < 2 {
+        if risk_assessment.factors.is_empty() {
+            risk_assessment.factors.push("Volatility may be elevated".to_string());
+        }
+        risk_assessment.factors.push("Signal consistency is limited".to_string());
+    }
+
+    let mut recommendations = partial_json.get("recommendations")
         .and_then(|v| v.as_array())
         .map(|arr| arr.iter()
             .filter_map(|v| v.as_str().map(|s| s.to_string()))
             .collect())
-        .unwrap_or_else(|| vec!["建议谨慎投资".to_string(), "关注市场变化".to_string()]);
+        .unwrap_or_else(|| vec!["Wait for clearer signals".to_string(), "Monitor key levels".to_string()]);
 
-    let technical_summary = if let Some(tech_obj) = partial_json.get("technical_summary") {
+    if recommendations.len() < 2 {
+        if recommendations.is_empty() {
+            recommendations.push("Wait for clearer signals".to_string());
+        }
+        recommendations.push("Use risk controls".to_string());
+    }
+
+    let mut technical_summary = if let Some(tech_obj) = partial_json.get("technical_summary") {
         AITechnicalSummary {
             indicators: tech_obj.get("indicators")
                 .and_then(|v| v.as_array())
@@ -326,7 +340,33 @@ pub fn patch_incomplete_ai_result(
         }
     };
 
-    let price_targets = partial_json.get("price_targets")
+    if !technical_summary.indicators.iter().any(|i| i.name == "RSI") {
+        technical_summary.indicators.push(AIIndicator {
+            name: "RSI".to_string(),
+            value: last_rsi,
+            signal: if last_rsi > 70.0 { "sell" } else if last_rsi < 30.0 { "buy" } else { "hold" }.to_string(),
+        });
+    }
+    if !technical_summary.indicators.iter().any(|i| i.name == "MA20") {
+        technical_summary.indicators.push(AIIndicator {
+            name: "MA20".to_string(),
+            value: last_ma20,
+            signal: if last_price > last_ma20 { "buy" } else { "hold" }.to_string(),
+        });
+    }
+    if !technical_summary.indicators.iter().any(|i| i.name == "MACD") {
+        technical_summary.indicators.push(AIIndicator {
+            name: "MACD".to_string(),
+            value: last_macd,
+            signal: if last_macd > last_signal { "buy" } else { "sell" }.to_string(),
+        });
+    }
+
+    if technical_summary.overall_signal.is_empty() {
+        technical_summary.overall_signal = "hold".to_string();
+    }
+
+    let mut price_targets = partial_json.get("price_targets")
         .and_then(|v| v.as_array())
         .map(|arr| arr.iter()
             .filter_map(|v| {
@@ -339,11 +379,19 @@ pub fn patch_incomplete_ai_result(
             .collect())
         .unwrap_or_else(|| vec![
             AIPriceTarget {
-                period: "1周".to_string(),
+                period: "1w".to_string(),
                 target: last_price * 1.05,
                 probability: 60.0,
             },
         ]);
+
+    if price_targets.len() < 2 {
+        price_targets.push(AIPriceTarget {
+            period: "1m".to_string(),
+            target: last_price * 1.10,
+            probability: 50.0,
+        });
+    }
 
     Ok(AIAnalysisResult {
         analysis,

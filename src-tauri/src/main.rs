@@ -217,6 +217,7 @@ fn main() {
             predict_stock_price,
             predict_stock_price_with_config,
             ai_analyze_stock,
+            ai_analyze_stock_with_keys,
             get_intraday_analysis,
             run_backtest_command,
             run_optimization_command,

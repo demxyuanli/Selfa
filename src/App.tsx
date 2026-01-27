@@ -190,7 +190,7 @@ function AppContent() {
     const dashboardTab: StockTab = {
       id: "tab-dashboard",
       symbol: "",
-      name: t("favorites.dashboard") || "自选股监控",
+      name: t("favorites.dashboard"),
       quote: null,
       type: "dashboard",
     };

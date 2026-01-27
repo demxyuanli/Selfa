@@ -71,6 +71,16 @@ interface IntradayAnalysisResult {
   volume_profile: VolumeProfileBin[];
   large_orders: LargeOrder[];
   buying_pressure: BuyingPressure;
+  vwap: number[];
+  vwap_deviation: number[];
+  relative_volume: number[];
+  momentum: number[];
+  volatility: number[];
+  opening_range_high: number;
+  opening_range_low: number;
+  opening_range_breakout: string;
+  trend_slope: number;
+  trend_r2: number;
 }
 
 interface IntradayPredictionAnalysisProps {
@@ -569,7 +579,26 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
                 xAxisIndex: 0,
                 yAxisIndex: 0,
                 showSymbol: false,
-                connectNulls: true
+                connectNulls: true,
+                markLine: {
+                  data: [
+                    { yAxis: analysisResult.opening_range_high, name: "OR High" },
+                    { yAxis: analysisResult.opening_range_low, name: "OR Low" }
+                  ],
+                  symbol: "none",
+                  lineStyle: { type: "dashed", color: "#888" },
+                  label: { show: true }
+                }
+            },
+            {
+                name: t("analysis.indicatorVWAP"),
+                type: "line",
+                data: alignIndicatorData(analysisResult.vwap), 
+                xAxisIndex: 0,
+                yAxisIndex: 0,
+                showSymbol: false,
+                connectNulls: true,
+                lineStyle: { width: 1, color: "#ffd54f" }
             },
             // Large Orders Scatter
             {
@@ -702,6 +731,14 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
                   <span className={analysisResult.buying_pressure.net_inflow > 0 ? "text-up" : "text-down"}>
                     {analysisResult.buying_pressure.net_inflow > 0 ? "+" : ""}{(analysisResult.buying_pressure.net_inflow / 10000).toFixed(2)}{t("common.tenThousand")}
                   </span>
+                </div>
+                <div className="stat-item">
+                  <span>OR Range:</span>
+                  <span>{analysisResult.opening_range_low.toFixed(2)} - {analysisResult.opening_range_high.toFixed(2)}</span>
+                </div>
+                <div className="stat-item">
+                  <span>OR Break:</span>
+                  <span>{analysisResult.opening_range_breakout}</span>
                 </div>
               </div>
             )}
@@ -1024,6 +1061,30 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
                     <span className={analysisResult.buying_pressure.net_inflow > 0 ? "text-up" : "text-down"}>
                       {analysisResult.buying_pressure.net_inflow > 0 ? "+" : ""}{(analysisResult.buying_pressure.net_inflow / 10000).toFixed(2)}{t("common.tenThousand")}
                     </span>
+                  </div>
+                  <div className="stat-item">
+                    <span>VWAP Dev:</span>
+                    <span>{analysisResult.vwap_deviation.length > 0 ? analysisResult.vwap_deviation[analysisResult.vwap_deviation.length - 1].toFixed(3) : "0.000"}</span>
+                  </div>
+                  <div className="stat-item">
+                    <span>Rel Vol:</span>
+                    <span>{analysisResult.relative_volume.length > 0 ? analysisResult.relative_volume[analysisResult.relative_volume.length - 1].toFixed(2) : "0.00"}</span>
+                  </div>
+                  <div className="stat-item">
+                    <span>Momentum:</span>
+                    <span>{analysisResult.momentum.length > 0 ? (analysisResult.momentum[analysisResult.momentum.length - 1] * 100).toFixed(2) : "0.00"}%</span>
+                  </div>
+                  <div className="stat-item">
+                    <span>Volatility:</span>
+                    <span>{analysisResult.volatility.length > 0 ? (analysisResult.volatility[analysisResult.volatility.length - 1] * 100).toFixed(2) : "0.00"}%</span>
+                  </div>
+                  <div className="stat-item">
+                    <span>Trend Slope:</span>
+                    <span>{analysisResult.trend_slope.toFixed(6)}</span>
+                  </div>
+                  <div className="stat-item">
+                    <span>Trend R2:</span>
+                    <span>{analysisResult.trend_r2.toFixed(3)}</span>
                   </div>
                 </div>
               ) : (

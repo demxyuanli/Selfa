@@ -128,11 +128,6 @@ impl StockCache {
             .unwrap_or(0)
     }
 
-    fn is_minute_boundary(now_ts: u64) -> bool {
-        let s = now_ts % 60;
-        s == 0 || s == 1
-    }
-
     pub async fn should_fetch_from_network_with_policy(
         &self,
         symbol: &str,
@@ -142,13 +137,16 @@ impl StockCache {
     ) -> bool {
         let key = format!("{}:{}", symbol, period);
         let now_ts = Self::now_unix_seconds();
-        if require_minute_boundary && !Self::is_minute_boundary(now_ts) {
-            return false;
-        }
-        let last_fetch = self.last_fetch_ts.read().await;
-        match last_fetch.get(&key) {
-            Some(last_ts) => now_ts.saturating_sub(*last_ts) >= min_interval_seconds,
-            None => true,
+        let last_ts = {
+            let last_fetch = self.last_fetch_ts.read().await;
+            last_fetch.get(&key).copied()
+        };
+
+        match (require_minute_boundary, last_ts) {
+            (true, None) => true,
+            (true, Some(ts)) => (now_ts / 60) > (ts / 60),
+            (false, None) => true,
+            (false, Some(ts)) => now_ts.saturating_sub(ts) >= min_interval_seconds,
         }
     }
 

@@ -305,7 +305,11 @@
     "shenzhen": "深证指数",
     "chuangye": "创业板指",
     "timeSeries": "分时图",
-    "dailyK": "日K图"
+    "dailyK": "日K图",
+    "shanghaiKeyword": "上证",
+    "shenzhenKeyword": "深证",
+    "starKeyword": "科创",
+    "indexKeyword": "指数"
   },
   "kline": {
     "1d": "日K",
@@ -1013,6 +1017,8 @@
     "apiKey": "API密钥",
     "apiKeyPlaceholder": "输入API密钥（免费API可选）",
     "model": "模型",
+    "modelFree": "免费",
+    "modelRecommended": "推荐",
     "freeModels": "免费模型",
     "paidModels": "付费模型",
     "freeApiInfo": "免费API：Gemini密钥获取 https://makersuite.google.com/app/apikey",
