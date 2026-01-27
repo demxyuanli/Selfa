@@ -29,7 +29,7 @@ interface LSTMPredictionAnalysisProps {
   klineData: StockData[];
 }
 
-type LSTMModelType = "local_simulation" | "deos_gpt" | "sspt" | "space_explore";
+type LSTMModelType = "local_simulation" | "deos_gpt" | "sspt" | "space_explore" | "boris_gan";
 
 // Simplified LSTM-like prediction using sequence analysis
 const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineData }) => {
@@ -199,8 +199,11 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
           type: "cross",
           snap: true,
         },
-        backgroundColor: "rgba(37, 37, 38, 0.95)",
-        borderColor: "#555",
+        backgroundColor: "transparent",
+        borderColor: "transparent",
+        borderWidth: 0,
+        padding: 0,
+        extraCssText: "box-shadow: none;",
         textStyle: { color: "#ccc" },
         formatter: (params: any) => {
           let res = `<div>${params[0].axisValue}</div>`;
@@ -305,6 +308,7 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
                 <option value="deos_gpt">DeOS AlphaTimeGPT-2025 (Advanced)</option>
                 <option value="sspt">StockTime/SSPT (Fine-tuned)</option>
                 <option value="space_explore">NEOAI/SpaceExplore-27M (Latent)</option>
+                <option value="boris_gan">StockPredictionAI (GAN/Fourier Hybrid)</option>
                 <option value="local_simulation">Local Simulation (Legacy)</option>
               </select>
             </div>

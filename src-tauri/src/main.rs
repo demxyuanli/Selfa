@@ -9,7 +9,12 @@ mod commands;
 use database::{Database, run_blocking_db};
 use cache::StockCache;
 use commands::*;
-use stock_api::utils::should_reset_triggered_alerts;
+use stock_api::utils::{
+    should_cleanup_expired_alerts,
+    should_generate_next_day_alerts,
+    should_reset_triggered_alerts,
+    next_trading_date,
+};
 use commands::stock_search::refresh_stock_cache_internal;
 use std::sync::Arc;
 use tauri::Manager;
@@ -114,6 +119,115 @@ fn main() {
                     } else {
                         if Local::now().hour() < 15 {
                             last_reset_date = None;
+                        }
+                    }
+                }
+            });
+
+            // Start background task to cleanup expired price alerts after 09:30 each trading day
+            let db_for_alert_cleanup = db_arc.clone();
+            tauri::async_runtime::spawn(async move {
+                let mut last_cleanup_date: Option<chrono::NaiveDate> = None;
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
+                loop {
+                    interval.tick().await;
+                    if should_cleanup_expired_alerts() {
+                        let today = Local::now().date_naive();
+                        if last_cleanup_date != Some(today) {
+                            let today_str = today.format("%Y-%m-%d").to_string();
+                            let db = db_for_alert_cleanup.clone();
+                            let result = run_blocking_db(move || db.delete_price_alerts_before_date(&today_str));
+                            match result {
+                                Ok(count) => {
+                                    if count > 0 {
+                                        println!("Auto-deleted {} expired alerts after 09:30", count);
+                                    }
+                                    last_cleanup_date = Some(today);
+                                }
+                                Err(e) => eprintln!("Failed to cleanup expired alerts: {}", e),
+                            }
+                        }
+                    } else {
+                        let now = Local::now();
+                        let hour = now.hour();
+                        let minute = now.minute();
+                        if hour < 9 || (hour == 9 && minute < 30) {
+                            last_cleanup_date = None;
+                        }
+                    }
+                }
+            });
+
+            // Start background task to generate next-day price alerts based on portfolio costs
+            let db_for_daily_alerts = db_arc.clone();
+            tauri::async_runtime::spawn(async move {
+                let mut last_generate_date: Option<chrono::NaiveDate> = None;
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
+                loop {
+                    interval.tick().await;
+                    if should_generate_next_day_alerts() {
+                        let today = Local::now().date_naive();
+                        if last_generate_date != Some(today) {
+                            let next_date = next_trading_date(today);
+                            let next_date_str = next_date.format("%Y-%m-%d").to_string();
+                            let next_date_str_for_db = next_date_str.clone();
+                            let db = db_for_daily_alerts.clone();
+                            let result = run_blocking_db(move || {
+                                let _ = db.delete_price_alerts_by_source_and_date("auto_daily", &next_date_str_for_db);
+                                let positions = match db.get_portfolio_positions() {
+                                    Ok(data) => data,
+                                    Err(e) => return Err(e),
+                                };
+                                let mut created_count: usize = 0;
+                                for (_id, symbol, _name, quantity, avg_cost, _current) in positions {
+                                    if quantity <= 0 || avg_cost <= 0.0 {
+                                        continue;
+                                    }
+                                    let upper = avg_cost * 1.02;
+                                    let lower = avg_cost * 0.98;
+                                    if db
+                                        .create_price_alert_with_meta(
+                                            &symbol,
+                                            upper,
+                                            "above",
+                                            &next_date_str_for_db,
+                                            "auto_daily",
+                                        )
+                                        .is_ok()
+                                    {
+                                        created_count += 1;
+                                    }
+                                    if db
+                                        .create_price_alert_with_meta(
+                                            &symbol,
+                                            lower,
+                                            "below",
+                                            &next_date_str_for_db,
+                                            "auto_daily",
+                                        )
+                                        .is_ok()
+                                    {
+                                        created_count += 1;
+                                    }
+                                }
+                                Ok(created_count)
+                            });
+                            match result {
+                                Ok(count) => {
+                                    if count > 0 {
+                                        println!(
+                                            "Auto-generated {} price alerts for {}",
+                                            count, next_date_str
+                                        );
+                                    }
+                                    last_generate_date = Some(today);
+                                }
+                                Err(e) => eprintln!("Failed to generate next-day alerts: {}", e),
+                            }
+                        }
+                    } else {
+                        if Local::now().hour() < 15 {
+                            last_generate_date = None;
                         }
                     }
                 }

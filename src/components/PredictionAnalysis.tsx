@@ -446,7 +446,7 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
         {
           name: t("analysis.prediction"),
           type: "line",
-          data: [...new Array(dates.length).fill(null), ...predData],
+          data: [...new Array(dates.length - 1).fill(null), ...predData],
           smooth: true,
           symbol: "circle",
           symbolSize: (_value: any, params: any) => {
@@ -460,7 +460,7 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
           lineStyle: {
             color: trendDirection === "up" ? "#00ff00" : trendDirection === "down" ? "#ff0000" : "#ff9800",
             width: 3,
-            type: "solid",
+            type: "dashed",
             shadowColor: trendDirection === "up" ? "rgba(0, 255, 0, 0.5)" :
                         trendDirection === "down" ? "rgba(255, 0, 0, 0.5)" : "rgba(255, 152, 0, 0.5)",
             shadowBlur: 6,
@@ -503,30 +503,40 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
                 if (pred) {
                   const signalIconName = pred.signal === "buy" ? "buy" : pred.signal === "sell" ? "sell" : "neutral";
                   const signalIconText = getIconText(signalIconName);
-                  // Show date and price, with confidence on next line
-                  return `${signalIconText} ${pred.date.split(' ')[0]}\n${t("common.currencySymbol")}${pred.predicted_price.toFixed(2)}\n${pred.confidence.toFixed(0)}%`;
+                  // Use rich text format with bright colors for dark background
+                  return `{date|${signalIconText} ${pred.date.split(' ')[0]}}\n{price|${t("common.currencySymbol")}${pred.predicted_price.toFixed(2)}}\n{confidence|${pred.confidence.toFixed(0)}%}`;
                 }
               }
               return "";
             },
             fontSize: 8,
-            color: (params: any) => {
-              if (params.dataIndex >= dates.length) {
-                const predIdx = params.dataIndex - dates.length;
-                const pred = predictions[predIdx];
-                if (pred) {
-                  return pred.signal === "buy" ? "#00ff00" : pred.signal === "sell" ? "#ff0000" : "#ff9800";
-                }
-              }
-              return "#333";
-            },
+            color: "#fff",
             fontWeight: "bold",
             distance: 12,
-            textBorderColor: "#fff",
-            textBorderWidth: 2,
-            backgroundColor: "rgba(255, 255, 255, 0.8)",
-            padding: [2, 4],
-            borderRadius: 3,
+            textBorderColor: "rgba(0, 0, 0, 0.3)",
+            textBorderWidth: 0.5,
+            backgroundColor: "rgba(37, 37, 38, 0.95)",
+            borderColor: "#555",
+            borderWidth: 1,
+            padding: [4, 6],
+            borderRadius: 4,
+            rich: {
+              date: {
+                color: "#ccc",
+                fontSize: 8,
+                fontWeight: "normal",
+              },
+              price: {
+                color: "#fff",
+                fontSize: 9,
+                fontWeight: "bold",
+              },
+              confidence: {
+                color: "#aaa",
+                fontSize: 7,
+                fontWeight: "normal",
+              },
+            },
           },
           emphasis: {
             focus: "series",
@@ -537,6 +547,9 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
             label: {
               fontSize: 10,
               show: true,
+              backgroundColor: "rgba(37, 37, 38, 0.98)",
+              borderColor: "#007acc",
+              borderWidth: 1,
             },
           },
         },
@@ -575,12 +588,13 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
           type: "cross",
           snap: true,
         },
-        backgroundColor: "rgba(255, 255, 255, 0.98)",
-        borderColor: "#ddd",
-        borderWidth: 1,
-        borderRadius: 8,
+        backgroundColor: "transparent",
+        borderColor: "transparent",
+        borderWidth: 0,
+        padding: 0,
+        extraCssText: "box-shadow: none;",
         textStyle: {
-          color: "#333",
+          color: "#ccc",
           fontSize: 12,
         },
         formatter: (params: any) => {
@@ -600,7 +614,7 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
               const iconText = getIconText(iconName);
 
               result += `<div style="margin: 4px 0; padding: 2px 0;">
-                <span style="display:inline-block;width:10px;height:10px;background:${p.color};border-radius:50%;margin-right:6px;border: 1px solid #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.1);"></span>
+                <span style="display:inline-block;width:10px;height:10px;background:${p.color};border-radius:50%;margin-right:6px;border: 1px solid rgba(255,255,255,0.3); box-shadow: none;"></span>
                 <span style="font-size: 14px; margin-right: 4px;">${iconText}</span> ${p.seriesName}: <strong style="color: ${p.color}">${value}</strong>
               </div>`;
             }
@@ -612,11 +626,11 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
             const signalIconText = getIconText(signalIconName);
             const signalText = pred.signal === "buy" ? t("analysis.bullish") : pred.signal === "sell" ? t("analysis.bearish") : t("analysis.neutral");
 
-            result += `<div style="margin-top: 8px;padding-top: 8px;border-top: 2px solid #eee;">
+            result += `<div style="margin-top: 8px;padding-top: 8px;border-top: 1px solid rgba(255,255,255,0.2);">
               <div style="margin: 4px 0;"><strong><span style="font-size: 16px; margin-right: 4px;">${signalIconText}</span>${t("analysis.signal")}: ${signalText}</strong></div>
               <div style="margin: 4px 0;">${t("analysis.confidence")}: <strong style="color: ${pred.confidence > 70 ? '#00ff00' : pred.confidence > 50 ? '#ff9800' : '#ff0000'}">${pred.confidence.toFixed(1)}%</strong></div>
               <div style="margin: 4px 0;">${t("analysis.priceRange")}: ${t("common.currencySymbol")}${pred.lower_bound.toFixed(2)} - ${t("common.currencySymbol")}${pred.upper_bound.toFixed(2)}</div>
-              <div style="margin: 4px 0; font-size: 11px; color: #666;">${t("analysis.method")}: ${pred.method}</div>
+              <div style="margin: 4px 0; font-size: 11px; color: #aaa;">${t("analysis.method")}: ${pred.method}</div>
             </div>`;
           }
 

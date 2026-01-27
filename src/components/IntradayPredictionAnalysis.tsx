@@ -311,7 +311,20 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
     // Use fullDayTimes as the X-axis categories
     const finalDates = fullDayTimes;
 
-    // Common Grid
+    const alignIndicatorData = (data: number[]) => {
+      const aligned = new Array(fullDayTimes.length).fill(null);
+      klineData.forEach((d, i) => {
+        const timePart = d.date.split(" ").pop()?.substring(0, 5);
+        if (timePart) {
+          const idx = fullDayTimes.indexOf(timePart);
+          if (idx !== -1 && i < data.length) {
+            aligned[idx] = data[i];
+          }
+        }
+      });
+      return aligned;
+    };
+
     const grid = { left: "10%", right: "8%", top: "10%", bottom: "15%" };
 
     if (activeTab === "prediction") {
@@ -441,24 +454,6 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
       const yAxes: any[] = [];
       const series: any[] = [];
 
-      // Helper to align indicator data
-      const alignIndicatorData = (data: number[]) => {
-          // Indicator data usually matches klineData length and order.
-          // We map it to fullDayTimes using the same logic as alignedCloses.
-          // Assuming data[i] corresponds to klineData[i].
-          const aligned = new Array(fullDayTimes.length).fill(null);
-          klineData.forEach((d, i) => {
-              const timePart = d.date.split(" ").pop()?.substring(0, 5);
-              if (timePart) {
-                  const idx = fullDayTimes.indexOf(timePart);
-                  if (idx !== -1 && i < data.length) {
-                      aligned[idx] = data[i];
-                  }
-              }
-          });
-          return aligned;
-      };
-
       // Main Chart
       grids.push({ left: "10%", right: "8%", top: "5%", height: `${gridHeight}%` });
       xAxes.push({ type: "category", data: finalDates, show: subCharts.length === 0 }); // Hide x-axis if subcharts exist
@@ -536,7 +531,16 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
       });
 
       return {
-        tooltip: { trigger: "axis", axisPointer: { type: "cross" } },
+        tooltip: {
+          trigger: "axis",
+          axisPointer: { type: "cross" },
+          backgroundColor: "transparent",
+          borderColor: "transparent",
+          borderWidth: 0,
+          padding: 0,
+          extraCssText: "box-shadow: none;",
+          textStyle: { color: "#eee", fontSize: 12 }
+        },
         axisPointer: { link: { xAxisIndex: 'all' } },
         grid: grids,
         xAxis: xAxes,
@@ -558,7 +562,16 @@ const IntradayPredictionAnalysis: React.FC<IntradayPredictionAnalysisProps> = ({
       }).filter(item => item[0] !== -1);
 
       return {
-        tooltip: { trigger: "axis", axisPointer: { type: "cross" } },
+        tooltip: {
+          trigger: "axis",
+          axisPointer: { type: "cross" },
+          backgroundColor: "transparent",
+          borderColor: "transparent",
+          borderWidth: 0,
+          padding: 0,
+          extraCssText: "box-shadow: none;",
+          textStyle: { color: "#eee", fontSize: 12 }
+        },
         grid: [
             { left: "5%", right: "35%", top: "10%", bottom: "10%" }, // Price Chart
             { left: "70%", right: "5%", top: "10%", bottom: "10%" }  // Volume Profile

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiConfig {
     pub provider: String,
@@ -135,6 +136,7 @@ pub fn detect_api_provider(model: &str) -> &'static str {
     }
 }
 
+#[allow(dead_code)]
 pub fn get_api_key_for_provider(provider: &str, api_keys: &std::collections::HashMap<String, String>) -> Option<String> {
     api_keys.get(provider).cloned()
 }

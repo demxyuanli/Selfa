@@ -494,7 +494,21 @@ STRICT RULES:
             prompt
         );
         
-        let body = serde_json::json!({
+        // Body for v1 API (without responseMimeType - v1 doesn't support it)
+        let body_v1 = serde_json::json!({
+            "contents": [{
+                "parts": [{
+                    "text": full_prompt
+                }]
+            }],
+            "generationConfig": {
+                "temperature": 0.3,
+                "maxOutputTokens": 8192
+            }
+        });
+        
+        // Body for v1beta API (with responseMimeType - v1beta supports it)
+        let body_v1beta = serde_json::json!({
             "contents": [{
                 "parts": [{
                     "text": full_prompt
@@ -520,10 +534,11 @@ STRICT RULES:
             "gemini-1.5-pro".to_string(),
         ];
         
-        eprintln!("=== Network Request Debug ===");
+            eprintln!("=== Network Request Debug ===");
         eprintln!("API Provider: {}", api_provider);
         eprintln!("Model: {} (mapped from: {})", gemini_model, model);
-        eprintln!("Request Body Size: {} bytes", serde_json::to_string(&body).unwrap_or_default().len());
+        eprintln!("Request Body Size (v1): {} bytes", serde_json::to_string(&body_v1).unwrap_or_default().len());
+        eprintln!("Request Body Size (v1beta): {} bytes", serde_json::to_string(&body_v1beta).unwrap_or_default().len());
         
         // Try v1 API first (for newer models)
         let mut api_key_invalid = false;
@@ -548,7 +563,7 @@ STRICT RULES:
             let response_result = client
                 .post(&url_v1)
                 .header("Content-Type", "application/json")
-                .json(&body)
+                .json(&body_v1)
                 .send()
                 .await;
             let elapsed = start_time.elapsed();
@@ -628,7 +643,7 @@ STRICT RULES:
                 let response_result = client
                     .post(&url_v1beta)
                     .header("Content-Type", "application/json")
-                    .json(&body)
+                    .json(&body_v1beta)
                     .send()
                     .await;
                 let elapsed = start_time.elapsed();

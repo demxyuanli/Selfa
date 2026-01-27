@@ -141,6 +141,7 @@ class StockDataManager {
       try {
         const fetched = await invoke<Record<string, StockDataBundle>>("get_batch_stock_data_bundle", {
           symbols: needFetch,
+          forceRefresh: forceRefresh || undefined,
         });
 
         const incompleteSymbols: string[] = [];

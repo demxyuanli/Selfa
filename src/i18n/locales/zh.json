@@ -1125,7 +1125,11 @@
     "addAlert": "添加警告",
     "removeAlert": "消除警告",
     "confirmRemoveAlertsForSymbol": "确定要删除该股票的所有价格提醒吗？",
-    "removeSuccess": "已删除"
+    "removeSuccess": "已删除",
+    "resetSuccess": "重置成功",
+    "resetError": "重置失败",
+    "updateError": "更新失败",
+    "deleteError": "删除失败"
   },
   "comments": {
     "title": "评论日志",

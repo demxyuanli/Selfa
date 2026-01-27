@@ -274,9 +274,9 @@ impl Database {
         alerts::delete_price_alert(&conn, alert_id)
     }
 
-    pub fn get_active_price_alerts(&self) -> Result<Vec<(i64, String, f64, String)>> {
+    pub fn get_active_price_alerts(&self, valid_date: &str) -> Result<Vec<(i64, String, f64, String)>> {
         let conn = self.get_conn()?;
-        alerts::get_active_price_alerts(&conn)
+        alerts::get_active_price_alerts(&conn, valid_date)
     }
 
     pub fn mark_alert_triggered(&self, alert_id: i64) -> Result<()> {
@@ -292,6 +292,38 @@ impl Database {
     pub fn reset_all_triggered_alerts(&self) -> Result<usize> {
         let conn = self.get_conn()?;
         alerts::reset_all_triggered_alerts(&conn)
+    }
+
+    pub fn create_price_alert_with_meta(
+        &self,
+        symbol: &str,
+        threshold_price: f64,
+        direction: &str,
+        valid_date: &str,
+        source: &str,
+    ) -> Result<i64> {
+        let conn = self.get_conn()?;
+        alerts::create_price_alert_with_meta(&conn, symbol, threshold_price, direction, valid_date, source)
+    }
+
+    pub fn delete_price_alerts_by_source_and_date(&self, source: &str, valid_date: &str) -> Result<usize> {
+        let conn = self.get_conn()?;
+        alerts::delete_price_alerts_by_source_and_date(&conn, source, valid_date)
+    }
+
+    pub fn delete_price_alerts_by_symbol_source_and_date(
+        &self,
+        symbol: &str,
+        source: &str,
+        valid_date: &str,
+    ) -> Result<usize> {
+        let conn = self.get_conn()?;
+        alerts::delete_price_alerts_by_symbol_source_and_date(&conn, symbol, source, valid_date)
+    }
+
+    pub fn delete_price_alerts_before_date(&self, date: &str) -> Result<usize> {
+        let conn = self.get_conn()?;
+        alerts::delete_price_alerts_before_date(&conn, date)
     }
 
     // Cache

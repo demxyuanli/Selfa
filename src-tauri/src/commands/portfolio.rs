@@ -1,4 +1,5 @@
-use crate::database::Database;
+use crate::database::{Database, run_blocking_db};
+use chrono::Local;
 use std::sync::Arc;
 use tauri::State;
 
@@ -94,6 +95,61 @@ pub async fn add_portfolio_transaction(
     tauri::async_runtime::spawn(async move {
         if let Err(e) = crate::commands::indices::update_stock_index_relations_internal(&db_clone, &symbol_clone).await {
             eprintln!("Failed to update index relations for {}: {}", symbol_clone, e);
+        }
+    });
+
+    let db_for_alerts = db.inner().clone();
+    let symbol_for_alerts = symbol.clone();
+    tauri::async_runtime::spawn(async move {
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        let symbol_for_query = symbol_for_alerts.clone();
+        let result = run_blocking_db(move || {
+            let positions = match db_for_alerts.get_portfolio_positions() {
+                Ok(data) => data,
+                Err(e) => return Err(e),
+            };
+            let mut target: Option<(i64, f64)> = None;
+            for (_id, sym, _name, quantity, avg_cost, _current) in positions {
+                if sym == symbol_for_query {
+                    target = Some((quantity, avg_cost));
+                    break;
+                }
+            }
+
+            match target {
+                Some((quantity_value, avg_cost_value)) => {
+                    if quantity_value <= 0 || avg_cost_value <= 0.0 {
+                        return Ok(());
+                    }
+                    let _ = db_for_alerts.delete_price_alerts_by_symbol_source_and_date(
+                        &symbol_for_query,
+                        "auto_trade",
+                        &today,
+                    );
+                    let upper = avg_cost_value * 1.02;
+                    let lower = avg_cost_value * 0.98;
+                    db_for_alerts.create_price_alert_with_meta(
+                        &symbol_for_query,
+                        upper,
+                        "above",
+                        &today,
+                        "auto_trade",
+                    )?;
+                    db_for_alerts.create_price_alert_with_meta(
+                        &symbol_for_query,
+                        lower,
+                        "below",
+                        &today,
+                        "auto_trade",
+                    )?;
+                }
+                None => {}
+            }
+            Ok(())
+        });
+
+        if let Err(e) = result {
+            eprintln!("Failed to create auto trade alerts for {}: {}", symbol_for_alerts, e);
         }
     });
     

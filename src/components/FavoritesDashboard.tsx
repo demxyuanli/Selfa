@@ -109,13 +109,19 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
 
   // Load intraday time series data for stocks using stockDataManager
   // Incremental update: only update changed time series data
-  const loadTimeSeriesData = useCallback(async (symbols: string[]) => {
+  const loadTimeSeriesData = useCallback(async (symbols: string[], forceRefresh = false) => {
     if (symbols.length === 0) {
       return;
     }
     try {
+      // Clear cache if force refresh
+      if (forceRefresh) {
+        for (const symbol of symbols) {
+          stockDataManager.clearCache(symbol);
+        }
+      }
       // Use stockDataManager to get intraday data
-      const bundles = await stockDataManager.getBatchStockData(symbols);
+      const bundles = await stockDataManager.getBatchStockData(symbols, forceRefresh);
       const missingSymbols: string[] = [];
       
       setTimeSeriesDataMap(prev => {
@@ -360,6 +366,62 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
     }
   }, [loadTimeSeriesData]);
 
+  const forceRefreshIntradayData = useCallback(async (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    try {
+      const symbols = stocks.map(({ stock }) => stock.symbol);
+      if (symbols.length === 0) {
+        return;
+      }
+      
+      // Clear cache for all symbols
+      for (const symbol of symbols) {
+        stockDataManager.clearCache(symbol);
+      }
+      
+      // Force fetch intraday data directly using get_batch_intraday_time_series
+      const intradayDataMap = await invoke<Record<string, Array<{
+        date: string;
+        open: number;
+        high: number;
+        low: number;
+        close: number;
+        volume: number;
+      }>>>("get_batch_intraday_time_series", {
+        symbols,
+        forceRefresh: true,
+      });
+      
+      // Update time series data map
+      setTimeSeriesDataMap(prev => {
+        const newMap = new Map(prev);
+        let hasChanges = false;
+        
+        for (const [symbol, intradayData] of Object.entries(intradayDataMap)) {
+          if (intradayData && intradayData.length > 0) {
+            // Always update on force refresh
+            newMap.set(symbol, intradayData);
+            hasChanges = true;
+            console.debug(`Force refreshed intraday data for ${symbol}:`, {
+              count: intradayData.length,
+              first: intradayData[0],
+              last: intradayData[intradayData.length - 1]
+            });
+          }
+        }
+        
+        return hasChanges ? newMap : prev;
+      });
+      
+      showAlert(t("favorites.intradayRefreshSuccess") || "Intraday data refreshed successfully");
+    } catch (err) {
+      console.error("Failed to force refresh intraday data:", err);
+      showAlert(t("favorites.intradayRefreshError") || "Failed to refresh intraday data");
+    }
+  }, [stocks, showAlert, t]);
+
   const refreshAlerts = useCallback(async () => {
     try {
       const alertsData = await invoke<PriceAlertInfo[]>("get_price_alerts", { symbol: null });
@@ -404,10 +466,10 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
     try {
       await invoke("reset_price_alert", { alertId });
       await refreshAlerts();
-      showAlert(t("priceAlert.resetSuccess") || "Alert reset successfully");
+      showAlert(t("priceAlert.resetSuccess"));
     } catch (err) {
       console.error("Error resetting alert:", err);
-      showAlert(t("priceAlert.resetError") || "Failed to reset alert");
+      showAlert(t("priceAlert.resetError"));
     }
   }, [refreshAlerts, showAlert, t]);
 
@@ -837,6 +899,13 @@ const FavoritesDashboard: React.FC<FavoritesDashboardProps> = ({ onStockSelect }
                 <span className="stat-value down">{downCount}</span>
               </div>
             </div>
+            <button
+              className="force-refresh-button"
+              onClick={forceRefreshIntradayData}
+              title={t("favorites.forceRefreshIntraday") || "Force refresh intraday data"}
+            >
+              <Icon name="refresh" />
+            </button>
           </div>
         </div>
 

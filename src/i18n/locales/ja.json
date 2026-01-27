@@ -689,7 +689,11 @@
     "addAlert": "アラートを追加",
     "removeAlert": "アラートを解除",
     "confirmRemoveAlertsForSymbol": "この銘柄の全ての価格アラートを削除しますか？",
-    "removeSuccess": "削除しました"
+    "removeSuccess": "削除しました",
+    "resetSuccess": "リセット成功",
+    "resetError": "リセットに失敗しました",
+    "updateError": "更新に失敗しました",
+    "deleteError": "削除に失敗しました"
   },
   "portfolio": {
     "title": "ポートフォリオ",

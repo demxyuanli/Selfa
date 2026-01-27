@@ -204,8 +204,11 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
           type: "cross",
           snap: true,
         },
-        backgroundColor: "rgba(37, 37, 38, 0.95)",
-        borderColor: "#3e3e42",
+        backgroundColor: "transparent",
+        borderColor: "transparent",
+        borderWidth: 0,
+        padding: 0,
+        extraCssText: "box-shadow: none;",
         textStyle: {
           color: "#cccccc",
         },

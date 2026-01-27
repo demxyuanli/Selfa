@@ -1,6 +1,7 @@
 use crate::cache::StockCache;
 use crate::database::Database;
 use crate::stock_api::fetch_stock_quote;
+use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
@@ -84,7 +85,8 @@ pub async fn check_price_alerts(
     cache: State<'_, Arc<StockCache>>,
     db: State<'_, Arc<Database>>,
 ) -> Result<Vec<PriceAlertInfo>, String> {
-    let active_alerts: Vec<(i64, String, f64, String)> = db.get_active_price_alerts()
+    let today = Local::now().format("%Y-%m-%d").to_string();
+    let active_alerts: Vec<(i64, String, f64, String)> = db.get_active_price_alerts(&today)
         .map_err(|e| format!("Failed to get active alerts: {}", e))?;
     
     let mut triggered_alerts = Vec::new();

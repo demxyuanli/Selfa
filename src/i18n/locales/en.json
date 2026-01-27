@@ -1092,7 +1092,11 @@
     "addAlert": "Add Alert",
     "removeAlert": "Remove Alert",
     "confirmRemoveAlertsForSymbol": "Remove all price alerts for this stock?",
-    "removeSuccess": "Removed"
+    "removeSuccess": "Removed",
+    "resetSuccess": "Alert reset successfully",
+    "resetError": "Failed to reset alert",
+    "updateError": "Failed to update alert",
+    "deleteError": "Failed to delete alert"
   },
   "customIndicator": {
     "formulaPlaceholder": "Example: MA(CLOSE, 20) or EMA(CLOSE, 12)"

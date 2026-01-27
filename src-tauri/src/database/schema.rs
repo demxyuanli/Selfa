@@ -74,7 +74,9 @@ fn migrate_remove_foreign_keys(conn: &Connection) -> Result<()> {
             enabled INTEGER NOT NULL DEFAULT 1,
             triggered INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
+            updated_at TEXT NOT NULL,
+            valid_date TEXT NOT NULL,
+            source TEXT NOT NULL
         )"),
         ("portfolio_positions", "CREATE TABLE portfolio_positions_new (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,7 +123,14 @@ fn migrate_remove_foreign_keys(conn: &Connection) -> Result<()> {
                 if !temp_exists {
                     conn.execute(create_sql, [])?;
                     
-                    let copy_sql = format!("INSERT INTO {}_new SELECT * FROM {}", table_name, table_name);
+                    let copy_sql = if table_name == "price_alerts" {
+                        format!(
+                            "INSERT INTO price_alerts_new (id, symbol, threshold_price, direction, enabled, triggered, created_at, updated_at, valid_date, source) \
+                             SELECT id, symbol, threshold_price, direction, enabled, triggered, created_at, updated_at, substr(created_at, 1, 10), 'manual' FROM price_alerts"
+                        )
+                    } else {
+                        format!("INSERT INTO {}_new SELECT * FROM {}", table_name, table_name)
+                    };
                     if let Err(e) = conn.execute(&copy_sql, []) {
                         eprintln!("Warning: Failed to copy data from {}: {}", table_name, e);
                     }
@@ -306,7 +315,9 @@ pub fn init_tables(conn: &Connection) -> Result<()> {
             enabled INTEGER NOT NULL DEFAULT 1,
             triggered INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
+            updated_at TEXT NOT NULL,
+            valid_date TEXT NOT NULL,
+            source TEXT NOT NULL
         )",
         [],
     )?;
@@ -315,6 +326,31 @@ pub fn init_tables(conn: &Connection) -> Result<()> {
         "CREATE INDEX IF NOT EXISTS idx_price_alerts_symbol ON price_alerts(symbol)",
         [],
     )?;
+
+    let mut alerts_stmt = conn.prepare("PRAGMA table_info(price_alerts)")?;
+    let alert_columns: Vec<String> = alerts_stmt.query_map([], |row| {
+        Ok(row.get::<_, String>(1)?)
+    })?
+    .collect::<Result<Vec<_>, _>>()?;
+
+    if !alert_columns.contains(&"valid_date".to_string()) {
+        conn.execute(
+            "ALTER TABLE price_alerts ADD COLUMN valid_date TEXT NOT NULL DEFAULT ''",
+            [],
+        )?;
+    }
+
+    if !alert_columns.contains(&"source".to_string()) {
+        conn.execute(
+            "ALTER TABLE price_alerts ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'",
+            [],
+        )?;
+    }
+
+    let _ = conn.execute(
+        "UPDATE price_alerts SET valid_date = substr(created_at, 1, 10) WHERE valid_date = ''",
+        [],
+    );
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS portfolio_positions (
@@ -386,6 +422,16 @@ pub fn init_tables(conn: &Connection) -> Result<()> {
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_price_alerts_enabled ON price_alerts(enabled)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_price_alerts_valid_date ON price_alerts(valid_date)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_price_alerts_source ON price_alerts(source)",
         [],
     )?;
 

@@ -10,6 +10,7 @@ pub mod ensemble;
 pub mod deos_alpha_time_gpt;
 pub mod sspt_fine_tune;
 pub mod space_explore_ai;
+pub mod boris_gan;
 
 #[allow(unused_imports)]
 pub use support_resistance::*;
@@ -25,6 +26,8 @@ pub use deos_alpha_time_gpt::*;
 pub use sspt_fine_tune::*;
 #[allow(unused_imports)]
 pub use space_explore_ai::*;
+#[allow(unused_imports)]
+pub use boris_gan::*;
 
 pub fn predict_mean_reversion(
     closes: &[f64],

@@ -27,6 +27,45 @@ pub fn should_reset_triggered_alerts() -> bool {
     hour >= 15
 }
 
+pub fn should_cleanup_expired_alerts() -> bool {
+    let now = Local::now();
+    let weekday = now.weekday();
+    
+    if weekday == Weekday::Sat || weekday == Weekday::Sun {
+        return false;
+    }
+
+    let hour = now.hour();
+    let minute = now.minute();
+    let total_minutes = hour * 60 + minute;
+    total_minutes >= 570
+}
+
+pub fn should_generate_next_day_alerts() -> bool {
+    let now = Local::now();
+    let weekday = now.weekday();
+    
+    if weekday == Weekday::Sat || weekday == Weekday::Sun {
+        return false;
+    }
+
+    let hour = now.hour();
+    let minute = now.minute();
+    let total_minutes = hour * 60 + minute;
+    total_minutes >= 900
+}
+
+pub fn next_trading_date(date: chrono::NaiveDate) -> chrono::NaiveDate {
+    let mut next_date = date + chrono::Duration::days(1);
+    loop {
+        let weekday = next_date.weekday();
+        if weekday != Weekday::Sat && weekday != Weekday::Sun {
+            return next_date;
+        }
+        next_date = next_date + chrono::Duration::days(1);
+    }
+}
+
 pub fn parse_symbol(symbol: &str) -> (String, String) {
     let code = symbol.trim();
     
