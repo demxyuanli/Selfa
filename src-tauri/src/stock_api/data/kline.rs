@@ -1,5 +1,5 @@
 use crate::stock_api::types::StockData;
-use crate::stock_api::http_client::http_client;
+use crate::stock_api::http_client::{http_client, reset_http_client, is_connection_error};
 use crate::stock_api::utils::parse_symbol;
 
 pub async fn fetch_time_series(symbol: &str) -> Result<Vec<StockData>, String> {
@@ -17,6 +17,7 @@ pub async fn fetch_time_series(symbol: &str) -> Result<Vec<StockData>, String> {
     
     // Retry up to 3 times for network errors
     let mut last_error = None;
+    let mut client = client;
     for attempt in 0..3 {
         eprintln!("Attempt {}: Sending request...", attempt + 1);
         let start_time = std::time::Instant::now();
@@ -92,8 +93,14 @@ pub async fn fetch_time_series(symbol: &str) -> Result<Vec<StockData>, String> {
                 }
             }
             Err(e) => {
-                last_error = Some(format!("Network error: {}", e));
+                let error_msg = format!("Network error: {}", e);
+                last_error = Some(error_msg.clone());
                 if attempt < 2 {
+                    if is_connection_error(&error_msg) {
+                        eprintln!("Connection error detected, resetting HTTP client...");
+                        reset_http_client().await;
+                        client = http_client().await?;
+                    }
                     tokio::time::sleep(tokio::time::Duration::from_millis(500 * (attempt + 1) as u64)).await;
                     continue;
                 }
@@ -127,7 +134,7 @@ pub async fn fetch_stock_history(symbol: &str, period: &str) -> Result<Vec<Stock
         "http://push2his.eastmoney.com/api/qt/stock/kline/get?secid={}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f61&klt={}&fqt=1&beg=0&end=20500000&lmt={}",
         secid, klt, limit
     );
-    let client = http_client().await?;
+    let mut client = http_client().await?;
     
     // Helper function to parse response
     let parse_response = |json: serde_json::Value| -> Result<Vec<StockData>, String> {
@@ -173,17 +180,12 @@ pub async fn fetch_stock_history(symbol: &str, period: &str) -> Result<Vec<Stock
         Ok(result)
     };
     
-    // Helper function to make a request
-    let make_request = || async {
-        client
-            .get(&url)
-            .timeout(std::time::Duration::from_secs(10))
-            .send()
-            .await
-    };
-    
     // First attempt
-    let response_result = make_request().await;
+    let response_result = client
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await;
     match response_result {
         Ok(response) => {
             if !response.status().is_success() {
@@ -197,14 +199,23 @@ pub async fn fetch_stock_history(symbol: &str, period: &str) -> Result<Vec<Stock
                 }
             }
         }
-        Err(_) => {
-            // Network error, try immediate retry
+        Err(e) => {
+            let error_msg = format!("{}", e);
+            if is_connection_error(&error_msg) {
+                eprintln!("Connection error detected, resetting HTTP client...");
+                reset_http_client().await;
+                client = http_client().await?;
+            }
         }
     }
     
     // Short delay then retry (second attempt)
     tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
-    let response_result = make_request().await;
+    let response_result = client
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await;
     match response_result {
         Ok(response) => {
             if !response.status().is_success() {
@@ -215,12 +226,23 @@ pub async fn fetch_stock_history(symbol: &str, period: &str) -> Result<Vec<Stock
                 Err(_e) => {}
             }
         }
-        Err(_) => {}
+        Err(e) => {
+            let error_msg = format!("{}", e);
+            if is_connection_error(&error_msg) {
+                eprintln!("Connection error detected, resetting HTTP client...");
+                reset_http_client().await;
+                client = http_client().await?;
+            }
+        }
     }
 
     // Brief delay and final retry (third attempt)
     tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
-    let response_result = make_request().await;
+    let response_result = client
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await;
     match response_result {
         Ok(response) => {
             if !response.status().is_success() {

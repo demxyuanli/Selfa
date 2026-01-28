@@ -600,6 +600,19 @@ fn is_trading_time(datetime_str: &str) -> bool {
     }
 }
 
+fn ensure_date_marked(data: Vec<StockData>, default_date: &str) -> Vec<StockData> {
+    data.into_iter()
+        .map(|mut d| {
+            if !d.date.contains("-") && d.date.contains(":") {
+                d.date = format!("{} {}", default_date, d.date);
+            } else if d.date.contains(":") && !d.date.contains(" ") {
+                d.date = format!("{} {}", default_date, d.date);
+            }
+            d
+        })
+        .collect()
+}
+
 fn filter_trading_hours_data(data: Vec<StockData>) -> Vec<StockData> {
     data.into_iter()
         .filter(|d| is_trading_time(&d.date))
@@ -609,10 +622,17 @@ fn filter_trading_hours_data(data: Vec<StockData>) -> Vec<StockData> {
 #[tauri::command]
 pub async fn get_intraday_time_series(
     symbol: String,
+    force_refresh: Option<bool>,
     cache: State<'_, Arc<StockCache>>,
     db: State<'_, Arc<Database>>,
 ) -> Result<Vec<StockData>, String> {
+    let force = force_refresh.unwrap_or(false);
     let today = Local::now().format("%Y-%m-%d").to_string();
+    
+    // Clear cache if force refresh
+    if force {
+        cache.clear_history(&symbol, "1m").await;
+    }
     
     let db_clone = db.inner().clone();
     let sym = symbol.clone();
@@ -623,7 +643,7 @@ pub async fn get_intraday_time_series(
     }).map_err(|e| format!("Database error: {}", e))?;
     let in_trading = is_trading_hours();
     let min_interval_seconds = if in_trading { 60 } else { 24 * 60 * 60 };
-    let should_fetch = if cached.is_empty() {
+    let should_fetch = if force || cached.is_empty() {
         true
     } else {
         cache
@@ -634,22 +654,24 @@ pub async fn get_intraday_time_series(
     // If we have cached data with today's data and don't need to fetch, return early
     if !should_fetch {
         if let Some(cached_data) = cache.get_history(&symbol, "1m").await {
-            let has_today_data = cached_data.iter().any(|d| d.date.starts_with(&today));
+            let has_today_data = cached_data.iter().any(|d| d.date.starts_with(&today) || (!d.date.contains("-") && d.date.contains(":")));
             if has_today_data {
                 let today_data: Vec<StockData> = cached_data.iter()
-                    .filter(|d| d.date.starts_with(&today))
+                    .filter(|d| d.date.starts_with(&today) || (!d.date.contains("-") && d.date.contains(":")))
                     .cloned()
                     .collect();
-                return Ok(filter_trading_hours_data(today_data));
+                let marked_data = ensure_date_marked(today_data, &today);
+                return Ok(filter_trading_hours_data(marked_data));
             }
         }
         // Fallback to DB cached data if cache doesn't have today's data
         let today_data: Vec<StockData> = cached.iter()
-            .filter(|d| d.date.starts_with(&today))
+            .filter(|d| d.date.starts_with(&today) || (!d.date.contains("-") && d.date.contains(":")))
             .cloned()
             .collect();
         if !today_data.is_empty() {
-            return Ok(filter_trading_hours_data(today_data));
+            let marked_data = ensure_date_marked(today_data, &today);
+            return Ok(filter_trading_hours_data(marked_data));
         }
     }
     
@@ -658,8 +680,10 @@ pub async fn get_intraday_time_series(
         
         cache.record_fetch_time(&symbol, "1m").await;
         
+        let fetched_marked = ensure_date_marked(fetched, &today);
+        
         if let Some(ref latest) = latest_date {
-            let new_data: Vec<StockData> = fetched
+            let new_data: Vec<StockData> = fetched_marked
                 .into_iter()
                 .filter(|d| d.date >= *latest)
                 .collect();
@@ -681,8 +705,8 @@ pub async fn get_intraday_time_series(
                 cached
             }
         } else {
-            cache.set_history(symbol.clone(), "1m".to_string(), fetched.clone()).await;
-            fetched
+            cache.set_history(symbol.clone(), "1m".to_string(), fetched_marked.clone()).await;
+            fetched_marked
         }
     } else {
         if !cached.is_empty() {
@@ -692,10 +716,11 @@ pub async fn get_intraday_time_series(
     };
     
     let today_data: Vec<StockData> = result.into_iter()
-        .filter(|d| d.date.starts_with(&today))
+        .filter(|d| d.date.starts_with(&today) || (!d.date.contains("-") && d.date.contains(":")))
         .collect();
     
-    let filtered_data = filter_trading_hours_data(today_data);
+    let marked_data = ensure_date_marked(today_data, &today);
+    let filtered_data = filter_trading_hours_data(marked_data);
     
     if filtered_data.is_empty() {
         let cached_all = cache.get_history(&symbol, "1m").await.unwrap_or_else(|| {
@@ -707,7 +732,19 @@ pub async fn get_intraday_time_series(
         if !cached_all.is_empty() {
             let final_data = get_latest_day_data(&cached_all);
             if !final_data.is_empty() {
-                return Ok(filter_trading_hours_data(final_data));
+                let latest_date = if let Some(first) = final_data.first() {
+                    if first.date.contains(" ") {
+                        first.date.split(" ").next().unwrap_or(&today).to_string()
+                    } else if first.date.contains("-") {
+                        first.date.chars().take(10).collect()
+                    } else {
+                        today.clone()
+                    }
+                } else {
+                    today.clone()
+                };
+                let marked_final = ensure_date_marked(final_data, &latest_date);
+                return Ok(filter_trading_hours_data(marked_final));
             }
         }
     }
@@ -1145,13 +1182,15 @@ pub async fn get_batch_intraday_time_series(
                 Ok(fetched) => {
                     cache.record_fetch_time(&symbol, "1m").await;
                     
+                    let fetched_marked = ensure_date_marked(fetched, &today);
+                    
                     if force {
                         // Force refresh: replace all data with fetched data
-                        cache.set_history(symbol.clone(), "1m".to_string(), fetched.clone()).await;
-                        fetched
+                        cache.set_history(symbol.clone(), "1m".to_string(), fetched_marked.clone()).await;
+                        fetched_marked
                     } else if let Some(ref latest) = latest_date {
                         // Normal refresh: merge with existing data
-                        let new_data: Vec<StockData> = fetched
+                        let new_data: Vec<StockData> = fetched_marked
                             .into_iter()
                             .filter(|d| d.date >= *latest)
                             .collect();
@@ -1173,8 +1212,8 @@ pub async fn get_batch_intraday_time_series(
                             cached
                         }
                     } else {
-                        cache.set_history(symbol.clone(), "1m".to_string(), fetched.clone()).await;
-                        fetched
+                        cache.set_history(symbol.clone(), "1m".to_string(), fetched_marked.clone()).await;
+                        fetched_marked
                     }
                 }
                 Err(e) => {
@@ -1190,11 +1229,12 @@ pub async fn get_batch_intraday_time_series(
         };
         
         let today_data_raw: Vec<StockData> = merged_data.iter()
-            .filter(|d| d.date.starts_with(&today))
+            .filter(|d| d.date.starts_with(&today) || (!d.date.contains("-") && d.date.contains(":")))
             .cloned()
             .collect();
         
-        let today_data = filter_trading_hours_data(today_data_raw);
+        let marked_today_data = ensure_date_marked(today_data_raw, &today);
+        let today_data = filter_trading_hours_data(marked_today_data);
         
         let final_data = if today_data.is_empty() {
             let mut sorted = merged_data;
@@ -1203,20 +1243,26 @@ pub async fn get_batch_intraday_time_series(
             if let Some(first_item) = sorted.first() {
                 let last_date = if first_item.date.contains(" ") {
                     first_item.date.split(" ").next().unwrap_or("").to_string()
-                } else {
+                } else if first_item.date.contains("-") {
                     first_item.date.chars().take(10).collect()
+                } else {
+                    today.clone()
                 };
                 
-                sorted.into_iter()
+                let filtered = sorted.into_iter()
                     .filter(|d| {
                         let d_date = if d.date.contains(" ") {
                             d.date.split(" ").next().unwrap_or("")
-                        } else {
+                        } else if d.date.contains("-") {
                             &d.date[..d.date.len().min(10)]
+                        } else {
+                            ""
                         };
-                        d_date == last_date
+                        d_date == last_date || (!d.date.contains("-") && d.date.contains(":"))
                     })
-                    .collect()
+                    .collect();
+                
+                ensure_date_marked(filtered, &last_date)
             } else {
                 Vec::new()
             }

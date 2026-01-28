@@ -1,5 +1,5 @@
 use crate::stock_api::types::StockQuote;
-use crate::stock_api::http_client::http_client;
+use crate::stock_api::http_client::{http_client, reset_http_client, is_connection_error};
 use crate::stock_api::utils::parse_symbol;
 
 pub async fn fetch_stock_quote(symbol: &str) -> Result<StockQuote, String> {
@@ -21,6 +21,7 @@ pub async fn fetch_stock_quote(symbol: &str) -> Result<StockQuote, String> {
 
     let mut last_error = String::new();
     let mut json_result: Option<serde_json::Value> = None;
+    let mut client = client;
 
     for attempt in 0..3 {
         eprintln!("Attempt {}: Sending request...", attempt + 1);
@@ -50,8 +51,15 @@ pub async fn fetch_stock_quote(symbol: &str) -> Result<StockQuote, String> {
                 }
             }
             Err(e) => {
-                last_error = format!("Network error: {}", e);
-                eprintln!("Network error: {}", e);
+                let error_msg = format!("Network error: {}", e);
+                last_error = error_msg.clone();
+                eprintln!("{}", error_msg);
+                
+                if is_connection_error(&error_msg) && attempt < 2 {
+                    eprintln!("Connection error detected, resetting HTTP client...");
+                    reset_http_client().await;
+                    client = http_client().await?;
+                }
             }
         }
         

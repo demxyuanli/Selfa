@@ -23,13 +23,14 @@ interface PredictionResult {
   upper_bound: number;
   lower_bound: number;
   method: string;
+  reasoning?: string;
 }
 
 interface LSTMPredictionAnalysisProps {
   klineData: StockData[];
 }
 
-type LSTMModelType = "local_simulation" | "deos_gpt" | "sspt" | "space_explore" | "boris_gan";
+type LSTMModelType = "local_simulation" | "deos_gpt" | "sspt" | "space_explore" | "boris_gan" | "deep_learning";
 
 // Simplified LSTM-like prediction using sequence analysis
 const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineData }) => {
@@ -67,6 +68,14 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
 
   // Simplified LSTM-like prediction using weighted moving average with momentum
   const predictLocalSimulation = async (): Promise<PredictionResult[]> => {
+    if (modelType === "deep_learning") {
+       return await invoke("predict_stock_price", {
+        data: klineData,
+        method: "deep_learning",
+        period: predictionDays,
+      });
+    }
+
     if (klineData.length < sequenceLength + 10) {
       throw new Error(t("analysis.insufficientData"));
     }
@@ -130,7 +139,8 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
         signal: "hold",
         upper_bound: price * 1.02,
         lower_bound: price * 0.98,
-        method: "local_simulation"
+        method: "local_simulation",
+        reasoning: "Simulation based on recent momentum and volatility."
       };
     });
   };
@@ -207,6 +217,8 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
         textStyle: { color: "#ccc" },
         formatter: (params: any) => {
           let res = `<div>${params[0].axisValue}</div>`;
+          let reasoning = "";
+
           params.forEach((param: any) => {
              if (param.value !== null && param.value !== undefined) {
                // Handle array data [index, value] or just value
@@ -216,6 +228,20 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
                }
              }
           });
+
+          // Find reasoning if this is a prediction point
+          const dataIndex = params[0].dataIndex;
+          const predictionStartIndex = klineData.length;
+          const predictionIndex = dataIndex - predictionStartIndex;
+          
+          if (predictionIndex >= 0 && predictions[predictionIndex]?.reasoning) {
+             reasoning = predictions[predictionIndex].reasoning || "";
+          }
+          
+          if (reasoning) {
+            res += `<div style="margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.2); font-size:10px; color:#ddd; max-width:250px; white-space:normal; line-height:1.4;">${reasoning}</div>`;
+          }
+
           return res;
         }
       },
@@ -306,6 +332,7 @@ const LSTMPredictionAnalysis: React.FC<LSTMPredictionAnalysisProps> = ({ klineDa
                 style={{ width: "100%", padding: "6px", backgroundColor: "#2d2d30", color: "#ccc", border: "1px solid #3e3e42", borderRadius: "2px" }}
               >
                 <option value="deos_gpt">DeOS AlphaTimeGPT-2025 (Advanced)</option>
+                <option value="deep_learning">Deep Learning (Rust Native RNN)</option>
                 <option value="sspt">StockTime/SSPT (Fine-tuned)</option>
                 <option value="space_explore">NEOAI/SpaceExplore-27M (Latent)</option>
                 <option value="boris_gan">StockPredictionAI (GAN/Fourier Hybrid)</option>

@@ -38,7 +38,33 @@ pub fn calculate_support_resistance_levels(
     let min_price = points.iter().fold(f64::INFINITY, |a, &b| a.min(b));
     let max_price = points.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
 
-    let h = (max_price - min_price) * 0.015;
+    // Adaptive bandwidth using Silverman's rule of thumb
+    // h = 0.9 * min(std_dev, IQR/1.34) * n^(-1/5)
+    let n = points.len() as f64;
+    let mean = points.iter().sum::<f64>() / n;
+    let variance = points.iter().map(|&p| (p - mean).powi(2)).sum::<f64>() / n;
+    let std_dev = variance.sqrt();
+    
+    // Calculate IQR (Interquartile Range) for robust bandwidth estimation
+    let mut sorted_points = points.clone();
+    sorted_points.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let q1_idx = (n * 0.25) as usize;
+    let q3_idx = (n * 0.75) as usize;
+    let iqr = if q3_idx < sorted_points.len() && q1_idx < sorted_points.len() {
+        sorted_points[q3_idx] - sorted_points[q1_idx]
+    } else {
+        std_dev * 1.34
+    };
+    
+    let robust_std = std_dev.min(iqr / 1.34);
+    let h_silverman = 0.9 * robust_std * n.powf(-0.2);
+    
+    // Fallback to fixed bandwidth if adaptive is too small or invalid
+    let h = if h_silverman > 0.0 && h_silverman < (max_price - min_price) {
+        h_silverman.max((max_price - min_price) * 0.01)
+    } else {
+        (max_price - min_price) * 0.015
+    };
 
     let steps = 500;
     let step_size = (max_price - min_price) / steps as f64;
@@ -139,6 +165,7 @@ pub fn predict_support_resistance(
             upper_bound: predicted + std_dev * 0.8,
             lower_bound: predicted - std_dev * 0.8,
             method: "support_resistance".to_string(),
+            reasoning: None,
         });
     }
 

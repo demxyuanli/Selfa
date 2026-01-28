@@ -38,6 +38,7 @@ pub fn predict_stock_price(
             "sspt" => prediction_advanced::predict_sspt_fine_tuned(data, &last_date, period)?,
             "space_explore" => prediction_advanced::predict_space_explore_ai(data, &last_date, period)?,
             "boris_gan" => prediction_advanced::predict_boris_gan(data, &last_date, period)?,
+            "deep_learning" => prediction_advanced::deep_learning::predict_deep_learning(data, &last_date, period)?,
             "intraday_ma" => super::prediction_intraday::predict_intraday_ma(data, &last_date, period)?,
             "intraday_volatility" => super::prediction_intraday::predict_intraday_volatility(data, &last_date, period)?,
             "intraday_regime" => super::prediction_intraday::predict_intraday_regime(data, &last_date, period)?,
@@ -90,6 +91,7 @@ pub fn predict_stock_price_with_config(
         "sspt" => prediction_advanced::predict_sspt_fine_tuned(data, &last_date, config.period)?,
         "space_explore" => prediction_advanced::predict_space_explore_ai(data, &last_date, config.period)?,
         "boris_gan" => prediction_advanced::predict_boris_gan(data, &last_date, config.period)?,
+        "deep_learning" => prediction_advanced::deep_learning::predict_deep_learning(data, &last_date, config.period)?,
         "intraday_ma" => super::prediction_intraday::predict_intraday_ma(data, &last_date, config.period)?,
         "intraday_volatility" => super::prediction_intraday::predict_intraday_volatility(data, &last_date, config.period)?,
         "intraday_regime" => super::prediction_intraday::predict_intraday_regime(data, &last_date, config.period)?,
@@ -181,6 +183,7 @@ pub fn predict_linear_regression(
             upper_bound: predicted + std_dev,
             lower_bound: predicted - std_dev,
             method: "linear".to_string(),
+            reasoning: None,
         });
     }
 
@@ -279,6 +282,7 @@ pub fn predict_moving_average(
             upper_bound: predicted + std_dev * 0.5,
             lower_bound: predicted - std_dev * 0.5,
             method: "ma".to_string(),
+            reasoning: None,
         });
     }
 
@@ -345,6 +349,7 @@ pub fn predict_technical_indicator(
             upper_bound: predicted + std_dev * 0.6,
             lower_bound: predicted - std_dev * 0.6,
             method: "technical".to_string(),
+            reasoning: None,
         });
     }
 
@@ -426,6 +431,7 @@ pub fn predict_polynomial(
             upper_bound: predicted + std_dev,
             lower_bound: predicted - std_dev,
             method: format!("polynomial({})", degree),
+            reasoning: None,
         });
     }
 
@@ -517,6 +523,7 @@ pub fn predict_exponential_smoothing(
             upper_bound: predicted + std_dev * 0.8,
             lower_bound: predicted - std_dev * 0.8,
             method: "exponential".to_string(),
+            reasoning: None,
         });
     }
     

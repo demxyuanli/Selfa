@@ -3,6 +3,7 @@
 use crate::stock_api::types::{StockData, PredictionResult};
 use crate::stock_api::utils::{parse_date, add_days};
 use rand::prelude::*;
+use rayon::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct MonteCarloConfig {
@@ -115,9 +116,6 @@ fn run_monte_carlo_simulations(
     num_simulations: usize,
     period: usize,
 ) -> Vec<Vec<f64>> {
-    let mut rng = thread_rng();
-    let mut results = Vec::with_capacity(num_simulations);
-
     let mean_return = if returns.is_empty() {
         0.0
     } else {
@@ -133,7 +131,9 @@ fn run_monte_carlo_simulations(
     };
     let drift = mean_return - 0.5 * variance;
 
-    for _ in 0..num_simulations {
+    // Parallelize Monte Carlo simulations using rayon
+    (0..num_simulations).into_par_iter().map(|_| {
+        let mut rng = thread_rng();
         let mut price_path = vec![*start_price];
         let mut current_price = *start_price;
 
@@ -153,10 +153,8 @@ fn run_monte_carlo_simulations(
             price_path.push(current_price);
         }
 
-        results.push(price_path);
-    }
-
-    results
+        price_path
+    }).collect()
 }
 
 fn generate_prediction_from_simulations(
@@ -217,6 +215,7 @@ fn generate_prediction_from_simulations(
             upper_bound,
             lower_bound,
             method: "monte_carlo".to_string(),
+            reasoning: None,
         });
     }
 

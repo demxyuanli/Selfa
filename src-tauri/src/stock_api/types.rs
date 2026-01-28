@@ -70,6 +70,7 @@ pub struct PredictionResult {
     pub upper_bound: f64,
     pub lower_bound: f64,
     pub method: String,
+    pub reasoning: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -88,6 +88,7 @@ pub fn predict_intraday_ma(
             upper_bound: predicted + std_dev * 0.5,
             lower_bound: predicted - std_dev * 0.5,
             method: "Intraday MA".to_string(),
+            reasoning: None,
         });
     }
     
@@ -151,6 +152,7 @@ pub fn predict_intraday_volatility(
             upper_bound: predicted + std_dev,
             lower_bound: predicted - std_dev,
             method: "Intraday Volatility".to_string(),
+            reasoning: None,
         });
     }
     
@@ -218,6 +220,7 @@ pub fn predict_intraday_regime(
             upper_bound: predicted + vol_short * (1.0 + 0.1 * i as f64),
             lower_bound: predicted - vol_short * (1.0 + 0.1 * i as f64),
             method: "Intraday Regime".to_string(),
+            reasoning: None,
         });
     }
     

@@ -542,3 +542,54 @@ pub fn calculate_adx(data: &[StockData], period: usize) -> Vec<f64> {
 
     result
 }
+
+pub fn calculate_obv(data: &[StockData]) -> Vec<f64> {
+    let mut obv = Vec::with_capacity(data.len());
+    if data.is_empty() { return obv; }
+
+    let mut current_obv = 0.0;
+    obv.push(current_obv);
+
+    for i in 1..data.len() {
+        let close_curr = data[i].close;
+        let close_prev = data[i-1].close;
+        let vol = data[i].volume as f64;
+
+        if close_curr > close_prev {
+            current_obv += vol;
+        } else if close_curr < close_prev {
+            current_obv -= vol;
+        }
+        obv.push(current_obv);
+    }
+    obv
+}
+
+pub fn calculate_cci(data: &[StockData], period: usize) -> Vec<f64> {
+    let mut cci = vec![0.0; data.len()];
+    if data.len() < period { return cci; }
+
+    let mut tp_values = Vec::with_capacity(data.len());
+    for d in data {
+        tp_values.push((d.high + d.low + d.close) / 3.0);
+    }
+
+    let sma_tp = calculate_sma(&tp_values, period);
+
+    // Mean Deviation
+    for i in (period-1)..data.len() {
+        let ma = sma_tp[i];
+        let mut sum_abs_diff = 0.0;
+        for j in (i+1-period)..=i {
+             sum_abs_diff += (tp_values[j] - ma).abs();
+        }
+        let md = sum_abs_diff / period as f64;
+        
+        if md != 0.0 {
+            cci[i] = (tp_values[i] - ma) / (0.015 * md);
+        } else {
+            cci[i] = 0.0;
+        }
+    }
+    cci
+}

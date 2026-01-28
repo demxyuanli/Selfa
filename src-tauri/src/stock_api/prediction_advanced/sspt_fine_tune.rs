@@ -1,6 +1,7 @@
 use crate::stock_api::types::{StockData, PredictionResult};
 use crate::stock_api::utils::{parse_date, add_days, calculate_variance};
 use crate::stock_api::technical_indicators::calculate_rsi;
+use super::deep_learning::predict_deep_learning;
 
 /// SSPT (Stock Semantic Pattern Transformer) Fine-Tuned Simulation
 /// 
@@ -10,6 +11,9 @@ use crate::stock_api::technical_indicators::calculate_rsi;
 /// 
 /// "Fine-tuning" here refers to the process of aggressively updating the transition probabilities
 /// using the most recent data (few-shot learning) to adapt to the stock's current "personality".
+/// 
+/// # Hybrid Enhancement
+/// Integrated with Rust-Native Deep Learning (MLP) to guide token transition probabilities.
 /// 
 /// # Arguments
 /// * `data` - Historical stock data
@@ -92,12 +96,15 @@ pub fn predict_sspt_fine_tuned(
     let mut current_context = (tokens[tokens.len()-2], tokens[tokens.len()-1]);
     let mut current_price = last_price;
     
+    // Get Deep Learning predictions (Hybrid Enhancement)
+    let dl_predictions = predict_deep_learning(data, start_date, period).ok();
+
     for i in 0..period {
         // Sample next token based on transition probabilities
         let next_token_dist = transition_counts.get(&current_context);
         
         // Calculate expected value (weighted average of possible next tokens)
-        let expected_token_val = if let Some(dist) = next_token_dist {
+        let mut expected_token_val = if let Some(dist) = next_token_dist {
             let total_count: f64 = dist.values().sum();
             let weighted_sum: f64 = dist.iter().map(|(&token, &count)| token as f64 * count).sum();
             weighted_sum / total_count
@@ -106,6 +113,25 @@ pub fn predict_sspt_fine_tuned(
             0.1 
         };
         
+        // Hybrid Blend: If Deep Learning signal exists, use it to bias the token expectation
+        if let Some(ref dl_preds) = dl_predictions {
+            if i < dl_preds.len() {
+                let dl_price = dl_preds[i].predicted_price;
+                // Calculate what token the DL model implies
+                // We compare DL price to *current simulation price* to get the step change
+                let dl_change = (dl_price - current_price) / current_price;
+                
+                let dl_token_val = if dl_change < -0.03 { -2.0 }
+                    else if dl_change < -0.005 { -1.0 }
+                    else if dl_change < 0.005 { 0.0 }
+                    else if dl_change > 0.03 { 2.0 }
+                    else { 1.0 };
+                
+                // Blend: 60% Markov Chain (Patterns), 40% Deep Learning (Trend)
+                expected_token_val = expected_token_val * 0.6 + dl_token_val * 0.4;
+            }
+        }
+
         // Map expected token value back to price change
         // We use a continuous mapping now for smoother predictions
         // -2 -> -4%, -1 -> -1.5%, 0 -> 0%, 1 -> 1.5%, 2 -> 4%
@@ -156,6 +182,12 @@ pub fn predict_sspt_fine_tuned(
         let price_change = (final_predicted - last_price) / last_price;
         let signal = if price_change > 0.02 { "buy" } else if price_change < -0.02 { "sell" } else { "hold" };
 
+        let reasoning = if dl_predictions.is_some() {
+            Some("Hybrid Model: Combined Markov Chain Patterns with Deep Learning Trend Guidance.".to_string())
+        } else {
+            Some("Pattern Model: Based on historical semantic token transitions.".to_string())
+        };
+
         results.push(PredictionResult {
             date,
             predicted_price: final_predicted,
@@ -163,7 +195,8 @@ pub fn predict_sspt_fine_tuned(
             signal: signal.to_string(),
             upper_bound: final_predicted + std_dev * (0.5 + i as f64 * 0.1),
             lower_bound: final_predicted - std_dev * (0.5 + i as f64 * 0.1),
-            method: "SSPT-FineTuned".to_string(),
+            method: "SSPT-Hybrid".to_string(),
+            reasoning,
         });
     }
 

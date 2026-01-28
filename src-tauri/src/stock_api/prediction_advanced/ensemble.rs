@@ -28,6 +28,124 @@ fn calculate_adaptive_weight(errors: &[f64], decay: f64) -> f64 {
     1.0 / (mse + 1e-6)
 }
 
+/// Calculate covariance matrix of prediction errors across models
+/// Returns a matrix where entry (i,j) is the covariance between model i and model j
+fn calculate_error_covariance(
+    all_errors: &[Vec<f64>],
+) -> Vec<Vec<f64>> {
+    let n_models = all_errors.len();
+    if n_models == 0 {
+        return Vec::new();
+    }
+
+    let min_len = all_errors.iter().map(|e| e.len()).min().unwrap_or(0);
+    if min_len == 0 {
+        return vec![vec![1.0; n_models]; n_models];
+    }
+
+    let mut cov_matrix = vec![vec![0.0; n_models]; n_models];
+
+    // Calculate means for each model
+    let means: Vec<f64> = all_errors.iter()
+        .map(|errors| errors.iter().sum::<f64>() / errors.len() as f64)
+        .collect();
+
+    // Calculate covariance
+    for i in 0..n_models {
+        for j in 0..n_models {
+            let mut cov_sum = 0.0;
+            let len = all_errors[i].len().min(all_errors[j].len());
+            for k in 0..len {
+                cov_sum += (all_errors[i][k] - means[i]) * (all_errors[j][k] - means[j]);
+            }
+            cov_matrix[i][j] = if len > 1 { cov_sum / (len - 1) as f64 } else { 0.0 };
+        }
+    }
+
+    cov_matrix
+}
+
+/// Ledoit-Wolf shrinkage estimator for covariance matrix
+/// Shrinks sample covariance towards identity matrix to reduce estimation error
+fn ledoit_wolf_shrinkage(
+    sample_cov: &[Vec<f64>],
+    n_samples: usize,
+) -> Vec<Vec<f64>> {
+    let n = sample_cov.len();
+    if n == 0 {
+        return Vec::new();
+    }
+
+    // Calculate mean of diagonal elements (average variance)
+    let mean_var = sample_cov.iter()
+        .enumerate()
+        .filter_map(|(i, row)| row.get(i))
+        .sum::<f64>() / n as f64;
+
+    // Target: identity matrix scaled by mean variance
+    let mut target = vec![vec![0.0; n]; n];
+    for i in 0..n {
+        target[i][i] = mean_var;
+    }
+
+    // Calculate shrinkage intensity (simplified Ledoit-Wolf formula)
+    // More sophisticated version would use trace and Frobenius norm
+    let shrinkage_intensity = (1.0 / n_samples as f64).min(0.5).max(0.0);
+
+    // Shrink: (1 - alpha) * sample + alpha * target
+    let mut shrunk = vec![vec![0.0; n]; n];
+    for i in 0..n {
+        for j in 0..n {
+            shrunk[i][j] = (1.0 - shrinkage_intensity) * sample_cov[i][j] 
+                         + shrinkage_intensity * target[i][j];
+        }
+    }
+
+    shrunk
+}
+
+/// Calculate optimal weights using covariance-adjusted inverse variance weighting
+fn calculate_covariance_adjusted_weights(
+    errors: &[Vec<f64>],
+    decay: f64,
+) -> Vec<f64> {
+    if errors.is_empty() {
+        return Vec::new();
+    }
+
+    // Calculate sample covariance matrix
+    let sample_cov = calculate_error_covariance(errors);
+    
+    // Apply Ledoit-Wolf shrinkage
+    let min_len = errors.iter().map(|e| e.len()).min().unwrap_or(0);
+    let shrunk_cov = ledoit_wolf_shrinkage(&sample_cov, min_len);
+
+    let n = errors.len();
+    
+    // Use diagonal elements (variances) for inverse variance weighting
+    // But account for off-diagonal correlations through shrinkage
+    let mut weights = Vec::with_capacity(n);
+    for i in 0..n {
+        let variance = if i < shrunk_cov.len() && i < shrunk_cov[i].len() {
+            shrunk_cov[i][i].max(1e-6)
+        } else {
+            // Fallback to simple inverse variance
+            calculate_adaptive_weight(&errors[i], decay)
+        };
+        weights.push(1.0 / variance);
+    }
+
+    // Normalize weights
+    let total: f64 = weights.iter().sum();
+    if total > 0.0 {
+        for w in &mut weights {
+            *w /= total;
+        }
+    }
+
+    weights
+}
+
 pub fn predict_ensemble_advanced(
     data: &[StockData],
     start_date: &str,
@@ -65,6 +183,10 @@ pub fn predict_ensemble_advanced(
     let mut model_weights: HashMap<String, f64> = HashMap::new();
 
     if closes.len() > lookback_for_error {
+        // Collect errors for all models
+        let mut all_model_errors: Vec<Vec<f64>> = Vec::new();
+        let mut model_names: Vec<&str> = Vec::new();
+        
         for (name, _) in &predictions {
             let mut errors = Vec::new();
             for i in 0..(lookback_for_error - 1) {
@@ -90,8 +212,28 @@ pub fn predict_ensemble_advanced(
                     }
                 }
             }
-            let w = calculate_adaptive_weight(&errors, 0.9);
-            model_weights.insert((*name).to_string(), w);
+            if !errors.is_empty() {
+                all_model_errors.push(errors);
+                model_names.push(name);
+            }
+        }
+
+        // Use covariance-adjusted weights if we have multiple models with errors
+        if all_model_errors.len() > 1 {
+            let adjusted_weights = calculate_covariance_adjusted_weights(&all_model_errors, 0.9);
+            for (idx, &name) in model_names.iter().enumerate() {
+                if idx < adjusted_weights.len() {
+                    model_weights.insert(name.to_string(), adjusted_weights[idx]);
+                }
+            }
+        } else {
+            // Fallback to simple inverse variance weighting
+            for (idx, &name) in model_names.iter().enumerate() {
+                if idx < all_model_errors.len() {
+                    let w = calculate_adaptive_weight(&all_model_errors[idx], 0.9);
+                    model_weights.insert(name.to_string(), w);
+                }
+            }
         }
 
         for name in predictions.keys() {
@@ -169,14 +311,15 @@ fn generate_weighted_ensemble(
 
             let date = add_days(&base_date, (day + 1) as i32)?;
             results.push(PredictionResult {
-                date,
-                predicted_price,
-                confidence: avg_confidence,
-                signal: dominant_signal,
-                upper_bound: predicted_price + std_dev * confidence_factor,
-                lower_bound: predicted_price - std_dev * confidence_factor,
-                method: "ensemble_advanced".to_string(),
-            });
+                    date,
+                    predicted_price,
+                    confidence: avg_confidence,
+                    signal: dominant_signal,
+                    upper_bound: predicted_price + std_dev * confidence_factor,
+                    lower_bound: predicted_price - std_dev * confidence_factor,
+                    method: "ensemble_advanced".to_string(),
+                    reasoning: None,
+                });
         }
     }
 

@@ -11,6 +11,7 @@ pub mod deos_alpha_time_gpt;
 pub mod sspt_fine_tune;
 pub mod space_explore_ai;
 pub mod boris_gan;
+pub mod deep_learning;
 
 #[allow(unused_imports)]
 pub use support_resistance::*;
@@ -28,6 +29,8 @@ pub use sspt_fine_tune::*;
 pub use space_explore_ai::*;
 #[allow(unused_imports)]
 pub use boris_gan::*;
+#[allow(unused_imports)]
+pub use deep_learning::*;
 
 pub fn predict_mean_reversion(
     closes: &[f64],
@@ -70,6 +73,7 @@ pub fn predict_mean_reversion(
             upper_bound: predicted + std_dev * 0.7,
             lower_bound: predicted - std_dev * 0.7,
             method: "mean_reversion".to_string(),
+            reasoning: None,
         });
     }
     
@@ -128,6 +132,7 @@ pub fn predict_weighted_ma(
             upper_bound: predicted + std_dev * 0.6,
             lower_bound: predicted - std_dev * 0.6,
             method: "wma".to_string(),
+            reasoning: None,
         });
     }
     
@@ -190,6 +195,7 @@ pub fn predict_pattern_recognition(
             upper_bound: predicted + price_range * 0.1,
             lower_bound: predicted - price_range * 0.1,
             method: "pattern".to_string(),
+            reasoning: None,
         });
     }
     
@@ -251,6 +257,7 @@ pub fn predict_similarity_match(
             upper_bound: predicted + std_dev,
             lower_bound: predicted - std_dev,
             method: "similarity".to_string(),
+            reasoning: None,
         });
     }
     
@@ -266,6 +273,7 @@ pub fn predict_similarity_match(
                 upper_bound: last_pred * 1.02,
                 lower_bound: last_pred * 0.98,
                 method: "similarity".to_string(),
+                reasoning: None,
             });
         }
     }
@@ -447,6 +455,7 @@ pub fn predict_ensemble(
                 upper_bound: predicted + std_dev * 0.7,
                 lower_bound: predicted - std_dev * 0.7,
                 method: "ensemble".to_string(),
+                reasoning: None,
             });
         }
     }
@@ -532,6 +541,7 @@ pub fn predict_fibonacci_retracement(
                 upper_bound: predicted + std_dev * 0.5,
                 lower_bound: predicted - std_dev * 0.5,
                 method: "fibonacci".to_string(),
+                reasoning: None,
             });
         }
         return Ok(results);
@@ -585,6 +595,7 @@ pub fn predict_fibonacci_retracement(
             upper_bound: predicted + std_dev * 0.5,
             lower_bound: predicted - std_dev * 0.5,
             method: "fibonacci".to_string(),
+            reasoning: None,
         });
     }
     
@@ -633,6 +644,7 @@ pub fn predict_fibonacci_extension(
                 upper_bound: predicted + std_dev * 0.8,
                 lower_bound: predicted - std_dev * 0.8,
                 method: "fibonacci_extension".to_string(),
+                reasoning: None,
             });
         }
         return Ok(results);
@@ -679,6 +691,7 @@ pub fn predict_fibonacci_extension(
             upper_bound: predicted + std_dev * 0.8,
             lower_bound: predicted - std_dev * 0.8,
             method: "fibonacci_extension".to_string(),
+            reasoning: None,
         });
     }
     

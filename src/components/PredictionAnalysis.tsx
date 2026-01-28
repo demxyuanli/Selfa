@@ -180,6 +180,7 @@ interface PredictionResult {
   upper_bound: number;
   lower_bound: number;
   method: string;
+  reasoning?: string;
 }
 
 interface PredictionAnalysisProps {
@@ -235,6 +236,8 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
       intraday_ma: t("analysis.methodIntradayMA"),
       intraday_volatility: t("analysis.methodIntradayVolatility"),
       intraday_regime: t("analysis.methodIntradayRegime"),
+      boris_gan: "Boris GAN (Optimized)",
+      deep_learning: "Deep Learning (Neural Network)",
     };
     return labels[m] || m;
   };
@@ -630,8 +633,13 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
               <div style="margin: 4px 0;"><strong><span style="font-size: 16px; margin-right: 4px;">${signalIconText}</span>${t("analysis.signal")}: ${signalText}</strong></div>
               <div style="margin: 4px 0;">${t("analysis.confidence")}: <strong style="color: ${pred.confidence > 70 ? '#00ff00' : pred.confidence > 50 ? '#ff9800' : '#ff0000'}">${pred.confidence.toFixed(1)}%</strong></div>
               <div style="margin: 4px 0;">${t("analysis.priceRange")}: ${t("common.currencySymbol")}${pred.lower_bound.toFixed(2)} - ${t("common.currencySymbol")}${pred.upper_bound.toFixed(2)}</div>
-              <div style="margin: 4px 0; font-size: 11px; color: #aaa;">${t("analysis.method")}: ${pred.method}</div>
-            </div>`;
+              <div style="margin: 4px 0; font-size: 11px; color: #aaa;">${t("analysis.method")}: ${pred.method}</div>`;
+              
+            if (pred.reasoning) {
+               result += `<div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.1); font-size: 10px; color: #ddd; white-space: normal; line-height: 1.4;">${pred.reasoning}</div>`;
+            }
+
+            result += `</div>`;
           }
 
           return result;
@@ -708,6 +716,8 @@ const PredictionAnalysis: React.FC<PredictionAnalysisProps> = ({ klineData }) =>
                       <option value="mean_reversion">{t("analysis.methodMeanReversion")}</option>
                     </optgroup>
                     <optgroup label={t("analysis.groupAdvanced")}>
+                      <option value="boris_gan">Boris GAN (Optimized)</option>
+                      <option value="deep_learning">Deep Learning (Neural Network)</option>
                       <option value="similarity">{t("analysis.methodSimilarity")}</option>
                       <option value="ensemble">{t("analysis.methodEnsemble")}</option>
                       <option value="monte_carlo">{t("analysis.methodMonteCarlo")}</option>

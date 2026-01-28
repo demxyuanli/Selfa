@@ -2,6 +2,7 @@ use crate::stock_api::types::{StockData, PredictionResult};
 use crate::stock_api::utils::{parse_date, add_days, calculate_variance};
 use rand::Rng;
 use std::f64::consts::PI;
+use super::deep_learning::predict_deep_learning;
 
 /// NEOAI SpaceExploreAI-Small-Base-Regression-27M (Simulation)
 /// 
@@ -21,6 +22,8 @@ pub fn predict_space_explore_ai(
     if data.len() < 50 {
         return Err("SpaceExploreAI requires at least 50 data points for latent space initialization".to_string());
     }
+
+    let dl_predictions = predict_deep_learning(data, start_date, period).ok();
 
     let closes: Vec<f64> = data.iter().map(|d| d.close).collect();
     let last_price = closes[closes.len() - 1];
@@ -127,8 +130,27 @@ pub fn predict_space_explore_ai(
         if (predicted_price - current_price).abs() > max_change {
              predicted_price = current_price + max_change * (predicted_price - current_price).signum();
         }
+
+        // 4. Deep Learning Guidance (Hybrid Enhancement)
+        // If the MLP model provided a prediction, we use it to correct the latent space drift.
+        // We blend the Latent Space Exploration (which is good at volatility/noise) 
+        // with the MLP (which is good at non-linear trends).
+        if let Some(dl_preds) = &dl_predictions {
+            if i < dl_preds.len() {
+                let dl_price = dl_preds[i].predicted_price;
+                // Blend: 60% Deep Learning (Signal), 40% Latent Space (Noise/Process)
+                predicted_price = dl_price * 0.6 + predicted_price * 0.4;
+            }
+        }
         
         // Update for next step
+        if let Some(dl_preds) = &dl_predictions {
+            if i < dl_preds.len() {
+                let dl_price = dl_preds[i].predicted_price;
+                predicted_price = dl_price * 0.6 + predicted_price * 0.4;
+            }
+        }
+
         current_price = predicted_price;
         current_state = next_state;
         
@@ -151,6 +173,7 @@ pub fn predict_space_explore_ai(
             upper_bound: predicted_price + std_price * (0.5 + i as f64 * 0.1),
             lower_bound: predicted_price - std_price * (0.5 + i as f64 * 0.1),
             method: "NEOAI/SpaceExplore-27M".to_string(),
+            reasoning: None,
         });
     }
 

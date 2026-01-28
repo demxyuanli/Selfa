@@ -68,6 +68,7 @@ pub fn predict_arima(
             upper_bound,
             lower_bound,
             method: format!("ARIMA({},{},{})", model.p, model.d, model.q),
+            reasoning: None,
         });
     }
 

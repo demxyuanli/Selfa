@@ -2,6 +2,7 @@ use crate::stock_api::types::{StockData, PredictionResult};
 use crate::stock_api::utils::{parse_date, add_days, calculate_variance};
 use crate::stock_api::technical_indicators::{calculate_rsi, calculate_macd};
 use std::cmp::Ordering;
+use super::deep_learning::predict_deep_learning;
 
 pub fn predict_deos_alpha_time_gpt(
     data: &[StockData],
@@ -12,6 +13,10 @@ pub fn predict_deos_alpha_time_gpt(
     if data.len() < 120 {
         return Err("DeOSAlphaTimeGPT requires at least 120 data points for multi-scale analysis".to_string());
     }
+
+    // Get Deep Learning predictions (MLP) to enhance the TimeGPT pattern matching
+    // This adds a model-based signal to the instance-based learning (Pattern Matching)
+    let dl_predictions = predict_deep_learning(data, start_date, period).ok();
 
     let closes: Vec<f64> = data.iter().map(|d| d.close).collect();
     let volumes: Vec<f64> = data.iter().map(|d| d.volume as f64).collect();
@@ -143,6 +148,12 @@ pub fn predict_deos_alpha_time_gpt(
         };
         
         predicted += alpha_influence + rsi_correction * momentum_decay;
+
+        if let Some(dl_preds) = &dl_predictions {
+            if i < dl_preds.len() {
+                predicted = predicted * 0.5 + dl_preds[i].predicted_price * 0.5;
+            }
+        }
         
         // Dynamic confidence based on multi-scale quality
         // Normalize quality roughly to 0-1 range
@@ -164,6 +175,7 @@ pub fn predict_deos_alpha_time_gpt(
             upper_bound: predicted + std_dev * (0.6 + i as f64 * 0.06),
             lower_bound: predicted - std_dev * (0.6 + i as f64 * 0.06),
             method: "DeOSAlphaTimeGPT-SSPT-v2".to_string(),
+            reasoning: None,
         });
     }
 
